@@ -1,0 +1,777 @@
+{
+  "source": "Read-only public routine definitions inspected 2026-09-10. No user records or credentials. Local fixture ONLY; apply before tracked migrations or selected historical aliases after replay. Not production parity certification.",
+  "functions": [
+    {
+      "proname": "calculate_sweepstakes_for_breed_baseline",
+      "arguments": "p_show_id uuid, p_breed_name text, p_scope text, p_show_letter text",
+      "definition": "CREATE OR REPLACE FUNCTION public.calculate_sweepstakes_for_breed_baseline(p_show_id uuid, p_breed_name text, p_scope text, p_show_letter text DEFAULT NULL::text)\n RETURNS SETOF sweepstakes_results\n LANGUAGE plpgsql\n SET search_path TO ''\nAS $function$\nDECLARE\n  v_letter text := upper(coalesce(nullif(btrim(p_show_letter), ''), 'ALL'));\nBEGIN\n  IF upper(coalesce(p_scope, '')) NOT IN ('OPEN', 'YOUTH') THEN\n    RAISE EXCEPTION 'Invalid scope: %. Expected OPEN or YOUTH.', p_scope;\n  END IF;\n\n  DELETE FROM public.sweepstakes_results sr\n  WHERE sr.show_id = p_show_id\n    AND sr.breed_name = p_breed_name\n    AND upper(sr.scope) = upper(p_scope)\n    AND upper(coalesce(sr.show_letter, 'ALL')) = v_letter\n    AND sr.calculation_version = 'v2';\n\n  DELETE FROM public.sweepstakes_entry_results ser\n  WHERE ser.show_id = p_show_id\n    AND ser.breed_name = p_breed_name\n    AND upper(ser.scope) = upper(p_scope)\n    AND upper(coalesce(ser.show_letter, 'ALL')) = v_letter;\n\n  INSERT INTO public.sweepstakes_results (\n    show_id,\n    breed_name,\n    exhibitor_id,\n    exhibitor_name,\n    scope,\n    show_letter,\n    class_points,\n    variety_points,\n    group_points,\n    bob_points,\n    bis_points,\n    fur_points,\n    total_points,\n    calculation_version,\n    rule_source,\n    verification_status,\n    engine_type\n  )\n  WITH matrix_rule AS (\n    SELECT brm.*\n    FROM public.breed_rules_matrix brm\n    WHERE brm.breed_name = p_breed_name\n      AND coalesce(brm.status, '') <> 'template'\n    LIMIT 1\n  ),\n  profile_rule AS (\n    SELECT brp.*\n    FROM public.breed_rules_profiles brp\n    WHERE brp.breed_name = p_breed_name\n    LIMIT 1\n  ),\n  result_rows AS (\n    SELECT\n      rer.entry_id,\n      p_show_id AS show_id,\n      rer.section_id,\n      s.kind::text AS section_kind,\n      concat(s.kind::text, ' ', s.letter::text) AS section_label,\n      s.letter::text AS section_letter,\n      rer.exhibitor_id::text AS exhibitor_id,\n      rer.exhibitor_label AS exhibitor_name,\n      rer.breed_name,\n      rer.variety_name,\n      rer.group_name,\n      coalesce(rer.fur_variety, '') AS fur_variety,\n      coalesce(rer.is_fur, false) AS is_fur,\n      rer.sex,\n      rer.class_name,\n      rer.placement,\n      CASE\n        WHEN btrim(coalesce(rer.placement, '')) ~ '^\\d+$'\n          THEN btrim(rer.placement)::integer\n        ELSE NULL\n      END AS placement_num,\n      rer.is_shown,\n      rer.is_disqualified,\n      rer.uses_group_awards,\n      rer.uses_variety_awards\n    FROM public.show_sections s\n    CROSS JOIN LATERAL public.report_results_entry_rows(\n      p_show_id,\n      s.id,\n      p_show_letter\n    ) rer\n    WHERE s.show_id = p_show_id\n      AND upper(s.kind::text) = upper(p_scope)\n      AND p_show_letter IS NOT NULL\n      AND btrim(p_show_letter) <> ''\n      AND rer.breed_name = p_breed_name\n      AND upper(coalesce(s.letter::text, '')) = upper(p_show_letter)\n\n    UNION ALL\n\n    SELECT\n      rer.entry_id,\n      p_show_id AS show_id,\n      rer.section_id,\n      s.kind::text AS section_kind,\n      concat(s.kind::text, ' ', s.letter::text) AS section_label,\n      s.letter::text AS section_letter,\n      rer.exhibitor_id::text AS exhibitor_id,\n      rer.exhibitor_label AS exhibitor_name,\n      rer.breed_name,\n      rer.variety_name,\n      rer.group_name,\n      coalesce(rer.fur_variety, '') AS fur_variety,\n      coalesce(rer.is_fur, false) AS is_fur,\n      rer.sex,\n      rer.class_name,\n      rer.placement,\n      CASE\n        WHEN btrim(coalesce(rer.placement, '')) ~ '^\\d+$'\n          THEN btrim(rer.placement)::integer\n        ELSE NULL\n      END AS placement_num,\n      rer.is_shown,\n      rer.is_disqualified,\n      rer.uses_group_awards,\n      rer.uses_variety_awards\n    FROM public.show_sections s\n    CROSS JOIN LATERAL public.report_results_entry_rows(\n      p_show_id,\n      s.id,\n      p_show_letter\n    ) rer\n    WHERE s.show_id = p_show_id\n      AND upper(s.kind::text) = upper(p_scope)\n      AND (p_show_letter IS NULL OR btrim(p_show_letter) = '')\n      AND rer.breed_name = p_breed_name\n  ),\n  eligible_rows AS (\n    SELECT *\n    FROM result_rows\n    WHERE coalesce(is_shown, true) = true\n      AND coalesce(is_disqualified, false) = false\n  ),\n  regular_rows AS (\n    SELECT *\n    FROM eligible_rows\n    WHERE coalesce(is_fur, false) = false\n  ),\n  fur_rows AS (\n    SELECT *\n    FROM eligible_rows\n    WHERE coalesce(is_fur, false) = true\n  ),\n  class_counts AS (\n    SELECT\n      er.breed_name,\n      er.variety_name,\n      er.sex,\n      er.class_name,\n      er.section_id,\n      count(*)::numeric AS entry_count,\n      count(DISTINCT er.exhibitor_id)::numeric AS exhibitor_count\n    FROM regular_rows er\n    GROUP BY er.breed_name, er.variety_name, er.sex, er.class_name, er.section_id\n  ),\n  \n  fur_class_counts AS (\n    SELECT\n      er.breed_name,\n      nullif(btrim(er.fur_variety), '') AS fur_variety,\n      er.section_id,\n      count(*)::numeric AS entry_count,\n      count(DISTINCT er.exhibitor_id)::numeric AS exhibitor_count\n    FROM fur_rows er\n    GROUP BY\n      er.breed_name,\n      nullif(btrim(er.fur_variety), ''),\n      er.section_id\n  ),\n\n  breed_totals AS (\n    SELECT er.breed_name, count(*)::numeric AS breed_total\n    FROM regular_rows er\n    GROUP BY er.breed_name\n  ),\n  sex_totals AS (\n    SELECT er.breed_name, er.sex, count(*)::numeric AS sex_total\n    FROM regular_rows er\n    GROUP BY er.breed_name, er.sex\n  ),\n  variety_totals AS (\n    SELECT er.breed_name, er.variety_name, count(*)::numeric AS variety_total\n    FROM regular_rows er\n    GROUP BY er.breed_name, er.variety_name\n  ),\n  group_totals AS (\n    SELECT er.breed_name, er.group_name, count(*)::numeric AS group_total\n    FROM regular_rows er\n    GROUP BY er.breed_name, er.group_name\n  ),\n  show_totals AS (\n    SELECT count(*)::numeric AS show_total\n    FROM regular_rows\n  ),\n  wool_totals AS (\n    SELECT er.breed_name, count(*)::numeric AS wool_total\n    FROM fur_rows er\n    GROUP BY er.breed_name\n  ),\n  class_points_by_exhibitor AS (\n    SELECT\n      er.show_id,\n      er.breed_name,\n      er.exhibitor_id,\n      max(er.exhibitor_name) AS exhibitor_name,\n      upper(p_scope) AS scope,\n      sum(\n        (\n          CASE er.placement_num\n            WHEN 1 THEN coalesce(mr.place_1, 0)\n            WHEN 2 THEN coalesce(mr.place_2, 0)\n            WHEN 3 THEN coalesce(mr.place_3, 0)\n            WHEN 4 THEN coalesce(mr.place_4, 0)\n            WHEN 5 THEN coalesce(mr.place_5, 0)\n            ELSE 0\n          END\n        ) *\n        (\n          CASE\n            WHEN upper(coalesce(mr.class_points_model, 'MULTIPLIER_BY_CLASS_SIZE')) = 'FLAT_BY_PLACING' THEN 1\n            WHEN upper(coalesce(mr.class_points_model, '')) = 'MULTIPLIER_BY_VARIETY_SIZE' THEN coalesce(vt.variety_total, 0)\n            WHEN upper(coalesce(mr.multiplier_type, 'ENTRY_COUNT')) = 'EXHIBITOR_COUNT' THEN coalesce(cc.exhibitor_count, 0)\n            ELSE coalesce(cc.entry_count, 0)\n          END\n        )\n      )::numeric(10,2) AS class_points\n    FROM regular_rows er\n    LEFT JOIN matrix_rule mr ON true\n    LEFT JOIN class_counts cc\n      ON cc.breed_name = er.breed_name\n     AND cc.variety_name IS NOT DISTINCT FROM er.variety_name\n     AND cc.sex IS NOT DISTINCT FROM er.sex\n     AND cc.class_name IS NOT DISTINCT FROM er.class_name\n     AND cc.section_id = er.section_id\n    LEFT JOIN variety_totals vt\n      ON vt.breed_name = er.breed_name\n     AND vt.variety_name IS NOT DISTINCT FROM er.variety_name\n    WHERE er.placement_num BETWEEN 1 AND 5\n    GROUP BY er.show_id, er.breed_name, er.exhibitor_id\n  ),\n  fur_class_points_by_exhibitor AS (\n    SELECT\n      er.show_id,\n      er.breed_name,\n      er.exhibitor_id,\n      max(er.exhibitor_name) AS exhibitor_name,\n      upper(p_scope) AS scope,\n      sum(\n        (\n          CASE er.placement_num\n            WHEN 1 THEN coalesce(mr.place_1, 0)\n            WHEN 2 THEN coalesce(mr.place_2, 0)\n            WHEN 3 THEN coalesce(mr.place_3, 0)\n            WHEN 4 THEN coalesce(mr.place_4, 0)\n            WHEN 5 THEN coalesce(mr.place_5, 0)\n            ELSE 0\n          END\n        ) *\n        (\n          CASE\n            WHEN upper(coalesce(mr.class_points_model, 'MULTIPLIER_BY_CLASS_SIZE')) = 'FLAT_BY_PLACING' THEN 1\n            WHEN upper(coalesce(mr.multiplier_type, 'ENTRY_COUNT')) = 'EXHIBITOR_COUNT' THEN coalesce(fc.exhibitor_count, 0)\n            ELSE coalesce(fc.entry_count, 0)\n          END\n        )\n      )::numeric(10,2) AS fur_points\n    FROM fur_rows er\n    LEFT JOIN matrix_rule mr ON true\n    \n    LEFT JOIN fur_class_counts fc\n      ON fc.breed_name = er.breed_name\n     AND fc.fur_variety IS NOT DISTINCT FROM\n         nullif(btrim(er.fur_variety), '')\n     AND fc.section_id = er.section_id\n\n    WHERE er.placement_num BETWEEN 1 AND 5\n    GROUP BY er.show_id, er.breed_name, er.exhibitor_id\n  ),\n  awards_union AS (\n    SELECT\n      e.show_id,\n      ea.entry_id,\n      upper(btrim(ea.award_code)) AS award_code\n    FROM public.entry_awards ea\n    JOIN public.entries e\n      ON e.id = ea.entry_id\n    WHERE e.show_id = p_show_id\n      AND ea.award_code IS NOT NULL\n      AND btrim(ea.award_code) <> ''\n\n    UNION\n\n    SELECT r.show_id, r.entry_id, upper(btrim(r.award)) AS award_code\n    FROM public.results r\n    WHERE r.show_id = p_show_id\n      AND r.award IS NOT NULL\n      AND btrim(r.award) <> ''\n\n    UNION\n\n    SELECT e.show_id, e.id AS entry_id, upper(btrim(e.special_awards)) AS award_code\n    FROM public.entries e\n    WHERE e.show_id = p_show_id\n      AND e.special_awards IS NOT NULL\n      AND btrim(e.special_awards) <> ''\n  ),\n  award_points_by_exhibitor AS (\n    SELECT\n      er.show_id,\n      er.breed_name,\n      er.exhibitor_id,\n      max(er.exhibitor_name) AS exhibitor_name,\n      upper(p_scope) AS scope,\n\n      sum(\n        CASE\n          WHEN coalesce(mr.uses_variety_points, false) = false THEN 0\n          WHEN er.uses_variety_awards IS NOT TRUE THEN 0\n          WHEN au.award_code LIKE '%BOV%' THEN\n            CASE upper(coalesce(mr.bov_basis, 'VARIETY_COUNT'))\n              WHEN 'VARIETY_COUNT' THEN coalesce(mr.bov_points, 0) * coalesce(vt.variety_total, 0)\n              WHEN 'FLAT' THEN coalesce(mr.bov_points, 0)\n              ELSE coalesce(mr.bov_points, 0)\n            END\n          WHEN au.award_code LIKE '%BOSV%' THEN\n            CASE upper(coalesce(mr.bosv_basis, 'VARIETY_COUNT'))\n              WHEN 'VARIETY_COUNT' THEN coalesce(mr.bosv_points, 0) * coalesce(vt.variety_total, 0)\n              WHEN 'FLAT' THEN coalesce(mr.bosv_points, 0)\n              ELSE coalesce(mr.bosv_points, 0)\n            END\n          ELSE 0\n        END\n      )::numeric(10,2) AS variety_points,\n\n      sum(\n        CASE\n          WHEN coalesce(mr.uses_group_points, false) = false THEN 0\n          WHEN er.uses_group_awards IS NOT TRUE THEN 0\n          WHEN au.award_code LIKE '%BOG%' THEN coalesce(mr.bog_points, 0)\n          WHEN au.award_code LIKE '%BOSG%' THEN coalesce(mr.bosg_points, 0)\n          ELSE 0\n        END\n      )::numeric(10,2) AS group_points,\n\n      sum(\n        CASE\n          WHEN coalesce(mr.uses_bob_points, true) = false THEN 0\n          WHEN au.award_code LIKE '%BOB%' THEN\n            CASE upper(coalesce(mr.bob_basis, 'BREED_COUNT'))\n              WHEN 'BREED_COUNT' THEN coalesce(mr.bob_points, 0) * coalesce(bt.breed_total, 0)\n              WHEN 'SAME_SEX_COUNT' THEN coalesce(mr.bob_points, 0) * coalesce(st.sex_total, 0)\n              WHEN 'BREED_COUNT_ROUND_UP' THEN ceil(coalesce(mr.bob_points, 0) * coalesce(bt.breed_total, 0))\n              WHEN 'SHOW_COUNT' THEN coalesce(mr.bob_points, 0) * coalesce(sht.show_total, 0)\n              WHEN 'FLAT' THEN coalesce(mr.bob_points, 0)\n              ELSE coalesce(mr.bob_points, 0)\n            END\n          WHEN au.award_code LIKE '%BOS%'\n            AND au.award_code NOT LIKE '%BOSV%'\n            AND au.award_code NOT LIKE '%BOSG%' THEN\n            CASE upper(coalesce(mr.bos_basis, 'BREED_COUNT'))\n              WHEN 'BREED_COUNT' THEN coalesce(mr.bosb_points, 0) * coalesce(bt.breed_total, 0)\n              WHEN 'SAME_SEX_COUNT' THEN coalesce(mr.bosb_points, 0) * coalesce(st.sex_total, 0)\n              WHEN 'BREED_COUNT_ROUND_UP' THEN ceil(coalesce(mr.bosb_points, 0) * coalesce(bt.breed_total, 0))\n              WHEN 'SHOW_COUNT' THEN coalesce(mr.bosb_points, 0) * coalesce(sht.show_total, 0)\n              WHEN 'FLAT' THEN coalesce(mr.bosb_points, 0)\n              ELSE coalesce(mr.bosb_points, 0)\n            END\n          ELSE 0\n        END\n      )::numeric(10,2) AS bob_points,\n\n      sum(\n        CASE\n          WHEN coalesce(mr.uses_bis_points, false) = false\n           AND coalesce(mr.uses_best4class_points, false) = false\n           AND coalesce(mr.uses_participation_points, false) = false\n          THEN 0\n          WHEN au.award_code LIKE '%BIS%' AND au.award_code NOT LIKE '%RIS%' THEN\n            CASE upper(coalesce(mr.bis_basis, 'FLAT'))\n              WHEN 'SHOW_COUNT' THEN coalesce(nullif(mr.bis_points, 0), 1) * coalesce(sht.show_total, 0)\n              WHEN 'SHOW_COUNT_CAPPED' THEN least(coalesce(sht.show_total, 0), coalesce(nullif(mr.bis_points, 0), coalesce(sht.show_total, 0)))\n              WHEN 'FLAT' THEN coalesce(mr.bis_points, 0)\n              WHEN 'BREED_COUNT' THEN coalesce(mr.bis_points, 0) * coalesce(bt.breed_total, 0)\n              ELSE coalesce(mr.bis_points, 0)\n            END\n          WHEN au.award_code LIKE '%RIS%'\n            OR au.award_code LIKE '%RBIS%'\n            OR au.award_code LIKE '%BRIS%'\n            OR au.award_code LIKE '%RESERVE%SHOW%' THEN\n            CASE upper(coalesce(mr.ris_basis, 'FLAT'))\n              WHEN 'SHOW_COUNT' THEN coalesce(nullif(mr.bris_points, 0), 1) * coalesce(sht.show_total, 0)\n              WHEN 'SHOW_COUNT_CAPPED' THEN least(coalesce(sht.show_total, 0), coalesce(nullif(mr.bris_points, 0), coalesce(sht.show_total, 0)))\n              WHEN 'FLAT' THEN coalesce(mr.bris_points, 0)\n              WHEN 'BREED_COUNT' THEN coalesce(mr.bris_points, 0) * coalesce(bt.breed_total, 0)\n              ELSE coalesce(mr.bris_points, 0)\n            END\n          WHEN coalesce(mr.uses_best4class_points, false) = true\n           AND (\n             au.award_code LIKE '%BEST 4%'\n             OR au.award_code LIKE '%B4C%'\n             OR au.award_code LIKE '%BEST 6 CLASS%'\n           )\n          THEN coalesce(mr.best4class_points, 0)\n          WHEN coalesce(mr.uses_participation_points, false) = true\n           AND (\n             au.award_code LIKE '%PARTICIPATION%'\n             OR au.award_code LIKE '%EXHIBIT%'\n           )\n          THEN coalesce(mr.participation_points, 0)\n          ELSE 0\n        END\n      )::numeric(10,2) AS bis_points,\n\n      sum(\n        CASE\n          WHEN coalesce(mr.uses_fur_points, false) = false THEN 0\n          WHEN au.award_code LIKE '%FUR%' OR au.award_code LIKE '%WOOL%' THEN\n            CASE upper(coalesce(mr.fur_basis, 'FLAT'))\n              WHEN 'WOOL_ENTRY_COUNT' THEN coalesce(nullif(mr.fur_points, 0), 1) * coalesce(wt.wool_total, 0)\n              WHEN 'FLAT' THEN coalesce(mr.fur_points, 0)\n              ELSE coalesce(mr.fur_points, 0)\n            END\n          ELSE 0\n        END\n      )::numeric(10,2) AS fur_points\n\n    FROM eligible_rows er\n    JOIN awards_union au\n      ON au.show_id = er.show_id\n     AND au.entry_id = er.entry_id\n    LEFT JOIN matrix_rule mr ON true\n    LEFT JOIN breed_totals bt\n      ON bt.breed_name = er.breed_name\n    LEFT JOIN sex_totals st\n      ON st.breed_name = er.breed_name\n     AND st.sex IS NOT DISTINCT FROM er.sex\n    LEFT JOIN variety_totals vt\n      ON vt.breed_name = er.breed_name\n     AND vt.variety_name IS NOT DISTINCT FROM er.variety_name\n    LEFT JOIN group_totals gt\n      ON gt.breed_name = er.breed_name\n     AND gt.group_name IS NOT DISTINCT FROM er.group_name\n    LEFT JOIN show_totals sht ON true\n    LEFT JOIN wool_totals wt\n      ON wt.breed_name = er.breed_name\n    GROUP BY er.show_id, er.breed_name, er.exhibitor_id\n  ),\n  combined AS (\n    SELECT\n      coalesce(cp.show_id, ap.show_id, fp.show_id) AS show_id,\n      coalesce(cp.breed_name, ap.breed_name, fp.breed_name) AS breed_name,\n      coalesce(cp.exhibitor_id, ap.exhibitor_id, fp.exhibitor_id) AS exhibitor_id,\n      coalesce(cp.exhibitor_name, ap.exhibitor_name, fp.exhibitor_name) AS exhibitor_name,\n      upper(p_scope) AS scope,\n      coalesce(cp.class_points, 0)::numeric(10,2) AS class_points,\n      coalesce(ap.variety_points, 0)::numeric(10,2) AS variety_points,\n      coalesce(ap.group_points, 0)::numeric(10,2) AS group_points,\n      coalesce(ap.bob_points, 0)::numeric(10,2) AS bob_points,\n      coalesce(ap.bis_points, 0)::numeric(10,2) AS bis_points,\n      (\n        coalesce(ap.fur_points, 0) +\n        coalesce(fp.fur_points, 0)\n      )::numeric(10,2) AS fur_points\n    FROM class_points_by_exhibitor cp\n    FULL OUTER JOIN award_points_by_exhibitor ap\n      ON ap.show_id = cp.show_id\n     AND ap.breed_name = cp.breed_name\n     AND ap.exhibitor_id = cp.exhibitor_id\n    FULL OUTER JOIN fur_class_points_by_exhibitor fp\n      ON fp.show_id = coalesce(cp.show_id, ap.show_id)\n     AND fp.breed_name = coalesce(cp.breed_name, ap.breed_name)\n     AND fp.exhibitor_id = coalesce(cp.exhibitor_id, ap.exhibitor_id)\n  )\n  SELECT\n    c.show_id,\n    c.breed_name,\n    c.exhibitor_id,\n    c.exhibitor_name,\n    c.scope,\n    v_letter,\n    c.class_points,\n    c.variety_points,\n    c.group_points,\n    c.bob_points,\n    c.bis_points,\n    c.fur_points,\n    (\n      c.class_points\n      + c.variety_points\n      + c.group_points\n      + c.bob_points\n      + c.bis_points\n      + c.fur_points\n    )::numeric(10,2) AS total_points,\n    'v2' AS calculation_version,\n    coalesce(pr.rule_source, 'DEFAULT')::text,\n    coalesce(pr.verification_status, 'PROVISIONAL')::text,\n    coalesce(pr.engine_type, 'ADDITIVE_LIGHT')::text\n  FROM combined c\n  LEFT JOIN profile_rule pr ON true\n  WHERE c.exhibitor_id IS NOT NULL;\n\n  INSERT INTO public.sweepstakes_entry_results (\n    show_id,\n    exhibitor_id,\n    entry_id,\n    animal_id,\n    breed_name,\n    variety_name,\n    class_name,\n    sex,\n    tattoo,\n    show_letter,\n    scope,\n    points_source,\n    points\n  )\n  WITH matrix_rule AS (\n    SELECT brm.*\n    FROM public.breed_rules_matrix brm\n    WHERE brm.breed_name = p_breed_name\n      AND coalesce(brm.status, '') <> 'template'\n    LIMIT 1\n  ),\n  result_rows AS (\n    SELECT\n      rer.entry_id,\n      NULL::uuid AS animal_id,\n      p_show_id AS show_id,\n      rer.section_id,\n      s.letter::text AS section_letter,\n      rer.exhibitor_id::text AS exhibitor_id,\n      rer.breed_name,\n      rer.variety_name,\n      rer.group_name,\n      coalesce(rer.fur_variety, '') AS fur_variety,\n      coalesce(rer.is_fur, false) AS is_fur,\n      rer.sex,\n      rer.class_name,\n      rer.tattoo,\n      rer.placement,\n      CASE\n        WHEN btrim(coalesce(rer.placement, '')) ~ '^\\d+$'\n          THEN btrim(rer.placement)::integer\n        ELSE NULL\n      END AS placement_num,\n      rer.is_shown,\n      rer.is_disqualified,\n      rer.uses_group_awards,\n      rer.uses_variety_awards\n    FROM public.show_sections s\n    CROSS JOIN LATERAL public.report_results_entry_rows(p_show_id, s.id, p_show_letter) rer\n    WHERE s.show_id = p_show_id\n      AND upper(s.kind::text) = upper(p_scope)\n      AND p_show_letter IS NOT NULL\n      AND btrim(p_show_letter) <> ''\n      AND rer.breed_name = p_breed_name\n      AND upper(coalesce(s.letter::text, '')) = upper(p_show_letter)\n\n    UNION ALL\n\n    SELECT\n      rer.entry_id,\n      NULL::uuid AS animal_id,\n      p_show_id AS show_id,\n      rer.section_id,\n      s.letter::text AS section_letter,\n      rer.exhibitor_id::text AS exhibitor_id,\n      rer.breed_name,\n      rer.variety_name,\n      rer.group_name,\n      coalesce(rer.fur_variety, '') AS fur_variety,\n      coalesce(rer.is_fur, false) AS is_fur,\n      rer.sex,\n      rer.class_name,\n      rer.tattoo,\n      rer.placement,\n      CASE\n        WHEN btrim(coalesce(rer.placement, '')) ~ '^\\d+$'\n          THEN btrim(rer.placement)::integer\n        ELSE NULL\n      END AS placement_num,\n      rer.is_shown,\n      rer.is_disqualified,\n      rer.uses_group_awards,\n      rer.uses_variety_awards\n    FROM public.show_sections s\n    CROSS JOIN LATERAL public.report_results_entry_rows(p_show_id, s.id, p_show_letter) rer\n    WHERE s.show_id = p_show_id\n      AND upper(s.kind::text) = upper(p_scope)\n      AND (p_show_letter IS NULL OR btrim(p_show_letter) = '')\n      AND rer.breed_name = p_breed_name\n  ),\n  eligible_rows AS (\n    SELECT *\n    FROM result_rows\n    WHERE coalesce(is_shown, true) = true\n      AND coalesce(is_disqualified, false) = false\n  ),\n  regular_rows AS (\n    SELECT *\n    FROM eligible_rows\n    WHERE coalesce(is_fur, false) = false\n  ),\n  fur_rows AS (\n    SELECT *\n    FROM eligible_rows\n    WHERE coalesce(is_fur, false) = true\n  ),\n  class_counts AS (\n    SELECT\n      er.breed_name,\n      er.variety_name,\n      er.sex,\n      er.class_name,\n      er.section_id,\n      count(*)::numeric AS entry_count,\n      count(DISTINCT er.exhibitor_id)::numeric AS exhibitor_count\n    FROM regular_rows er\n    GROUP BY er.breed_name, er.variety_name, er.sex, er.class_name, er.section_id\n  ),\n  \n  fur_class_counts AS (\n    SELECT\n      er.breed_name,\n      nullif(btrim(er.fur_variety), '') AS fur_variety,\n      er.section_id,\n      count(*)::numeric AS entry_count,\n      count(DISTINCT er.exhibitor_id)::numeric AS exhibitor_count\n    FROM fur_rows er\n    GROUP BY\n      er.breed_name,\n      nullif(btrim(er.fur_variety), ''),\n      er.section_id\n  ),\n\n  breed_totals AS (\n    SELECT er.breed_name, count(*)::numeric AS breed_total\n    FROM regular_rows er\n    GROUP BY er.breed_name\n  ),\n  sex_totals AS (\n    SELECT er.breed_name, er.sex, count(*)::numeric AS sex_total\n    FROM regular_rows er\n    GROUP BY er.breed_name, er.sex\n  ),\n  show_totals AS (\n    SELECT count(*)::numeric AS show_total\n    FROM regular_rows\n  ),\n  variety_totals AS (\n    SELECT er.breed_name, er.variety_name, count(*)::numeric AS variety_total\n    FROM regular_rows er\n    GROUP BY er.breed_name, er.variety_name\n  ),\n  awards_union AS (\n    SELECT\n      e.show_id,\n      ea.entry_id,\n      upper(btrim(ea.award_code)) AS award_code\n    FROM public.entry_awards ea\n    JOIN public.entries e\n      ON e.id = ea.entry_id\n    WHERE e.show_id = p_show_id\n      AND ea.award_code IS NOT NULL\n      AND btrim(ea.award_code) <> ''\n\n    UNION\n\n    SELECT r.show_id, r.entry_id, upper(btrim(r.award)) AS award_code\n    FROM public.results r\n    WHERE r.show_id = p_show_id\n      AND r.award IS NOT NULL\n      AND btrim(r.award) <> ''\n\n    UNION\n\n    SELECT e.show_id, e.id AS entry_id, upper(btrim(e.special_awards)) AS award_code\n    FROM public.entries e\n    WHERE e.show_id = p_show_id\n      AND e.special_awards IS NOT NULL\n      AND btrim(e.special_awards) <> ''\n  ),\n  entry_points AS (\n    SELECT\n      er.show_id,\n      er.exhibitor_id,\n      er.entry_id,\n      er.animal_id,\n      \n      er.breed_name,\n      CASE\n        WHEN coalesce(er.is_fur, false) THEN\n          CASE\n            WHEN btrim(coalesce(er.fur_variety, '')) = ''\n              THEN 'Wool'\n            WHEN lower(btrim(er.fur_variety)) IN ('white', 'white wool')\n              THEN 'Wool - White'\n            WHEN lower(btrim(er.fur_variety)) IN (\n              'colored',\n              'coloured',\n              'colored wool',\n              'coloured wool'\n            )\n              THEN 'Wool - Colored'\n            WHEN lower(btrim(er.fur_variety)) LIKE 'wool - %'\n              THEN initcap(btrim(er.fur_variety))\n            ELSE 'Wool - ' || initcap(btrim(er.fur_variety))\n          END\n        ELSE er.variety_name\n      END AS variety_name,\n      CASE\n        WHEN coalesce(er.is_fur, false) THEN ''\n        ELSE er.class_name\n      END AS class_name,\n      CASE\n        WHEN coalesce(er.is_fur, false) THEN ''\n        ELSE er.sex\n      END AS sex,\n      er.tattoo,\n      coalesce(er.section_letter, v_letter) AS show_letter,\n\n      upper(p_scope) AS scope,\n      CASE\n        WHEN coalesce(er.is_fur, false) THEN 'FUR'\n        ELSE 'CLASS'\n      END AS points_source,\n      (\n        CASE er.placement_num\n          WHEN 1 THEN coalesce(mr.place_1, 0)\n          WHEN 2 THEN coalesce(mr.place_2, 0)\n          WHEN 3 THEN coalesce(mr.place_3, 0)\n          WHEN 4 THEN coalesce(mr.place_4, 0)\n          WHEN 5 THEN coalesce(mr.place_5, 0)\n          ELSE 0\n        END\n        *\n        CASE\n          WHEN upper(coalesce(mr.class_points_model, 'MULTIPLIER_BY_CLASS_SIZE')) = 'FLAT_BY_PLACING' THEN 1\n          WHEN coalesce(er.is_fur, false) = true THEN\n            CASE\n              WHEN upper(coalesce(mr.multiplier_type, 'ENTRY_COUNT')) = 'EXHIBITOR_COUNT' THEN coalesce(fc.exhibitor_count, 0)\n              ELSE coalesce(fc.entry_count, 0)\n            END\n          WHEN upper(coalesce(mr.class_points_model, '')) = 'MULTIPLIER_BY_VARIETY_SIZE' THEN coalesce(vt.variety_total, 0)\n          WHEN upper(coalesce(mr.multiplier_type, 'ENTRY_COUNT')) = 'EXHIBITOR_COUNT' THEN coalesce(cc.exhibitor_count, 0)\n          ELSE coalesce(cc.entry_count, 0)\n        END\n      )::numeric(10,2) AS points\n    FROM eligible_rows er\n    LEFT JOIN matrix_rule mr ON true\n    LEFT JOIN class_counts cc\n      ON cc.breed_name = er.breed_name\n     AND cc.variety_name IS NOT DISTINCT FROM er.variety_name\n     AND cc.sex IS NOT DISTINCT FROM er.sex\n     AND cc.class_name IS NOT DISTINCT FROM er.class_name\n     AND cc.section_id = er.section_id\n    \n    LEFT JOIN fur_class_counts fc\n      ON fc.breed_name = er.breed_name\n     AND fc.fur_variety IS NOT DISTINCT FROM\n         nullif(btrim(er.fur_variety), '')\n     AND fc.section_id = er.section_id\n\n    LEFT JOIN variety_totals vt\n      ON vt.breed_name = er.breed_name\n     AND vt.variety_name IS NOT DISTINCT FROM er.variety_name\n    WHERE er.placement_num BETWEEN 1 AND 5\n\n    UNION ALL\n\n    SELECT\n      er.show_id,\n      er.exhibitor_id,\n      er.entry_id,\n      er.animal_id,\n      \n      er.breed_name,\n      CASE\n        WHEN coalesce(er.is_fur, false) THEN\n          CASE\n            WHEN btrim(coalesce(er.fur_variety, '')) = ''\n              THEN 'Wool'\n            WHEN lower(btrim(er.fur_variety)) IN ('white', 'white wool')\n              THEN 'Wool - White'\n            WHEN lower(btrim(er.fur_variety)) IN (\n              'colored',\n              'coloured',\n              'colored wool',\n              'coloured wool'\n            )\n              THEN 'Wool - Colored'\n            WHEN lower(btrim(er.fur_variety)) LIKE 'wool - %'\n              THEN initcap(btrim(er.fur_variety))\n            ELSE 'Wool - ' || initcap(btrim(er.fur_variety))\n          END\n        ELSE er.variety_name\n      END AS variety_name,\n      CASE\n        WHEN coalesce(er.is_fur, false) THEN ''\n        ELSE er.class_name\n      END AS class_name,\n      CASE\n        WHEN coalesce(er.is_fur, false) THEN ''\n        ELSE er.sex\n      END AS sex,\n      er.tattoo,\n      coalesce(er.section_letter, v_letter) AS show_letter,\n\n      upper(p_scope) AS scope,\n      au.award_code AS points_source,\n      (\n        CASE\n          WHEN coalesce(mr.uses_variety_points, false) = true\n            AND er.uses_variety_awards IS true\n            AND au.award_code LIKE '%BOV%' THEN\n            CASE upper(coalesce(mr.bov_basis, 'VARIETY_COUNT'))\n              WHEN 'VARIETY_COUNT' THEN coalesce(mr.bov_points, 0) * coalesce(vt.variety_total, 0)\n              WHEN 'FLAT' THEN coalesce(mr.bov_points, 0)\n              ELSE coalesce(mr.bov_points, 0)\n            END\n\n          WHEN coalesce(mr.uses_variety_points, false) = true\n            AND er.uses_variety_awards IS true\n            AND au.award_code LIKE '%BOSV%' THEN\n            CASE upper(coalesce(mr.bosv_basis, 'VARIETY_COUNT'))\n              WHEN 'VARIETY_COUNT' THEN coalesce(mr.bosv_points, 0) * coalesce(vt.variety_total, 0)\n              WHEN 'FLAT' THEN coalesce(mr.bosv_points, 0)\n              ELSE coalesce(mr.bosv_points, 0)\n            END\n\n          WHEN coalesce(mr.uses_group_points, false) = true\n            AND er.uses_group_awards IS true\n            AND au.award_code LIKE '%BOG%' THEN\n            coalesce(mr.bog_points, 0)\n\n          WHEN coalesce(mr.uses_group_points, false) = true\n            AND er.uses_group_awards IS true\n            AND au.award_code LIKE '%BOSG%' THEN\n            coalesce(mr.bosg_points, 0)\n\n          WHEN coalesce(mr.uses_bob_points, true) = true\n            AND au.award_code LIKE '%BOB%' THEN\n            CASE upper(coalesce(mr.bob_basis, 'BREED_COUNT'))\n              WHEN 'BREED_COUNT' THEN coalesce(mr.bob_points, 0) * coalesce(bt.breed_total, 0)\n              WHEN 'SAME_SEX_COUNT' THEN coalesce(mr.bob_points, 0) * coalesce(st.sex_total, 0)\n              WHEN 'BREED_COUNT_ROUND_UP' THEN ceil(coalesce(mr.bob_points, 0) * coalesce(bt.breed_total, 0))\n              WHEN 'SHOW_COUNT' THEN coalesce(mr.bob_points, 0) * coalesce(sht.show_total, 0)\n              WHEN 'FLAT' THEN coalesce(mr.bob_points, 0)\n              ELSE coalesce(mr.bob_points, 0)\n            END\n\n          WHEN coalesce(mr.uses_bob_points, true) = true\n            AND au.award_code LIKE '%BOS%'\n            AND au.award_code NOT LIKE '%BOSV%'\n            AND au.award_code NOT LIKE '%BOSG%' THEN\n            CASE upper(coalesce(mr.bos_basis, 'BREED_COUNT'))\n              WHEN 'BREED_COUNT' THEN coalesce(mr.bosb_points, 0) * coalesce(bt.breed_total, 0)\n              WHEN 'SAME_SEX_COUNT' THEN coalesce(mr.bosb_points, 0) * coalesce(st.sex_total, 0)\n              WHEN 'BREED_COUNT_ROUND_UP' THEN ceil(coalesce(mr.bosb_points, 0) * coalesce(bt.breed_total, 0))\n              WHEN 'SHOW_COUNT' THEN coalesce(mr.bosb_points, 0) * coalesce(sht.show_total, 0)\n              WHEN 'FLAT' THEN coalesce(mr.bosb_points, 0)\n              ELSE coalesce(mr.bosb_points, 0)\n            END\n\n          WHEN coalesce(mr.uses_bis_points, false) = true\n            AND au.award_code LIKE '%BIS%'\n            AND au.award_code NOT LIKE '%RIS%' THEN\n            coalesce(mr.bis_points, 0)\n\n          WHEN au.award_code LIKE '%RIS%'\n            OR au.award_code LIKE '%RBIS%'\n            OR au.award_code LIKE '%BRIS%'\n            OR au.award_code LIKE '%RESERVE%SHOW%' THEN\n            coalesce(mr.bris_points, 0)\n\n          WHEN coalesce(mr.uses_fur_points, false) = true\n            AND (au.award_code LIKE '%FUR%' OR au.award_code LIKE '%WOOL%') THEN\n            coalesce(mr.fur_points, 0)\n\n          ELSE 0\n        END\n      )::numeric(10,2) AS points\n    FROM eligible_rows er\n    JOIN awards_union au\n      ON au.show_id = er.show_id\n     AND au.entry_id = er.entry_id\n    LEFT JOIN matrix_rule mr ON true\n    LEFT JOIN breed_totals bt\n      ON bt.breed_name = er.breed_name\n    LEFT JOIN variety_totals vt\n      ON vt.breed_name = er.breed_name\n     AND vt.variety_name IS NOT DISTINCT FROM er.variety_name\n    LEFT JOIN sex_totals st\n      ON st.breed_name = er.breed_name\n     AND st.sex IS NOT DISTINCT FROM er.sex\n    LEFT JOIN show_totals sht ON true\n  )\n  SELECT\n    show_id,\n    exhibitor_id,\n    entry_id,\n    animal_id,\n    breed_name,\n    variety_name,\n    class_name,\n    sex,\n    tattoo,\n    show_letter,\n    scope,\n    points_source,\n    sum(points)::numeric(10,2) AS points\n  FROM entry_points\n  WHERE points <> 0\n  GROUP BY\n    show_id,\n    exhibitor_id,\n    entry_id,\n    animal_id,\n    breed_name,\n    variety_name,\n    class_name,\n    sex,\n    tattoo,\n    show_letter,\n    scope,\n    points_source;\n\n  RETURN QUERY\n  SELECT sr.*\n  FROM public.sweepstakes_results sr\n  WHERE sr.show_id = p_show_id\n    AND sr.breed_name = p_breed_name\n    AND upper(sr.scope) = upper(p_scope)\n    AND upper(coalesce(sr.show_letter, 'ALL')) = v_letter\n    AND sr.calculation_version = 'v2'\n  ORDER BY sr.total_points DESC, sr.exhibitor_name ASC;\nEND;\n$function$\n"
+    },
+    {
+      "proname": "calculate_sweepstakes_for_show",
+      "arguments": "p_show_id uuid, p_scope text, p_show_letter text",
+      "definition": "CREATE OR REPLACE FUNCTION public.calculate_sweepstakes_for_show(p_show_id uuid, p_scope text, p_show_letter text DEFAULT NULL::text)\n RETURNS SETOF sweepstakes_results\n LANGUAGE plpgsql\nAS $function$declare\n  v_breed record;\n  v_letter text := upper(coalesce(nullif(btrim(p_show_letter), ''), 'ALL'));\nbegin\n  if upper(coalesce(p_scope, '')) not in ('OPEN', 'YOUTH') then\n    raise exception 'Invalid scope: %. Expected OPEN or YOUTH.', p_scope;\n  end if;\n\n  delete from public.sweepstakes_results sr\n  where sr.show_id = p_show_id\n    and upper(sr.scope) = upper(p_scope)\n    and upper(coalesce(sr.show_letter, 'ALL')) = v_letter\n    and sr.calculation_version = 'v2';\n\n  for v_breed in\n\n    -- specific letter path\n    select distinct rer.breed_name\n    from public.show_sections s\n    cross join lateral public.report_results_entry_rows(\n      p_show_id,\n      s.id,\n      null\n    ) rer\n    where s.show_id = p_show_id\n      and upper(s.kind::text) = upper(p_scope)\n      and p_show_letter is not null\n      and btrim(p_show_letter) <> ''\n      and rer.breed_name is not null\n      and btrim(rer.breed_name) <> ''\n      and upper(coalesce(s.letter::text, '')) = upper(p_show_letter)\n\n    union\n\n    -- all letters path\n    select distinct rer.breed_name\n    from public.show_sections s\n    cross join lateral public.report_results_entry_rows(\n      p_show_id,\n      s.id,\n      null\n    ) rer\n    where s.show_id = p_show_id\n      and upper(s.kind::text) = upper(p_scope)\n      and (p_show_letter is null or btrim(p_show_letter) = '')\n      and rer.breed_name is not null\n      and btrim(rer.breed_name) <> ''\n\n    order by 1\n\n  loop\n    perform public.calculate_sweepstakes_for_breed(\n      p_show_id,\n      v_breed.breed_name,\n      upper(p_scope),\n      p_show_letter\n    );\n  end loop;\n\n  return query\n  select sr.*\n  from public.sweepstakes_results sr\n  where sr.show_id = p_show_id\n    and upper(sr.scope) = upper(p_scope)\n    and upper(coalesce(sr.show_letter, 'ALL')) = v_letter\n    and sr.calculation_version = 'v2'\n  order by sr.breed_name asc, sr.total_points desc, sr.exhibitor_name asc;\nend;$function$\n"
+    },
+    {
+      "proname": "user_can_enter_results",
+      "arguments": "p_show_id uuid, p_user_id uuid",
+      "definition": "CREATE OR REPLACE FUNCTION public.user_can_enter_results(p_show_id uuid, p_user_id uuid DEFAULT NULL::uuid)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\r\n  select\r\n    public.user_can_manage_show_settings(\r\n      p_show_id,\r\n      coalesce(p_user_id, auth.uid())\r\n    )\r\n    or exists (\r\n      select 1\r\n      from public.role_assignments ra\r\n      where ra.show_id = p_show_id\r\n        and ra.user_id = coalesce(p_user_id, auth.uid())\r\n        and ra.role::text = 'reporting_clerk'\r\n    );\r\n$function$\n"
+    },
+    {
+      "proname": "calculate_entry_cart_balance",
+      "arguments": "p_cart_id uuid",
+      "definition": "CREATE OR REPLACE FUNCTION public.calculate_entry_cart_balance(p_cart_id uuid)\n RETURNS SETOF show_exhibitor_balances\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO ''\nAS $function$\ndeclare\n  v_cart public.entry_carts%rowtype;\n  v_is_service boolean :=\n    coalesce(auth.jwt() ->> 'role', '') = 'service_role';\nbegin\n  select * into v_cart\n  from public.entry_carts\n  where id = p_cart_id;\n\n  if not found then\n    raise exception 'Cart % not found', p_cart_id;\n  end if;\n\n  if not v_is_service\n     and auth.uid() is distinct from v_cart.user_id\n     and not public.user_can_manage_entries(v_cart.show_id)\n     and not public.user_can_manage_show_settings(v_cart.show_id) then\n    raise exception 'You do not have access to this cart'\n      using errcode = '42501';\n  end if;\n\n  return query\n  select *\n  from public.calculate_entry_cart_balance_internal(p_cart_id);\nend;\n$function$\n"
+    },
+    {
+      "proname": "calculate_entry_cart_balance_internal",
+      "arguments": "p_cart_id uuid",
+      "definition": "CREATE OR REPLACE FUNCTION public.calculate_entry_cart_balance_internal(p_cart_id uuid)\n RETURNS SETOF show_exhibitor_balances\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public', 'pg_temp'\nAS $function$\ndeclare\n  v_show_id uuid;\n  v_enabled boolean := false;\n  v_type text := 'amount';\n  v_value numeric := 0;\n  v_scope text := 'both';\n  v_show_letters text[] := '{}'::text[];\nbegin\n  perform 1\n  from public.calculate_entry_cart_balance_without_canada_special(p_cart_id);\n\n  select c.show_id\n  into v_show_id\n  from public.entry_carts c\n  where c.id = p_cart_id;\n\n  select\n    coalesce(sfs.canada_special_discount_enabled, false),\n    lower(coalesce(sfs.canada_special_discount_type, 'amount')),\n    greatest(coalesce(sfs.canada_special_discount_value, 0), 0),\n    lower(coalesce(sfs.canada_special_discount_scope, 'both')),\n    coalesce(sfs.canada_special_show_letters, '{}'::text[])\n  into v_enabled, v_type, v_value, v_scope, v_show_letters\n  from public.show_fee_settings sfs\n  where sfs.show_id = v_show_id;\n\n  if coalesce(v_enabled, false) then\n    with canada_discount_by_exhibitor as (\n      select\n        eci.exhibitor_id,\n        round(\n          sum(\n            least(\n              coalesce(sffs.fee_per_entry, 0),\n              greatest(\n                case\n                  when v_type = 'fixed_rate' then\n                    coalesce(sffs.fee_per_entry, 0) - v_value\n                  when v_type = 'percent' then\n                    coalesce(sffs.fee_per_entry, 0)\n                    * case when v_value <= 1 then v_value else v_value / 100 end\n                  when v_type = 'amount' then v_value\n                  else 0\n                end,\n                0\n              )\n            )\n          ) * 100\n        )::integer as special_discount_cents\n      from public.entry_cart_items eci\n      join public.exhibitors exhibitor\n        on exhibitor.id = eci.exhibitor_id\n      join public.show_sections section\n        on section.id = eci.section_id\n       and section.show_id = v_show_id\n      left join public.show_section_fee_settings sffs\n        on sffs.section_id = eci.section_id\n      where eci.cart_id = p_cart_id\n        and not coalesce(eci.is_fur, false)\n        and public.is_canadian_exhibitor_address(\n          exhibitor.state,\n          exhibitor.zip\n        )\n        and (\n          v_scope = 'both'\n          or lower(section.kind::text) = v_scope\n        )\n        and (\n          cardinality(v_show_letters) = 0\n          or exists (\n            select 1\n            from unnest(v_show_letters) as selected_letter\n            where upper(btrim(selected_letter)) = upper(btrim(section.letter))\n          )\n        )\n      group by eci.exhibitor_id\n    ), chosen_discounts as (\n      select\n        balance.id,\n        balance.discount_cents as volume_discount_cents,\n        greatest(\n          balance.discount_cents,\n          canada.special_discount_cents\n        )::integer as chosen_discount_cents,\n        canada.special_discount_cents\n      from public.show_exhibitor_balances balance\n      join canada_discount_by_exhibitor canada\n        on canada.exhibitor_id = balance.exhibitor_id\n      where balance.entry_cart_id = p_cart_id\n        and balance.source = 'cart'\n    )\n    update public.show_exhibitor_balances balance\n    set\n      discount_cents = chosen.chosen_discount_cents,\n      calculated_total_cents = greatest(\n        balance.subtotal_before_discount_cents - chosen.chosen_discount_cents,\n        0\n      ),\n      balance_due_cents = greatest(\n        balance.subtotal_before_discount_cents\n          - chosen.chosen_discount_cents\n          - balance.paid_online_cents\n          - balance.paid_manual_cents\n          + balance.refunded_cents,\n        0\n      ),\n      payment_status = case\n        when greatest(\n          balance.subtotal_before_discount_cents\n            - chosen.chosen_discount_cents\n            - balance.paid_online_cents\n            - balance.paid_manual_cents\n            + balance.refunded_cents,\n          0\n        ) = 0 then 'paid'\n        else 'unpaid'\n      end,\n      fee_snapshot = coalesce(balance.fee_snapshot, '{}'::jsonb)\n        || jsonb_build_object(\n          'discount_strategy', 'better_discount',\n          'volume_discount_cents', chosen.volume_discount_cents,\n          'special_discount_eligible', true,\n          'special_discount_cents', chosen.special_discount_cents,\n          'applied_discount', case\n            when chosen.special_discount_cents > chosen.volume_discount_cents\n              then 'special'\n            when chosen.volume_discount_cents > 0 then 'volume'\n            else 'none'\n          end,\n          'discount_cents', chosen.chosen_discount_cents,\n          'calculated_total_cents', greatest(\n            balance.subtotal_before_discount_cents\n              - chosen.chosen_discount_cents,\n            0\n          )\n        ),\n      calculated_at = now(),\n      updated_at = now()\n    from chosen_discounts chosen\n    where balance.id = chosen.id;\n  end if;\n\n  return query\n  select balance.*\n  from public.show_exhibitor_balances balance\n  where balance.entry_cart_id = p_cart_id\n    and balance.source = 'cart'\n  order by balance.exhibitor_id;\nend;\n$function$\n"
+    },
+    {
+      "proname": "calculate_entry_cart_balance_without_canada_special",
+      "arguments": "p_cart_id uuid",
+      "definition": "CREATE OR REPLACE FUNCTION public.calculate_entry_cart_balance_without_canada_special(p_cart_id uuid)\n RETURNS SETOF show_exhibitor_balances\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public', 'pg_temp'\nAS $function$\ndeclare\n  v_show_id uuid;\n  v_cart_user_id uuid;\n\n  v_currency text := 'usd';\n\n  v_discount_enabled boolean := false;\n  v_discount_type text := 'amount';\n  v_discount_value numeric := 0;\n\n  v_discount_basis text := 'each_show';\n  v_discount_scope text := 'both';\n  v_discount_min_entries integer := 0;\n  v_discount_max_entries integer := null;\n  v_discount_required_shows integer := 0;\nbegin\n  select\n    c.show_id,\n    c.user_id\n  into\n    v_show_id,\n    v_cart_user_id\n  from public.entry_carts c\n  where c.id = p_cart_id;\n\n  if v_show_id is null then\n    raise exception 'Cart % not found', p_cart_id;\n  end if;\n\n  select\n    lower(coalesce(sfs.currency, 'usd')),\n    coalesce(sfs.multi_show_discount_enabled, false),\n    lower(coalesce(sfs.multi_show_discount_type, 'amount')),\n    coalesce(sfs.multi_show_discount_value, 0),\n    lower(coalesce(sfs.multi_show_discount_basis, 'each_show')),\n    lower(coalesce(sfs.multi_show_discount_scope, 'both')),\n    coalesce(sfs.multi_show_discount_min_entries, 0),\n    sfs.multi_show_discount_max_entries,\n    coalesce(sfs.multi_show_discount_required_shows, 0)\n  into\n    v_currency,\n    v_discount_enabled,\n    v_discount_type,\n    v_discount_value,\n    v_discount_basis,\n    v_discount_scope,\n    v_discount_min_entries,\n    v_discount_max_entries,\n    v_discount_required_shows\n  from public.show_fee_settings sfs\n  where sfs.show_id = v_show_id;\n\n  -- Apply safe defaults when the show has no fee-settings row.\n  if not found then\n    v_currency := 'usd';\n    v_discount_enabled := false;\n    v_discount_type := 'amount';\n    v_discount_value := 0;\n    v_discount_basis := 'each_show';\n    v_discount_scope := 'both';\n    v_discount_min_entries := 0;\n    v_discount_max_entries := null;\n    v_discount_required_shows := 0;\n  end if;\n\n  if length(v_currency) <> 3 then\n    v_currency := 'usd';\n  end if;\n\n  if v_discount_type not in ('fixed_rate', 'amount', 'percent') then\n    v_discount_type := 'amount';\n  end if;\n\n  if v_discount_basis not in ('each_show', 'cumulative') then\n    v_discount_basis := 'each_show';\n  end if;\n\n  if v_discount_scope not in ('both', 'open', 'youth') then\n    v_discount_scope := 'both';\n  end if;\n\n  v_discount_value := greatest(coalesce(v_discount_value, 0), 0);\n  v_discount_min_entries :=\n    greatest(coalesce(v_discount_min_entries, 0), 0);\n  v_discount_required_shows :=\n    greatest(coalesce(v_discount_required_shows, 0), 0);\n\n  if v_discount_max_entries is not null then\n    v_discount_max_entries :=\n      greatest(v_discount_max_entries, 0);\n  end if;\n\n  if not exists (\n    select 1\n    from public.entry_cart_items eci\n    where eci.cart_id = p_cart_id\n  ) then\n    raise exception 'Cart % is empty', p_cart_id;\n  end if;\n\n  if exists (\n    select 1\n    from public.entry_cart_items eci\n    where eci.cart_id = p_cart_id\n      and eci.exhibitor_id is null\n  ) then\n    raise exception\n      'Cart % has one or more items missing exhibitor_id',\n      p_cart_id;\n  end if;\n\n  return query\n  with cart_items as (\n    select\n      eci.id,\n      eci.cart_id,\n      eci.section_id,\n      eci.animal_id,\n      eci.exhibitor_id,\n      coalesce(eci.is_fur, false) as is_fur,\n      eci.created_at\n    from public.entry_cart_items eci\n    where eci.cart_id = p_cart_id\n      and eci.exhibitor_id is not null\n  ),\n\n  priced_items as (\n    select\n      ci.*,\n      ss.show_id,\n      lower(ss.kind::text) as section_kind,\n      ss.letter as section_letter,\n      coalesce(\n        nullif(btrim(ss.display_name), ''),\n        concat(\n          initcap(ss.kind::text),\n          ' ',\n          coalesce(ss.letter, '')\n        )\n      ) as section_label,\n      ss.sort_order as section_sort_order,\n\n      coalesce(sffs.fee_per_entry, 0)::numeric\n        as fee_per_entry,\n\n      coalesce(sffs.fee_per_show, 0)::numeric\n        as fee_per_show,\n\n      coalesce(sffs.fur_fee, 0)::numeric\n        as fur_fee,\n\n      case\n        when v_discount_scope = 'both' then true\n        when lower(ss.kind::text) = v_discount_scope then true\n        else false\n      end as eligible_for_discount\n\n    from cart_items ci\n\n    join public.show_sections ss\n      on ss.id = ci.section_id\n\n    left join public.show_section_fee_settings sffs\n      on sffs.section_id = ci.section_id\n\n    where ss.show_id = v_show_id\n  ),\n\n  /*\n   * All section totals remain included in the balance, regardless of whether\n   * the section is eligible for the selected discount scope.\n   */\n  section_counts as (\n    select\n      pi.exhibitor_id,\n      pi.section_id,\n\n      min(pi.section_kind) as section_kind,\n      min(pi.section_letter) as section_letter,\n      min(pi.section_label) as section_label,\n\n      min(\n        coalesce(pi.section_sort_order, 999999)\n      ) as section_sort_order,\n\n      count(*) filter (where not pi.is_fur)::integer as entry_count,\n\n      count(*) filter (\n        where pi.is_fur\n      )::integer as fur_count,\n\n      round(\n        sum(case when not pi.is_fur then pi.fee_per_entry else 0 end) * 100\n      )::integer as entries_subtotal_cents,\n\n      round(\n        sum(\n          case\n            when pi.is_fur then pi.fur_fee\n            else 0\n          end\n        ) * 100\n      )::integer as fur_subtotal_cents,\n\n      round(\n        max(pi.fee_per_show) * 100\n      )::integer as show_fee_cents\n\n    from priced_items pi\n\n    group by\n      pi.exhibitor_id,\n      pi.section_id\n  ),\n\n  /*\n   * Counts only sections permitted by multi_show_discount_scope.\n   */\n  eligible_section_counts as (\n    select\n      pi.exhibitor_id,\n      pi.section_id,\n      count(*) filter (where not pi.is_fur)::integer as eligible_entry_count\n\n    from priced_items pi\n\n    where pi.eligible_for_discount = true\n      and not pi.is_fur\n\n    group by\n      pi.exhibitor_id,\n      pi.section_id\n  ),\n\n  /*\n   * Determines whether each exhibitor qualifies.\n   *\n   * each_show:\n   *   At least the configured number of sections must each contain the\n   *   configured minimum number of entries.\n   *\n   * cumulative:\n   *   The exhibitor must enter at least the configured number of sections\n   *   and have at least the configured total number of eligible entries.\n   */\n  exhibitor_discount_stats as (\n    select\n      pi.exhibitor_id,\n\n      count(*) filter (\n        where pi.eligible_for_discount\n          and not pi.is_fur\n      )::integer as eligible_entry_count,\n\n      count(\n        distinct pi.section_id\n      ) filter (\n        where pi.eligible_for_discount\n      )::integer as eligible_show_count,\n\n      coalesce((\n        select count(*)::integer\n        from eligible_section_counts esc\n        where esc.exhibitor_id = pi.exhibitor_id\n          and esc.eligible_entry_count >= v_discount_min_entries\n      ), 0) as qualifying_show_count\n\n    from priced_items pi\n\n    group by pi.exhibitor_id\n  ),\n\n  /*\n   * Add deterministic numbering so an optional maximum can be applied.\n   *\n   * For cumulative discounts, maximum entries is applied across all eligible\n   * entries for the exhibitor.\n   *\n   * For each-show discounts, maximum entries is applied separately to each\n   * qualifying show section, matching the cart-screen calculation.\n   */\n  eligible_ranked_items as (\n    select\n      pi.*,\n\n      row_number() over (\n        partition by pi.exhibitor_id\n        order by\n          pi.created_at,\n          pi.id\n      ) as cumulative_entry_number,\n\n      row_number() over (\n        partition by\n          pi.exhibitor_id,\n          pi.section_id\n        order by\n          pi.created_at,\n          pi.id\n      ) as section_entry_number\n\n    from priced_items pi\n\n    where pi.eligible_for_discount = true\n      and not pi.is_fur\n  ),\n\n  discount_eligible_items as (\n    select eri.*\n\n    from eligible_ranked_items eri\n\n    join exhibitor_discount_stats eds\n      on eds.exhibitor_id = eri.exhibitor_id\n\n    join eligible_section_counts esc\n      on esc.exhibitor_id = eri.exhibitor_id\n     and esc.section_id = eri.section_id\n\n    where\n      v_discount_enabled = true\n\n      and v_discount_min_entries > 0\n\n      and v_discount_required_shows > 0\n\n      and (\n        (\n          v_discount_basis = 'cumulative'\n\n          and eds.eligible_show_count\n            >= v_discount_required_shows\n\n          and eds.eligible_entry_count\n            >= v_discount_min_entries\n\n          and (\n            v_discount_max_entries is null\n            or eri.cumulative_entry_number\n              <= v_discount_max_entries\n          )\n        )\n\n        or\n\n        (\n          v_discount_basis = 'each_show'\n\n          and eds.qualifying_show_count\n            >= v_discount_required_shows\n\n          and esc.eligible_entry_count\n            >= v_discount_min_entries\n\n          and (\n            v_discount_max_entries is null\n            or eri.section_entry_number\n              <= v_discount_max_entries\n          )\n        )\n      )\n  ),\n\n  /*\n   * Calculate the discount one item at a time so differing section entry\n   * fees are handled correctly.\n   */\n  exhibitor_discount_totals as (\n    select\n      dei.exhibitor_id,\n\n      count(*)::integer as qualifying_entry_count,\n\n      count(\n        distinct dei.section_id\n      )::integer as discounted_show_count,\n\n      round(\n        sum(\n          least(\n            dei.fee_per_entry,\n\n            greatest(\n              case\n                when v_discount_type = 'fixed_rate' then\n                  dei.fee_per_entry - v_discount_value\n\n                when v_discount_type = 'percent' then\n                  dei.fee_per_entry\n                  *\n                  case\n                    when v_discount_value <= 1 then\n                      v_discount_value\n                    else\n                      v_discount_value / 100.0\n                  end\n\n                when v_discount_type = 'amount' then\n                  v_discount_value\n\n                else 0\n              end,\n              0\n            )\n          )\n        ) * 100\n      )::integer as discount_cents\n\n    from discount_eligible_items dei\n\n    group by dei.exhibitor_id\n  ),\n\n  exhibitor_totals_raw as (\n    select\n      pi.exhibitor_id,\n\n      count(*) filter (where not pi.is_fur)::integer as entry_count,\n\n      count(*) filter (\n        where pi.is_fur\n      )::integer as fur_count,\n\n      round(\n        sum(case when not pi.is_fur then pi.fee_per_entry else 0 end) * 100\n      )::integer as entries_subtotal_cents,\n\n      round(\n        sum(\n          case\n            when pi.is_fur then pi.fur_fee\n            else 0\n          end\n        ) * 100\n      )::integer as fur_subtotal_cents,\n\n      coalesce((\n        select sum(sc.show_fee_cents)::integer\n        from section_counts sc\n        where sc.exhibitor_id = pi.exhibitor_id\n      ), 0) as show_fee_subtotal_cents,\n\n      coalesce(\n        eds.eligible_entry_count,\n        0\n      )::integer as eligible_entry_count,\n\n      coalesce(\n        eds.eligible_show_count,\n        0\n      )::integer as eligible_show_count,\n\n      coalesce(\n        eds.qualifying_show_count,\n        0\n      )::integer as qualifying_show_count,\n\n      coalesce(\n        edt.qualifying_entry_count,\n        0\n      )::integer as qualifying_entry_count,\n\n      coalesce(\n        edt.discounted_show_count,\n        0\n      )::integer as discounted_show_count,\n\n      greatest(\n        coalesce(edt.discount_cents, 0),\n        0\n      )::integer as discount_cents\n\n    from priced_items pi\n\n    left join exhibitor_discount_stats eds\n      on eds.exhibitor_id = pi.exhibitor_id\n\n    left join exhibitor_discount_totals edt\n      on edt.exhibitor_id = pi.exhibitor_id\n\n    group by\n      pi.exhibitor_id,\n      eds.eligible_entry_count,\n      eds.eligible_show_count,\n      eds.qualifying_show_count,\n      edt.qualifying_entry_count,\n      edt.discounted_show_count,\n      edt.discount_cents\n  ),\n\n  exhibitor_totals as (\n    select\n      etr.*,\n\n      (\n        etr.entries_subtotal_cents\n        + etr.fur_subtotal_cents\n        + etr.show_fee_subtotal_cents\n      )::integer as subtotal_before_discount_cents\n\n    from exhibitor_totals_raw etr\n  ),\n\n  final_rows as (\n    select\n      et.exhibitor_id,\n\n      coalesce(\n        ex.owner_user_id,\n        v_cart_user_id\n      ) as exhibitor_user_id,\n\n      et.entry_count,\n      et.fur_count,\n      et.entries_subtotal_cents,\n      et.fur_subtotal_cents,\n      et.show_fee_subtotal_cents,\n      et.subtotal_before_discount_cents,\n\n      least(\n        greatest(et.discount_cents, 0),\n        et.entries_subtotal_cents\n      )::integer as discount_cents,\n\n      greatest(\n        et.subtotal_before_discount_cents\n        - least(\n            greatest(et.discount_cents, 0),\n            et.entries_subtotal_cents\n          ),\n        0\n      )::integer as calculated_total_cents,\n\n      coalesce((\n        select jsonb_agg(\n          jsonb_build_object(\n            'section_id', sc.section_id,\n            'kind', sc.section_kind,\n            'letter', sc.section_letter,\n            'label', sc.section_label,\n            'entry_count', sc.entry_count,\n            'fur_count', sc.fur_count,\n            'entries_subtotal_cents',\n              sc.entries_subtotal_cents,\n            'fur_subtotal_cents',\n              sc.fur_subtotal_cents,\n            'show_fee_cents',\n              sc.show_fee_cents,\n            'discount_scope_eligible',\n              case\n                when v_discount_scope = 'both' then true\n                when lower(sc.section_kind) = v_discount_scope then true\n                else false\n              end\n          )\n          order by\n            sc.section_sort_order,\n            sc.section_kind,\n            sc.section_letter\n        )\n        from section_counts sc\n        where sc.exhibitor_id = et.exhibitor_id\n      ), '[]'::jsonb) as section_breakdown,\n\n      jsonb_build_object(\n        'source', 'cart',\n        'cart_id', p_cart_id,\n        'show_id', v_show_id,\n        'currency', v_currency,\n\n        'discount_enabled', v_discount_enabled,\n        'discount_type', v_discount_type,\n        'discount_value', v_discount_value,\n        'discount_basis', v_discount_basis,\n        'discount_scope', v_discount_scope,\n        'discount_min_entries', v_discount_min_entries,\n        'discount_max_entries', v_discount_max_entries,\n        'discount_required_shows', v_discount_required_shows,\n\n        'eligible_entry_count',\n          et.eligible_entry_count,\n        'eligible_show_count',\n          et.eligible_show_count,\n        'qualifying_show_count',\n          et.qualifying_show_count,\n        'qualifying_entry_count',\n          et.qualifying_entry_count,\n        'discounted_show_count',\n          et.discounted_show_count,\n\n        'entry_count', et.entry_count,\n        'fur_count', et.fur_count,\n\n        'entries_subtotal_cents',\n          et.entries_subtotal_cents,\n\n        'fur_subtotal_cents',\n          et.fur_subtotal_cents,\n\n        'show_fee_subtotal_cents',\n          et.show_fee_subtotal_cents,\n\n        'subtotal_before_discount_cents',\n          et.subtotal_before_discount_cents,\n\n        'discount_cents',\n          least(\n            greatest(et.discount_cents, 0),\n            et.entries_subtotal_cents\n          ),\n\n        'calculated_total_cents',\n          greatest(\n            et.subtotal_before_discount_cents\n            - least(\n                greatest(et.discount_cents, 0),\n                et.entries_subtotal_cents\n              ),\n            0\n          )\n      ) as fee_snapshot\n\n    from exhibitor_totals et\n\n    left join public.exhibitors ex\n      on ex.id = et.exhibitor_id\n  ),\n\n  upserted as (\n    insert into public.show_exhibitor_balances (\n      show_id,\n      exhibitor_id,\n      exhibitor_user_id,\n      entry_cart_id,\n      cart_id,\n      currency,\n      entry_count,\n      fur_count,\n      entries_subtotal_cents,\n      fur_subtotal_cents,\n      show_fee_subtotal_cents,\n      subtotal_before_discount_cents,\n      discount_cents,\n      calculated_total_cents,\n      paid_online_cents,\n      paid_manual_cents,\n      refunded_cents,\n      balance_due_cents,\n      payment_status,\n      latest_show_payment_id,\n      latest_checkout_session_id,\n      latest_payment_intent_id,\n      section_breakdown,\n      fee_snapshot,\n      source,\n      calculated_at,\n      updated_at\n    )\n    select\n      v_show_id,\n      fr.exhibitor_id,\n      fr.exhibitor_user_id,\n      p_cart_id,\n      p_cart_id,\n      v_currency,\n      fr.entry_count,\n      fr.fur_count,\n      fr.entries_subtotal_cents,\n      fr.fur_subtotal_cents,\n      fr.show_fee_subtotal_cents,\n      fr.subtotal_before_discount_cents,\n      fr.discount_cents,\n      fr.calculated_total_cents,\n      0,\n      0,\n      0,\n      fr.calculated_total_cents,\n\n      case\n        when fr.calculated_total_cents <= 0 then 'paid'\n        else 'unpaid'\n      end,\n\n      null,\n      null,\n      null,\n      fr.section_breakdown,\n      fr.fee_snapshot,\n      'cart',\n      now(),\n      now()\n\n    from final_rows fr\n\n    on conflict (entry_cart_id, exhibitor_id)\n      where (\n        entry_cart_id is not null\n        and exhibitor_id is not null\n        and source = 'cart'\n      )\n\n    do update set\n      show_id = excluded.show_id,\n      exhibitor_user_id = excluded.exhibitor_user_id,\n      cart_id = excluded.cart_id,\n      currency = excluded.currency,\n      entry_count = excluded.entry_count,\n      fur_count = excluded.fur_count,\n      entries_subtotal_cents =\n        excluded.entries_subtotal_cents,\n      fur_subtotal_cents =\n        excluded.fur_subtotal_cents,\n      show_fee_subtotal_cents =\n        excluded.show_fee_subtotal_cents,\n      subtotal_before_discount_cents =\n        excluded.subtotal_before_discount_cents,\n      discount_cents =\n        excluded.discount_cents,\n      calculated_total_cents =\n        excluded.calculated_total_cents,\n      paid_online_cents = 0,\n      paid_manual_cents = 0,\n      refunded_cents = 0,\n      balance_due_cents =\n        excluded.calculated_total_cents,\n\n      payment_status = case\n        when excluded.calculated_total_cents <= 0 then 'paid'\n        else 'unpaid'\n      end,\n\n      latest_show_payment_id = null,\n      latest_checkout_session_id = null,\n      latest_payment_intent_id = null,\n      section_breakdown =\n        excluded.section_breakdown,\n      fee_snapshot =\n        excluded.fee_snapshot,\n      source = 'cart',\n      calculated_at = now(),\n      updated_at = now()\n\n    returning public.show_exhibitor_balances.*\n  )\n\n  select *\n  from upserted\n  order by exhibitor_id;\nend;\n$function$\n"
+    }
+  ],
+  "policies": [
+    {
+      "schemaname": "public",
+      "tablename": "animals",
+      "policyname": "Show managers can create account exhibitor animals",
+      "permissive": "PERMISSIVE",
+      "roles": "{authenticated}",
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "((owner_user_id IS NULL) AND (exhibitor_id IS NOT NULL) AND (EXISTS ( SELECT 1\n   FROM (exhibitors ex\n     JOIN entries e ON ((e.exhibitor_id = ex.id)))\n  WHERE ((ex.id = animals.exhibitor_id) AND (ex.owner_user_id IS NOT NULL) AND (ex.is_active = true) AND (COALESCE(ex.is_merged, false) = false) AND user_can_manage_entries(e.show_id, auth.uid())))))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "animals",
+      "policyname": "Show managers can create animals for account exhibitors",
+      "permissive": "PERMISSIVE",
+      "roles": "{authenticated}",
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "((owner_user_id IS NOT NULL) AND (exhibitor_id IS NOT NULL) AND (EXISTS ( SELECT 1\n   FROM exhibitors ex\n  WHERE ((ex.id = animals.exhibitor_id) AND (ex.owner_user_id = animals.owner_user_id) AND (ex.is_active = true) AND (COALESCE(ex.is_merged, false) = false) AND (EXISTS ( SELECT 1\n           FROM role_assignments ra\n          WHERE ((ra.user_id = auth.uid()) AND (ra.show_id IS NOT NULL) AND (ra.role = ANY (ARRAY['super_admin'::app_role, 'admin'::app_role, 'superintendent'::app_role, 'reporting_clerk'::app_role])))))))))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "animals",
+      "policyname": "Show managers can create animals for selected account exhibitor",
+      "permissive": "PERMISSIVE",
+      "roles": "{authenticated}",
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "((owner_user_id IS NOT NULL) AND (exhibitor_id IS NOT NULL) AND (EXISTS ( SELECT 1\n   FROM exhibitors ex\n  WHERE ((ex.id = animals.exhibitor_id) AND (ex.owner_user_id = animals.owner_user_id) AND (ex.is_active = true) AND (COALESCE(ex.is_merged, false) = false)))) AND (EXISTS ( SELECT 1\n   FROM role_assignments ra\n  WHERE ((ra.user_id = auth.uid()) AND (ra.role = ANY (ARRAY['admin'::app_role, 'reporting_clerk'::app_role, 'superintendent'::app_role, 'super_admin'::app_role]))))))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "animals",
+      "policyname": "Show managers can create local exhibitor animals",
+      "permissive": "PERMISSIVE",
+      "roles": "{authenticated}",
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "((owner_user_id IS NULL) AND (exhibitor_id IS NOT NULL) AND (EXISTS ( SELECT 1\n   FROM exhibitors ex\n  WHERE ((ex.id = animals.exhibitor_id) AND (ex.owner_user_id IS NULL) AND (ex.is_active = true) AND (COALESCE(ex.is_merged, false) = false) AND (user_can_manage_entries(ex.created_for_show_id, auth.uid()) OR (EXISTS ( SELECT 1\n           FROM role_assignments ra\n          WHERE ((ra.user_id = auth.uid()) AND (ra.show_id IS NOT NULL) AND (ra.role = ANY (ARRAY['admin'::app_role, 'reporting_clerk'::app_role, 'superintendent'::app_role, 'super_admin'::app_role]))))))))))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "animals",
+      "policyname": "Show managers can update local exhibitor animals",
+      "permissive": "PERMISSIVE",
+      "roles": "{authenticated}",
+      "cmd": "UPDATE",
+      "qual": "((owner_user_id IS NULL) AND (exhibitor_id IS NOT NULL) AND (EXISTS ( SELECT 1\n   FROM exhibitors ex\n  WHERE ((ex.id = animals.exhibitor_id) AND (ex.owner_user_id IS NULL) AND (ex.is_active = true) AND (COALESCE(ex.is_merged, false) = false) AND user_can_manage_entries(ex.created_for_show_id, auth.uid())))))",
+      "with_check": "((owner_user_id IS NULL) AND (exhibitor_id IS NOT NULL) AND (EXISTS ( SELECT 1\n   FROM exhibitors ex\n  WHERE ((ex.id = animals.exhibitor_id) AND (ex.owner_user_id IS NULL) AND (ex.is_active = true) AND (COALESCE(ex.is_merged, false) = false) AND user_can_manage_entries(ex.created_for_show_id, auth.uid())))))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "animals",
+      "policyname": "Show managers can view exhibitor animals for entry management",
+      "permissive": "PERMISSIVE",
+      "roles": "{authenticated}",
+      "cmd": "SELECT",
+      "qual": "(EXISTS ( SELECT 1\n   FROM role_assignments ra\n  WHERE ((ra.user_id = auth.uid()) AND (ra.show_id IS NOT NULL) AND (ra.role = ANY (ARRAY['admin'::app_role, 'reporting_clerk'::app_role, 'superintendent'::app_role, 'super_admin'::app_role])) AND (EXISTS ( SELECT 1\n           FROM exhibitors ex\n          WHERE ((ex.owner_user_id = animals.owner_user_id) AND (ex.owner_user_id IS NOT NULL) AND (ex.is_active = true) AND (COALESCE(ex.is_merged, false) = false)))))))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "animals",
+      "policyname": "Show managers can view local exhibitor animals",
+      "permissive": "PERMISSIVE",
+      "roles": "{authenticated}",
+      "cmd": "SELECT",
+      "qual": "((exhibitor_id IS NOT NULL) AND (EXISTS ( SELECT 1\n   FROM exhibitors ex\n  WHERE ((ex.id = animals.exhibitor_id) AND (ex.owner_user_id IS NULL) AND (ex.is_active = true) AND (COALESCE(ex.is_merged, false) = false) AND (user_can_manage_entries(ex.created_for_show_id, auth.uid()) OR (EXISTS ( SELECT 1\n           FROM role_assignments ra\n          WHERE ((ra.user_id = auth.uid()) AND (ra.show_id IS NOT NULL) AND (ra.role = ANY (ARRAY['admin'::app_role, 'reporting_clerk'::app_role, 'superintendent'::app_role, 'super_admin'::app_role]))))))))))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "animals",
+      "policyname": "animals_delete_own",
+      "permissive": "PERMISSIVE",
+      "roles": "{authenticated}",
+      "cmd": "DELETE",
+      "qual": "(owner_user_id = auth.uid())",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "animals",
+      "policyname": "animals_delete_own_or_manager",
+      "permissive": "PERMISSIVE",
+      "roles": "{authenticated}",
+      "cmd": "DELETE",
+      "qual": "((owner_user_id = auth.uid()) OR (EXISTS ( SELECT 1\n   FROM role_assignments ra\n  WHERE ((ra.user_id = auth.uid()) AND (ra.role = ANY (ARRAY['admin'::app_role, 'super_admin'::app_role]))))))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "animals",
+      "policyname": "animals_insert_own",
+      "permissive": "PERMISSIVE",
+      "roles": "{authenticated}",
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "(owner_user_id = auth.uid())"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "animals",
+      "policyname": "animals_insert_own_or_manager",
+      "permissive": "PERMISSIVE",
+      "roles": "{authenticated}",
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "((owner_user_id = auth.uid()) OR (EXISTS ( SELECT 1\n   FROM role_assignments ra\n  WHERE ((ra.user_id = auth.uid()) AND (ra.role = ANY (ARRAY['admin'::app_role, 'super_admin'::app_role]))))))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "animals",
+      "policyname": "animals_select_own",
+      "permissive": "PERMISSIVE",
+      "roles": "{authenticated}",
+      "cmd": "SELECT",
+      "qual": "(owner_user_id = auth.uid())",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "animals",
+      "policyname": "animals_select_own_or_manager",
+      "permissive": "PERMISSIVE",
+      "roles": "{authenticated}",
+      "cmd": "SELECT",
+      "qual": "((owner_user_id = auth.uid()) OR (EXISTS ( SELECT 1\n   FROM role_assignments ra\n  WHERE ((ra.user_id = auth.uid()) AND (ra.role = ANY (ARRAY['admin'::app_role, 'super_admin'::app_role, 'reporting_clerk'::app_role, 'superintendent'::app_role]))))))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "animals",
+      "policyname": "animals_update_own",
+      "permissive": "PERMISSIVE",
+      "roles": "{authenticated}",
+      "cmd": "UPDATE",
+      "qual": "(owner_user_id = auth.uid())",
+      "with_check": "(owner_user_id = auth.uid())"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "animals",
+      "policyname": "animals_update_own_or_manager",
+      "permissive": "PERMISSIVE",
+      "roles": "{authenticated}",
+      "cmd": "UPDATE",
+      "qual": "((owner_user_id = auth.uid()) OR (EXISTS ( SELECT 1\n   FROM role_assignments ra\n  WHERE ((ra.user_id = auth.uid()) AND (ra.role = ANY (ARRAY['admin'::app_role, 'super_admin'::app_role]))))))",
+      "with_check": "((owner_user_id = auth.uid()) OR (EXISTS ( SELECT 1\n   FROM role_assignments ra\n  WHERE ((ra.user_id = auth.uid()) AND (ra.role = ANY (ARRAY['admin'::app_role, 'super_admin'::app_role]))))))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "breeds",
+      "policyname": "breeds_manage_local_show",
+      "permissive": "PERMISSIVE",
+      "roles": "{public}",
+      "cmd": "ALL",
+      "qual": "((local_show_id IS NOT NULL) AND ((EXISTS ( SELECT 1\n   FROM shows s\n  WHERE ((s.id = breeds.local_show_id) AND ((s.created_by = auth.uid()) OR (s.owner_user_id = auth.uid()))))) OR (EXISTS ( SELECT 1\n   FROM show_admins sa\n  WHERE ((sa.show_id = breeds.local_show_id) AND (sa.user_id = auth.uid())))) OR (EXISTS ( SELECT 1\n   FROM role_assignments ra\n  WHERE ((ra.show_id = breeds.local_show_id) AND (ra.user_id = auth.uid()) AND ((ra.role)::text = 'admin'::text))))))",
+      "with_check": "((local_show_id IS NOT NULL) AND ((EXISTS ( SELECT 1\n   FROM shows s\n  WHERE ((s.id = breeds.local_show_id) AND ((s.created_by = auth.uid()) OR (s.owner_user_id = auth.uid()))))) OR (EXISTS ( SELECT 1\n   FROM show_admins sa\n  WHERE ((sa.show_id = breeds.local_show_id) AND (sa.user_id = auth.uid())))) OR (EXISTS ( SELECT 1\n   FROM role_assignments ra\n  WHERE ((ra.show_id = breeds.local_show_id) AND (ra.user_id = auth.uid()) AND ((ra.role)::text = 'admin'::text))))))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "breeds",
+      "policyname": "breeds_read_all",
+      "permissive": "PERMISSIVE",
+      "roles": "{authenticated}",
+      "cmd": "SELECT",
+      "qual": "true",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "breeds",
+      "policyname": "breeds_write_super",
+      "permissive": "PERMISSIVE",
+      "roles": "{authenticated}",
+      "cmd": "ALL",
+      "qual": "is_super_admin(auth.uid())",
+      "with_check": "is_super_admin(auth.uid())"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "entry_cart_items",
+      "policyname": "cart_items_delete_own",
+      "permissive": "PERMISSIVE",
+      "roles": "{public}",
+      "cmd": "DELETE",
+      "qual": "(EXISTS ( SELECT 1\n   FROM entry_carts c\n  WHERE ((c.id = entry_cart_items.cart_id) AND (c.user_id = auth.uid()))))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "entry_cart_items",
+      "policyname": "cart_items_insert_own",
+      "permissive": "PERMISSIVE",
+      "roles": "{public}",
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "(EXISTS ( SELECT 1\n   FROM entry_carts c\n  WHERE ((c.id = entry_cart_items.cart_id) AND (c.user_id = auth.uid()))))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "entry_cart_items",
+      "policyname": "cart_items_select_own",
+      "permissive": "PERMISSIVE",
+      "roles": "{public}",
+      "cmd": "SELECT",
+      "qual": "(EXISTS ( SELECT 1\n   FROM entry_carts c\n  WHERE ((c.id = entry_cart_items.cart_id) AND (c.user_id = auth.uid()))))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "entry_cart_items",
+      "policyname": "entry_cart_items_delete_own_or_manager",
+      "permissive": "PERMISSIVE",
+      "roles": "{authenticated}",
+      "cmd": "DELETE",
+      "qual": "(EXISTS ( SELECT 1\n   FROM entry_carts c\n  WHERE ((c.id = entry_cart_items.cart_id) AND ((c.user_id = auth.uid()) OR user_can_manage_entries(c.show_id) OR user_can_manage_show_settings(c.show_id)))))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "entry_cart_items",
+      "policyname": "entry_cart_items_insert_own_or_manager",
+      "permissive": "PERMISSIVE",
+      "roles": "{authenticated}",
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "(EXISTS ( SELECT 1\n   FROM entry_carts c\n  WHERE ((c.id = entry_cart_items.cart_id) AND ((c.user_id = auth.uid()) OR user_can_manage_entries(c.show_id) OR user_can_manage_show_settings(c.show_id)))))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "entry_cart_items",
+      "policyname": "entry_cart_items_select_own_or_manager",
+      "permissive": "PERMISSIVE",
+      "roles": "{authenticated}",
+      "cmd": "SELECT",
+      "qual": "(EXISTS ( SELECT 1\n   FROM entry_carts c\n  WHERE ((c.id = entry_cart_items.cart_id) AND ((c.user_id = auth.uid()) OR user_can_manage_entries(c.show_id) OR user_can_manage_show_settings(c.show_id)))))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "entry_cart_items",
+      "policyname": "entry_cart_items_update_own_or_manager",
+      "permissive": "PERMISSIVE",
+      "roles": "{authenticated}",
+      "cmd": "UPDATE",
+      "qual": "(EXISTS ( SELECT 1\n   FROM entry_carts c\n  WHERE ((c.id = entry_cart_items.cart_id) AND ((c.user_id = auth.uid()) OR user_can_manage_entries(c.show_id) OR user_can_manage_show_settings(c.show_id)))))",
+      "with_check": "(EXISTS ( SELECT 1\n   FROM entry_carts c\n  WHERE ((c.id = entry_cart_items.cart_id) AND ((c.user_id = auth.uid()) OR user_can_manage_entries(c.show_id) OR user_can_manage_show_settings(c.show_id)))))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "entry_carts",
+      "policyname": "carts_insert_own",
+      "permissive": "PERMISSIVE",
+      "roles": "{public}",
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "(auth.uid() = user_id)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "entry_carts",
+      "policyname": "carts_select_own",
+      "permissive": "PERMISSIVE",
+      "roles": "{public}",
+      "cmd": "SELECT",
+      "qual": "(auth.uid() = user_id)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "entry_carts",
+      "policyname": "carts_update_own",
+      "permissive": "PERMISSIVE",
+      "roles": "{public}",
+      "cmd": "UPDATE",
+      "qual": "(auth.uid() = user_id)",
+      "with_check": "(auth.uid() = user_id)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "entry_carts",
+      "policyname": "entry_carts_delete_own_or_manager",
+      "permissive": "PERMISSIVE",
+      "roles": "{authenticated}",
+      "cmd": "DELETE",
+      "qual": "((user_id = auth.uid()) OR user_can_manage_entries(show_id) OR user_can_manage_show_settings(show_id))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "entry_carts",
+      "policyname": "entry_carts_insert_own_or_manager",
+      "permissive": "PERMISSIVE",
+      "roles": "{authenticated}",
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "((user_id = auth.uid()) OR user_can_manage_entries(show_id) OR user_can_manage_show_settings(show_id))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "entry_carts",
+      "policyname": "entry_carts_owner_all",
+      "permissive": "PERMISSIVE",
+      "roles": "{authenticated}",
+      "cmd": "ALL",
+      "qual": "(user_id = auth.uid())",
+      "with_check": "(user_id = auth.uid())"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "entry_carts",
+      "policyname": "entry_carts_select_own_or_manager",
+      "permissive": "PERMISSIVE",
+      "roles": "{authenticated}",
+      "cmd": "SELECT",
+      "qual": "((user_id = auth.uid()) OR user_can_manage_entries(show_id) OR user_can_manage_show_settings(show_id))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "entry_carts",
+      "policyname": "entry_carts_update_own_or_manager",
+      "permissive": "PERMISSIVE",
+      "roles": "{authenticated}",
+      "cmd": "UPDATE",
+      "qual": "((user_id = auth.uid()) OR user_can_manage_entries(show_id) OR user_can_manage_show_settings(show_id))",
+      "with_check": "((user_id = auth.uid()) OR user_can_manage_entries(show_id) OR user_can_manage_show_settings(show_id))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "exhibitors",
+      "policyname": "Allow insert for authenticated users",
+      "permissive": "PERMISSIVE",
+      "roles": "{authenticated}",
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "true"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "exhibitors",
+      "policyname": "Show managers can update local exhibitors",
+      "permissive": "PERMISSIVE",
+      "roles": "{authenticated}",
+      "cmd": "UPDATE",
+      "qual": "((owner_user_id IS NULL) AND (COALESCE(is_merged, false) = false) AND (((created_for_show_id IS NOT NULL) AND user_can_manage_entries(created_for_show_id)) OR (EXISTS ( SELECT 1\n   FROM entries e\n  WHERE ((e.exhibitor_id = exhibitors.id) AND user_can_manage_entries(e.show_id))))))",
+      "with_check": "((owner_user_id IS NULL) AND (COALESCE(is_merged, false) = false))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "exhibitors",
+      "policyname": "TEMP allow all inserts",
+      "permissive": "PERMISSIVE",
+      "roles": "{authenticated}",
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "true"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "exhibitors",
+      "policyname": "authenticated can read exhibitors",
+      "permissive": "PERMISSIVE",
+      "roles": "{authenticated}",
+      "cmd": "SELECT",
+      "qual": "true",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "exhibitors",
+      "policyname": "exhibitors_insert_own",
+      "permissive": "PERMISSIVE",
+      "roles": "{public}",
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "(auth.uid() = owner_user_id)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "exhibitors",
+      "policyname": "exhibitors_select_own",
+      "permissive": "PERMISSIVE",
+      "roles": "{public}",
+      "cmd": "SELECT",
+      "qual": "(auth.uid() = owner_user_id)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "exhibitors",
+      "policyname": "exhibitors_update_own",
+      "permissive": "PERMISSIVE",
+      "roles": "{public}",
+      "cmd": "UPDATE",
+      "qual": "(auth.uid() = owner_user_id)",
+      "with_check": "(auth.uid() = owner_user_id)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "show_breeds",
+      "policyname": "admin_by_show_all",
+      "permissive": "PERMISSIVE",
+      "roles": "{authenticated}",
+      "cmd": "ALL",
+      "qual": "(EXISTS ( SELECT 1\n   FROM show_admins sa\n  WHERE ((sa.show_id = show_breeds.show_id) AND (sa.user_id = auth.uid()))))",
+      "with_check": "(EXISTS ( SELECT 1\n   FROM show_admins sa\n  WHERE ((sa.show_id = show_breeds.show_id) AND (sa.user_id = auth.uid()))))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "show_breeds",
+      "policyname": "show_breeds_manage_creator",
+      "permissive": "PERMISSIVE",
+      "roles": "{authenticated}",
+      "cmd": "ALL",
+      "qual": "(EXISTS ( SELECT 1\n   FROM shows s\n  WHERE ((s.id = show_breeds.show_id) AND (s.created_by = ( SELECT auth.uid() AS uid)))))",
+      "with_check": "(EXISTS ( SELECT 1\n   FROM shows s\n  WHERE ((s.id = show_breeds.show_id) AND (s.created_by = ( SELECT auth.uid() AS uid)))))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "show_breeds",
+      "policyname": "show_breeds_read_published_show",
+      "permissive": "PERMISSIVE",
+      "roles": "{authenticated}",
+      "cmd": "SELECT",
+      "qual": "(EXISTS ( SELECT 1\n   FROM shows s\n  WHERE ((s.id = show_breeds.show_id) AND (s.is_published = true))))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "show_breeds",
+      "policyname": "show_breeds_read_staff",
+      "permissive": "PERMISSIVE",
+      "roles": "{authenticated}",
+      "cmd": "SELECT",
+      "qual": "is_show_staff(show_id, auth.uid())",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "show_breeds",
+      "policyname": "show_breeds_write_admin",
+      "permissive": "PERMISSIVE",
+      "roles": "{authenticated}",
+      "cmd": "ALL",
+      "qual": "(is_super_admin(auth.uid()) OR has_show_role(show_id, 'show_admin'::text, auth.uid()))",
+      "with_check": "(is_super_admin(auth.uid()) OR has_show_role(show_id, 'show_admin'::text, auth.uid()))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "show_fee_settings",
+      "policyname": "admin_by_show_all",
+      "permissive": "PERMISSIVE",
+      "roles": "{authenticated}",
+      "cmd": "ALL",
+      "qual": "(EXISTS ( SELECT 1\n   FROM show_admins sa\n  WHERE ((sa.show_id = show_fee_settings.show_id) AND (sa.user_id = auth.uid()))))",
+      "with_check": "(EXISTS ( SELECT 1\n   FROM show_admins sa\n  WHERE ((sa.show_id = show_fee_settings.show_id) AND (sa.user_id = auth.uid()))))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "show_fee_settings",
+      "policyname": "show_fee_settings_delete_authenticated",
+      "permissive": "PERMISSIVE",
+      "roles": "{authenticated}",
+      "cmd": "DELETE",
+      "qual": "true",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "show_fee_settings",
+      "policyname": "show_fee_settings_insert_authenticated",
+      "permissive": "PERMISSIVE",
+      "roles": "{authenticated}",
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "true"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "show_fee_settings",
+      "policyname": "show_fee_settings_select_authenticated",
+      "permissive": "PERMISSIVE",
+      "roles": "{authenticated}",
+      "cmd": "SELECT",
+      "qual": "true",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "show_fee_settings",
+      "policyname": "show_fee_settings_update_authenticated",
+      "permissive": "PERMISSIVE",
+      "roles": "{authenticated}",
+      "cmd": "UPDATE",
+      "qual": "true",
+      "with_check": "true"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "show_section_fee_settings",
+      "policyname": "Authenticated users can read show fee settings",
+      "permissive": "PERMISSIVE",
+      "roles": "{authenticated}",
+      "cmd": "SELECT",
+      "qual": "(EXISTS ( SELECT 1\n   FROM show_sections ss\n  WHERE (ss.id = show_section_fee_settings.section_id)))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "show_section_fee_settings",
+      "policyname": "Show managers can manage show fee settings",
+      "permissive": "PERMISSIVE",
+      "roles": "{authenticated}",
+      "cmd": "ALL",
+      "qual": "(EXISTS ( SELECT 1\n   FROM show_sections ss\n  WHERE ((ss.id = show_section_fee_settings.section_id) AND user_can_manage_show_settings(ss.show_id))))",
+      "with_check": "(EXISTS ( SELECT 1\n   FROM show_sections ss\n  WHERE ((ss.id = show_section_fee_settings.section_id) AND user_can_manage_show_settings(ss.show_id))))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "show_sections",
+      "policyname": "Allow show admins to insert sections",
+      "permissive": "PERMISSIVE",
+      "roles": "{authenticated}",
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "(EXISTS ( SELECT 1\n   FROM shows s\n  WHERE ((s.id = show_sections.show_id) AND (s.created_by = auth.uid()))))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "show_sections",
+      "policyname": "Allow show admins to view sections",
+      "permissive": "PERMISSIVE",
+      "roles": "{authenticated}",
+      "cmd": "SELECT",
+      "qual": "(EXISTS ( SELECT 1\n   FROM shows s\n  WHERE ((s.id = show_sections.show_id) AND (s.created_by = auth.uid()))))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "show_sections",
+      "policyname": "anon can read qr show sections",
+      "permissive": "PERMISSIVE",
+      "roles": "{anon}",
+      "cmd": "SELECT",
+      "qual": "true",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "show_sections",
+      "policyname": "show_sections_delete_admin",
+      "permissive": "PERMISSIVE",
+      "roles": "{public}",
+      "cmd": "DELETE",
+      "qual": "is_show_admin(show_id)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "show_sections",
+      "policyname": "show_sections_insert_admin",
+      "permissive": "PERMISSIVE",
+      "roles": "{public}",
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "is_show_admin(show_id)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "show_sections",
+      "policyname": "show_sections_select",
+      "permissive": "PERMISSIVE",
+      "roles": "{public}",
+      "cmd": "SELECT",
+      "qual": "(is_show_admin(show_id) OR (EXISTS ( SELECT 1\n   FROM shows s\n  WHERE ((s.id = show_sections.show_id) AND (s.is_published = true)))))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "show_sections",
+      "policyname": "show_sections_select_authenticated",
+      "permissive": "PERMISSIVE",
+      "roles": "{authenticated}",
+      "cmd": "SELECT",
+      "qual": "true",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "show_sections",
+      "policyname": "show_sections_update_admin",
+      "permissive": "PERMISSIVE",
+      "roles": "{public}",
+      "cmd": "UPDATE",
+      "qual": "is_show_admin(show_id)",
+      "with_check": "is_show_admin(show_id)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "shows",
+      "policyname": "Anyone can view published shows",
+      "permissive": "PERMISSIVE",
+      "roles": "{anon,authenticated}",
+      "cmd": "SELECT",
+      "qual": "(is_published = true)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "shows",
+      "policyname": "Public can view published shows",
+      "permissive": "PERMISSIVE",
+      "roles": "{anon}",
+      "cmd": "SELECT",
+      "qual": "(is_published = true)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "shows",
+      "policyname": "anon can read qr shows",
+      "permissive": "PERMISSIVE",
+      "roles": "{anon}",
+      "cmd": "SELECT",
+      "qual": "true",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "shows",
+      "policyname": "no direct insert",
+      "permissive": "PERMISSIVE",
+      "roles": "{authenticated}",
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "false"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "shows",
+      "policyname": "show_admin_update",
+      "permissive": "PERMISSIVE",
+      "roles": "{authenticated}",
+      "cmd": "UPDATE",
+      "qual": "has_role(auth.uid(), id, 'admin'::app_role)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "shows",
+      "policyname": "shows_delete_super_only",
+      "permissive": "PERMISSIVE",
+      "roles": "{authenticated}",
+      "cmd": "DELETE",
+      "qual": "is_super_admin(auth.uid())",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "shows",
+      "policyname": "shows_insert_creator",
+      "permissive": "PERMISSIVE",
+      "roles": "{authenticated}",
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "((created_by = auth.uid()) OR is_super_admin(auth.uid()))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "shows",
+      "policyname": "shows_select",
+      "permissive": "PERMISSIVE",
+      "roles": "{authenticated}",
+      "cmd": "SELECT",
+      "qual": "true",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "shows",
+      "policyname": "shows_select_admin",
+      "permissive": "PERMISSIVE",
+      "roles": "{authenticated}",
+      "cmd": "SELECT",
+      "qual": "(EXISTS ( SELECT 1\n   FROM show_admins sa\n  WHERE ((sa.show_id = shows.id) AND (sa.user_id = auth.uid()))))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "shows",
+      "policyname": "shows_select_published",
+      "permissive": "PERMISSIVE",
+      "roles": "{authenticated}",
+      "cmd": "SELECT",
+      "qual": "(is_published = true)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "shows",
+      "policyname": "shows_select_published_or_staff",
+      "permissive": "PERMISSIVE",
+      "roles": "{authenticated}",
+      "cmd": "SELECT",
+      "qual": "((is_published = true) OR is_show_staff(id, auth.uid()) OR (created_by = auth.uid()))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "shows",
+      "policyname": "shows_update",
+      "permissive": "PERMISSIVE",
+      "roles": "{authenticated}",
+      "cmd": "UPDATE",
+      "qual": "(is_super_admin(auth.uid()) OR (EXISTS ( SELECT 1\n   FROM role_assignments ra\n  WHERE ((ra.show_id = shows.id) AND (ra.user_id = auth.uid()) AND (ra.role = ANY (ARRAY['admin'::app_role, 'superintendent'::app_role]))))))",
+      "with_check": "(is_super_admin(auth.uid()) OR (EXISTS ( SELECT 1\n   FROM role_assignments ra\n  WHERE ((ra.show_id = shows.id) AND (ra.user_id = auth.uid()) AND (ra.role = ANY (ARRAY['admin'::app_role, 'superintendent'::app_role]))))))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "shows",
+      "policyname": "shows_update_admin",
+      "permissive": "PERMISSIVE",
+      "roles": "{authenticated}",
+      "cmd": "UPDATE",
+      "qual": "(EXISTS ( SELECT 1\n   FROM show_admins sa\n  WHERE ((sa.show_id = shows.id) AND (sa.user_id = auth.uid()))))",
+      "with_check": "(EXISTS ( SELECT 1\n   FROM show_admins sa\n  WHERE ((sa.show_id = shows.id) AND (sa.user_id = auth.uid()))))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "shows",
+      "policyname": "super admins can view all shows",
+      "permissive": "PERMISSIVE",
+      "roles": "{authenticated}",
+      "cmd": "SELECT",
+      "qual": "(EXISTS ( SELECT 1\n   FROM role_assignments ra\n  WHERE ((ra.user_id = auth.uid()) AND (ra.role = 'super_admin'::app_role))))",
+      "with_check": null
+    }
+  ]
+}

@@ -1,7 +1,10 @@
 # Disposable local Supabase bootstrap
 
 Production predates the checked-in migration history. This directory reconstructs
-its prerequisites for local database tests without exporting hosted schema or data.
+its prerequisites for local database tests. The original SQL bootstrap was built
+without a hosted export. The separate `e2e_historical_*.json` fixtures added for
+the full workflow rehearsal contain selected schema definitions inspected
+read-only on September 10, 2026; they contain no hosted records or credentials.
 It is intentionally outside `supabase/migrations` and must never be applied to an
 existing or production project.
 
@@ -52,3 +55,6 @@ See `docs/national-readiness-fixes.md` for the latest verified results.
 
 Future regular migrations stay in `supabase/migrations`. Do not use these local
 fixture definitions as a production migration or staging parity dump.
+
+See `tool/full_e2e/README.md` for the isolated full workflow test, its additional
+historical contracts and its remaining catalog/browser parity limitations.

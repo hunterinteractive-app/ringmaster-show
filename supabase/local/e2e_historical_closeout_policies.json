@@ -1,0 +1,66 @@
+[
+  {
+    "tablename": "show_arba_report_details",
+    "policyname": "Show managers can manage ARBA report details",
+    "cmd": "ALL",
+    "roles": "{authenticated}",
+    "qual": "(user_can_manage_show_settings(show_id) OR user_can_finalize_show(show_id, auth.uid()))",
+    "with_check": "(user_can_manage_show_settings(show_id) OR user_can_finalize_show(show_id, auth.uid()))"
+  },
+  {
+    "tablename": "show_arba_report_details",
+    "policyname": "Show managers can read ARBA report details",
+    "cmd": "SELECT",
+    "roles": "{authenticated}",
+    "qual": "(user_can_manage_show_settings(show_id) OR user_can_finalize_show(show_id, auth.uid()))",
+    "with_check": null
+  },
+  {
+    "tablename": "show_closeout_state",
+    "policyname": "Show managers can insert closeout state",
+    "cmd": "INSERT",
+    "roles": "{authenticated}",
+    "qual": null,
+    "with_check": "(user_can_manage_show_settings(show_id) OR user_can_manage_entries(show_id) OR user_can_enter_results(show_id) OR user_can_finalize_show(show_id, auth.uid()))"
+  },
+  {
+    "tablename": "show_closeout_state",
+    "policyname": "Show managers can read closeout state",
+    "cmd": "SELECT",
+    "roles": "{authenticated}",
+    "qual": "(user_can_manage_show_settings(show_id) OR user_can_finalize_show(show_id, auth.uid()) OR user_can_email_reports(show_id))",
+    "with_check": null
+  },
+  {
+    "tablename": "show_closeout_state",
+    "policyname": "Show managers can update closeout state",
+    "cmd": "UPDATE",
+    "roles": "{authenticated}",
+    "qual": "(user_can_manage_show_settings(show_id) OR user_can_manage_entries(show_id) OR user_can_enter_results(show_id) OR user_can_finalize_show(show_id, auth.uid()))",
+    "with_check": "(user_can_manage_show_settings(show_id) OR user_can_manage_entries(show_id) OR user_can_enter_results(show_id) OR user_can_finalize_show(show_id, auth.uid()))"
+  },
+  {
+    "tablename": "show_closeout_state",
+    "policyname": "show_closeout_state_insert_for_show_users",
+    "cmd": "INSERT",
+    "roles": "{authenticated}",
+    "qual": null,
+    "with_check": "(user_can_manage_entries(show_id) OR user_can_manage_show_settings(show_id) OR (EXISTS ( SELECT 1\n   FROM (entries e\n     LEFT JOIN exhibitors ex ON ((ex.id = e.exhibitor_id)))\n  WHERE ((e.show_id = show_closeout_state.show_id) AND ((e.exhibitor_user_id = auth.uid()) OR (ex.owner_user_id = auth.uid()))))))"
+  },
+  {
+    "tablename": "show_closeout_state",
+    "policyname": "show_closeout_state_select_for_show_users",
+    "cmd": "SELECT",
+    "roles": "{authenticated}",
+    "qual": "(user_can_manage_entries(show_id) OR user_can_manage_show_settings(show_id) OR (EXISTS ( SELECT 1\n   FROM (entries e\n     LEFT JOIN exhibitors ex ON ((ex.id = e.exhibitor_id)))\n  WHERE ((e.show_id = show_closeout_state.show_id) AND ((e.exhibitor_user_id = auth.uid()) OR (ex.owner_user_id = auth.uid()))))))",
+    "with_check": null
+  },
+  {
+    "tablename": "show_closeout_state",
+    "policyname": "show_closeout_state_update_for_show_users",
+    "cmd": "UPDATE",
+    "roles": "{authenticated}",
+    "qual": "(user_can_manage_entries(show_id) OR user_can_manage_show_settings(show_id) OR (EXISTS ( SELECT 1\n   FROM (entries e\n     LEFT JOIN exhibitors ex ON ((ex.id = e.exhibitor_id)))\n  WHERE ((e.show_id = show_closeout_state.show_id) AND ((e.exhibitor_user_id = auth.uid()) OR (ex.owner_user_id = auth.uid()))))))",
+    "with_check": "(user_can_manage_entries(show_id) OR user_can_manage_show_settings(show_id) OR (EXISTS ( SELECT 1\n   FROM (entries e\n     LEFT JOIN exhibitors ex ON ((ex.id = e.exhibitor_id)))\n  WHERE ((e.show_id = show_closeout_state.show_id) AND ((e.exhibitor_user_id = auth.uid()) OR (ex.owner_user_id = auth.uid()))))))"
+  }
+]

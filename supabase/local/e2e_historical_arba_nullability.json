@@ -1,0 +1,62 @@
+[
+  {
+    "column_name": "show_id",
+    "is_nullable": "NO"
+  },
+  {
+    "column_name": "superintendent_name",
+    "is_nullable": "YES"
+  },
+  {
+    "column_name": "superintendent_arba_number",
+    "is_nullable": "YES"
+  },
+  {
+    "column_name": "official_protest",
+    "is_nullable": "YES"
+  },
+  {
+    "column_name": "arba_report_filed",
+    "is_nullable": "YES"
+  },
+  {
+    "column_name": "signed_by_user_id",
+    "is_nullable": "YES"
+  },
+  {
+    "column_name": "filed_at",
+    "is_nullable": "YES"
+  },
+  {
+    "column_name": "updated_at",
+    "is_nullable": "NO"
+  },
+  {
+    "column_name": "created_at",
+    "is_nullable": "NO"
+  },
+  {
+    "column_name": "secretary_name",
+    "is_nullable": "YES"
+  },
+  {
+    "column_name": "secretary_address",
+    "is_nullable": "YES"
+  },
+  {
+    "column_name": "secretary_phone",
+    "is_nullable": "YES"
+  },
+  {
+    "column_name": "sweepstakes_issue",
+    "is_nullable": "YES"
+  },
+  {
+    "column_name": "sweepstakes_club",
+    "is_nullable": "YES"
+  },
+  {
+    "column_name": "secretary_email",
+    "is_nullable": "YES"
+  }
+]

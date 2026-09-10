@@ -1,0 +1,171 @@
+{
+  "columns": [
+    {
+      "column_name": "user_id",
+      "data_type": "uuid",
+      "column_default": null
+    },
+    {
+      "column_name": "display_name",
+      "data_type": "text",
+      "column_default": "''::text"
+    },
+    {
+      "column_name": "email",
+      "data_type": "text",
+      "column_default": null
+    },
+    {
+      "column_name": "phone",
+      "data_type": "text",
+      "column_default": null
+    },
+    {
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "column_default": "now()"
+    },
+    {
+      "column_name": "id",
+      "data_type": "uuid",
+      "column_default": null
+    },
+    {
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "column_default": "now()"
+    },
+    {
+      "column_name": "can_switch_hosting_club",
+      "data_type": "boolean",
+      "column_default": "false"
+    },
+    {
+      "column_name": "accepted_terms_version",
+      "data_type": "text",
+      "column_default": null
+    },
+    {
+      "column_name": "accepted_terms_at",
+      "data_type": "timestamp with time zone",
+      "column_default": null
+    },
+    {
+      "column_name": "accepted_privacy_version",
+      "data_type": "text",
+      "column_default": null
+    },
+    {
+      "column_name": "accepted_privacy_at",
+      "data_type": "timestamp with time zone",
+      "column_default": null
+    },
+    {
+      "column_name": "primary_exhibitor_id",
+      "data_type": "uuid",
+      "column_default": null
+    }
+  ],
+  "policies": [
+    {
+      "policyname": "Super admins can read profiles",
+      "cmd": "SELECT",
+      "roles": [
+        "authenticated"
+      ],
+      "qual": "is_super_admin_user(auth.uid())",
+      "with_check": null
+    },
+    {
+      "policyname": "Users can insert their own profile",
+      "cmd": "INSERT",
+      "roles": [
+        "authenticated"
+      ],
+      "qual": null,
+      "with_check": "(id = auth.uid())"
+    },
+    {
+      "policyname": "Users can read their own profile",
+      "cmd": "SELECT",
+      "roles": [
+        "authenticated"
+      ],
+      "qual": "(id = auth.uid())",
+      "with_check": null
+    },
+    {
+      "policyname": "Users can update their own legal acceptance",
+      "cmd": "UPDATE",
+      "roles": [
+        "authenticated"
+      ],
+      "qual": "(id = auth.uid())",
+      "with_check": "(id = auth.uid())"
+    },
+    {
+      "policyname": "Users can update their own profile",
+      "cmd": "UPDATE",
+      "roles": [
+        "authenticated"
+      ],
+      "qual": "(id = auth.uid())",
+      "with_check": "(id = auth.uid())"
+    },
+    {
+      "policyname": "profiles_read_own",
+      "cmd": "SELECT",
+      "roles": [
+        "authenticated"
+      ],
+      "qual": "(user_id = auth.uid())",
+      "with_check": null
+    },
+    {
+      "policyname": "profiles_update_own",
+      "cmd": "UPDATE",
+      "roles": [
+        "authenticated"
+      ],
+      "qual": "(user_id = auth.uid())",
+      "with_check": "(user_id = auth.uid())"
+    },
+    {
+      "policyname": "profiles_upsert_own",
+      "cmd": "INSERT",
+      "roles": [
+        "authenticated"
+      ],
+      "qual": null,
+      "with_check": "(user_id = auth.uid())"
+    }
+  ],
+  "triggers": [
+    {
+      "definition": "CREATE TRIGGER trg_profiles_updated_at BEFORE UPDATE ON public.profiles FOR EACH ROW EXECUTE FUNCTION set_updated_at()",
+      "function_definition": "CREATE OR REPLACE FUNCTION public.set_updated_at()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$\nbegin\n  new.updated_at = now();\n  return new;\nend;\n$function$\n"
+    }
+  ],
+  "constraints": [
+    {
+      "conname": "profiles_id_fkey",
+      "definition": "FOREIGN KEY (id) REFERENCES auth.users(id) ON DELETE CASCADE"
+    },
+    {
+      "conname": "profiles_id_key",
+      "definition": "UNIQUE (id)"
+    },
+    {
+      "conname": "profiles_pkey",
+      "definition": "PRIMARY KEY (user_id)"
+    },
+    {
+      "conname": "profiles_primary_exhibitor_id_fkey",
+      "definition": "FOREIGN KEY (primary_exhibitor_id) REFERENCES exhibitors(id) ON DELETE SET NULL"
+    },
+    {
+      "conname": "profiles_user_id_fkey",
+      "definition": "FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE"
+    }
+  ]
+}

@@ -1,0 +1,207 @@
+[
+  {
+    "tablename": "breeds",
+    "indexname": "breeds_local_show_id_idx",
+    "indexdef": "CREATE INDEX breeds_local_show_id_idx ON public.breeds USING btree (local_show_id) WHERE (local_show_id IS NOT NULL)"
+  },
+  {
+    "tablename": "breeds",
+    "indexname": "breeds_name_species_local_scope_ci",
+    "indexdef": "CREATE UNIQUE INDEX breeds_name_species_local_scope_ci ON public.breeds USING btree (lower(name), species, COALESCE(local_show_id, '00000000-0000-0000-0000-000000000000'::uuid))"
+  },
+  {
+    "tablename": "breeds",
+    "indexname": "breeds_pkey",
+    "indexdef": "CREATE UNIQUE INDEX breeds_pkey ON public.breeds USING btree (id)"
+  },
+  {
+    "tablename": "entries",
+    "indexname": "entries_cart_item_kind_uidx",
+    "indexdef": "CREATE UNIQUE INDEX entries_cart_item_kind_uidx ON public.entries USING btree (source_cart_id, source_cart_item_id, cart_entry_kind) WHERE ((source_cart_id IS NOT NULL) AND (source_cart_item_id IS NOT NULL) AND (cart_entry_kind IS NOT NULL))"
+  },
+  {
+    "tablename": "entries",
+    "indexname": "entries_exhibitor_id_idx",
+    "indexdef": "CREATE INDEX entries_exhibitor_id_idx ON public.entries USING btree (exhibitor_id)"
+  },
+  {
+    "tablename": "entries",
+    "indexname": "entries_pkey",
+    "indexdef": "CREATE UNIQUE INDEX entries_pkey ON public.entries USING btree (id)"
+  },
+  {
+    "tablename": "entries",
+    "indexname": "idx_entries_results",
+    "indexdef": "CREATE INDEX idx_entries_results ON public.entries USING btree (show_id, section_id, breed, variety, class_name, sex, placement)"
+  },
+  {
+    "tablename": "entries",
+    "indexname": "idx_entries_show_exhibitor",
+    "indexdef": "CREATE INDEX idx_entries_show_exhibitor ON public.entries USING btree (show_id, exhibitor_id)"
+  },
+  {
+    "tablename": "entries",
+    "indexname": "idx_entries_show_payment_id",
+    "indexdef": "CREATE INDEX idx_entries_show_payment_id ON public.entries USING btree (show_payment_id)"
+  },
+  {
+    "tablename": "entries",
+    "indexname": "idx_entries_show_section",
+    "indexdef": "CREATE INDEX idx_entries_show_section ON public.entries USING btree (show_id, section_id)"
+  },
+  {
+    "tablename": "entry_awards",
+    "indexname": "entry_awards_entry_id_award_code_key",
+    "indexdef": "CREATE UNIQUE INDEX entry_awards_entry_id_award_code_key ON public.entry_awards USING btree (entry_id, award_code)"
+  },
+  {
+    "tablename": "entry_awards",
+    "indexname": "entry_awards_entry_id_idx",
+    "indexdef": "CREATE INDEX entry_awards_entry_id_idx ON public.entry_awards USING btree (entry_id)"
+  },
+  {
+    "tablename": "entry_awards",
+    "indexname": "entry_awards_pkey",
+    "indexdef": "CREATE UNIQUE INDEX entry_awards_pkey ON public.entry_awards USING btree (id)"
+  },
+  {
+    "tablename": "entry_awards",
+    "indexname": "idx_entry_awards_show_entry",
+    "indexdef": "CREATE INDEX idx_entry_awards_show_entry ON public.entry_awards USING btree (show_id, entry_id)"
+  },
+  {
+    "tablename": "exhibitors",
+    "indexname": "exhibitors_exhibitor_number_uidx",
+    "indexdef": "CREATE UNIQUE INDEX exhibitors_exhibitor_number_uidx ON public.exhibitors USING btree (exhibitor_number)"
+  },
+  {
+    "tablename": "exhibitors",
+    "indexname": "exhibitors_monthly_deduplication_identity_idx",
+    "indexdef": "CREATE INDEX exhibitors_monthly_deduplication_identity_idx ON public.exhibitors USING btree (lower(regexp_replace(COALESCE(display_name, ''::text), '[^a-z0-9]+'::text, ''::text, 'g'::text)), lower(regexp_replace(COALESCE(email, ''::text), '\\\\s+'::text, ''::text, 'g'::text)), regexp_replace(COALESCE(phone, ''::text), '\\\\D'::text, ''::text, 'g'::text)) WHERE (is_active AND (NOT is_merged) AND (NOT is_test))"
+  },
+  {
+    "tablename": "exhibitors",
+    "indexname": "exhibitors_owner_active_idx",
+    "indexdef": "CREATE INDEX exhibitors_owner_active_idx ON public.exhibitors USING btree (owner_user_id, is_active)"
+  },
+  {
+    "tablename": "exhibitors",
+    "indexname": "exhibitors_owner_idx",
+    "indexdef": "CREATE INDEX exhibitors_owner_idx ON public.exhibitors USING btree (owner_user_id)"
+  },
+  {
+    "tablename": "exhibitors",
+    "indexname": "exhibitors_pkey",
+    "indexdef": "CREATE UNIQUE INDEX exhibitors_pkey ON public.exhibitors USING btree (id)"
+  },
+  {
+    "tablename": "exhibitors",
+    "indexname": "exhibitors_unique_club_import_idx",
+    "indexdef": "CREATE UNIQUE INDEX exhibitors_unique_club_import_idx ON public.exhibitors USING btree (imported_source_id) WHERE ((imported_from = 'ringmaster_club'::text) AND (imported_source_id IS NOT NULL))"
+  },
+  {
+    "tablename": "exhibitors",
+    "indexname": "exhibitors_unowned_email_idx",
+    "indexdef": "CREATE INDEX exhibitors_unowned_email_idx ON public.exhibitors USING btree (lower(TRIM(BOTH FROM email))) WHERE ((owner_user_id IS NULL) AND (COALESCE(is_active, true) = true) AND (COALESCE(is_test, false) = false) AND (COALESCE(is_merged, false) = false))"
+  },
+  {
+    "tablename": "results",
+    "indexname": "idx_results_show_entry",
+    "indexdef": "CREATE INDEX idx_results_show_entry ON public.results USING btree (show_id, entry_id)"
+  },
+  {
+    "tablename": "results",
+    "indexname": "results_pkey",
+    "indexdef": "CREATE UNIQUE INDEX results_pkey ON public.results USING btree (id)"
+  },
+  {
+    "tablename": "results",
+    "indexname": "results_show_id_entry_id_key",
+    "indexdef": "CREATE UNIQUE INDEX results_show_id_entry_id_key ON public.results USING btree (show_id, entry_id)"
+  },
+  {
+    "tablename": "show_exhibitor_numbers",
+    "indexname": "idx_show_exhibitor_lookup",
+    "indexdef": "CREATE INDEX idx_show_exhibitor_lookup ON public.show_exhibitor_numbers USING btree (show_id, exhibitor_id)"
+  },
+  {
+    "tablename": "show_exhibitor_numbers",
+    "indexname": "show_exhibitor_numbers_pkey",
+    "indexdef": "CREATE UNIQUE INDEX show_exhibitor_numbers_pkey ON public.show_exhibitor_numbers USING btree (id)"
+  },
+  {
+    "tablename": "show_exhibitor_numbers",
+    "indexname": "show_exhibitor_numbers_show_id_exhibitor_id_key",
+    "indexdef": "CREATE UNIQUE INDEX show_exhibitor_numbers_show_id_exhibitor_id_key ON public.show_exhibitor_numbers USING btree (show_id, exhibitor_id)"
+  },
+  {
+    "tablename": "show_exhibitor_numbers",
+    "indexname": "show_exhibitor_numbers_show_id_exhibitor_number_key",
+    "indexdef": "CREATE UNIQUE INDEX show_exhibitor_numbers_show_id_exhibitor_number_key ON public.show_exhibitor_numbers USING btree (show_id, exhibitor_number)"
+  },
+  {
+    "tablename": "sweepstakes_entry_results",
+    "indexname": "sweepstakes_entry_results_pkey",
+    "indexdef": "CREATE UNIQUE INDEX sweepstakes_entry_results_pkey ON public.sweepstakes_entry_results USING btree (id)"
+  },
+  {
+    "tablename": "sweepstakes_results",
+    "indexname": "idx_sweepstakes_results_breed_name",
+    "indexdef": "CREATE INDEX idx_sweepstakes_results_breed_name ON public.sweepstakes_results USING btree (breed_name)"
+  },
+  {
+    "tablename": "sweepstakes_results",
+    "indexname": "idx_sweepstakes_results_scope",
+    "indexdef": "CREATE INDEX idx_sweepstakes_results_scope ON public.sweepstakes_results USING btree (scope)"
+  },
+  {
+    "tablename": "sweepstakes_results",
+    "indexname": "idx_sweepstakes_results_show_breed_scope",
+    "indexdef": "CREATE INDEX idx_sweepstakes_results_show_breed_scope ON public.sweepstakes_results USING btree (show_id, breed_name, scope)"
+  },
+  {
+    "tablename": "sweepstakes_results",
+    "indexname": "idx_sweepstakes_results_show_id",
+    "indexdef": "CREATE INDEX idx_sweepstakes_results_show_id ON public.sweepstakes_results USING btree (show_id)"
+  },
+  {
+    "tablename": "sweepstakes_results",
+    "indexname": "sweepstakes_results_pkey",
+    "indexdef": "CREATE UNIQUE INDEX sweepstakes_results_pkey ON public.sweepstakes_results USING btree (id)"
+  },
+  {
+    "tablename": "sweepstakes_results",
+    "indexname": "sweepstakes_results_unique_row",
+    "indexdef": "CREATE UNIQUE INDEX sweepstakes_results_unique_row ON public.sweepstakes_results USING btree (show_id, breed_name, exhibitor_id, scope, show_letter, calculation_version)"
+  },
+  {
+    "tablename": "varieties",
+    "indexname": "varieties_breed_id_sort_order_idx",
+    "indexdef": "CREATE INDEX varieties_breed_id_sort_order_idx ON public.varieties USING btree (breed_id, sort_order, name)"
+  },
+  {
+    "tablename": "varieties",
+    "indexname": "varieties_breed_name_ci",
+    "indexdef": "CREATE UNIQUE INDEX varieties_breed_name_ci ON public.varieties USING btree (breed_id, lower(name))"
+  },
+  {
+    "tablename": "varieties",
+    "indexname": "varieties_pkey",
+    "indexdef": "CREATE UNIQUE INDEX varieties_pkey ON public.varieties USING btree (id)"
+  },
+  {
+    "tablename": "variety_groups",
+    "indexname": "idx_variety_groups_breed_id",
+    "indexdef": "CREATE INDEX idx_variety_groups_breed_id ON public.variety_groups USING btree (breed_id)"
+  },
+  {
+    "tablename": "variety_groups",
+    "indexname": "uq_variety_groups_breed_name_ci",
+    "indexdef": "CREATE UNIQUE INDEX uq_variety_groups_breed_name_ci ON public.variety_groups USING btree (breed_id, lower(name))"
+  },
+  {
+    "tablename": "variety_groups",
+    "indexname": "variety_groups_pkey",
+    "indexdef": "CREATE UNIQUE INDEX variety_groups_pkey ON public.variety_groups USING btree (id)"
+  }
+]

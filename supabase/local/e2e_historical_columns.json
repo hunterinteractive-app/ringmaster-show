@@ -1,0 +1,2618 @@
+[
+  {
+    "table_name": "animals",
+    "column_name": "id",
+    "data_type": "uuid",
+    "udt_name": "uuid",
+    "column_default": "gen_random_uuid()",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "animals",
+    "column_name": "owner_user_id",
+    "data_type": "uuid",
+    "udt_name": "uuid",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "animals",
+    "column_name": "species",
+    "data_type": "USER-DEFINED",
+    "udt_name": "species",
+    "column_default": "'rabbit'::species",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "animals",
+    "column_name": "name",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "animals",
+    "column_name": "tattoo",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "animals",
+    "column_name": "breed",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "animals",
+    "column_name": "variety",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "animals",
+    "column_name": "sex",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "animals",
+    "column_name": "birth_date",
+    "data_type": "date",
+    "udt_name": "date",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "animals",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone",
+    "udt_name": "timestamptz",
+    "column_default": "now()",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "animals",
+    "column_name": "is_test",
+    "data_type": "boolean",
+    "udt_name": "bool",
+    "column_default": "false",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "animals",
+    "column_name": "is_dob_unknown",
+    "data_type": "boolean",
+    "udt_name": "bool",
+    "column_default": "false",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "animals",
+    "column_name": "exhibitor_id",
+    "data_type": "uuid",
+    "udt_name": "uuid",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "animals",
+    "column_name": "updated_at",
+    "data_type": "timestamp with time zone",
+    "udt_name": "timestamptz",
+    "column_default": "now()",
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "animals",
+    "column_name": "deleted_at",
+    "data_type": "timestamp with time zone",
+    "udt_name": "timestamptz",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "breed_rules_matrix",
+    "column_name": "id",
+    "data_type": "uuid",
+    "udt_name": "uuid",
+    "column_default": "gen_random_uuid()",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "breed_rules_matrix",
+    "column_name": "breed_name",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": null,
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "breed_rules_matrix",
+    "column_name": "engine_family",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": null,
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "breed_rules_matrix",
+    "column_name": "class_points_model",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": null,
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "breed_rules_matrix",
+    "column_name": "placement_depth",
+    "data_type": "integer",
+    "udt_name": "int4",
+    "column_default": "5",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "breed_rules_matrix",
+    "column_name": "multiplier_type",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": "'ENTRY_COUNT'::text",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "breed_rules_matrix",
+    "column_name": "place_1",
+    "data_type": "numeric",
+    "udt_name": "numeric",
+    "column_default": "0",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "breed_rules_matrix",
+    "column_name": "place_2",
+    "data_type": "numeric",
+    "udt_name": "numeric",
+    "column_default": "0",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "breed_rules_matrix",
+    "column_name": "place_3",
+    "data_type": "numeric",
+    "udt_name": "numeric",
+    "column_default": "0",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "breed_rules_matrix",
+    "column_name": "place_4",
+    "data_type": "numeric",
+    "udt_name": "numeric",
+    "column_default": "0",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "breed_rules_matrix",
+    "column_name": "place_5",
+    "data_type": "numeric",
+    "udt_name": "numeric",
+    "column_default": "0",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "breed_rules_matrix",
+    "column_name": "place_6",
+    "data_type": "numeric",
+    "udt_name": "numeric",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "breed_rules_matrix",
+    "column_name": "place_7",
+    "data_type": "numeric",
+    "udt_name": "numeric",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "breed_rules_matrix",
+    "column_name": "place_8",
+    "data_type": "numeric",
+    "udt_name": "numeric",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "breed_rules_matrix",
+    "column_name": "place_9",
+    "data_type": "numeric",
+    "udt_name": "numeric",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "breed_rules_matrix",
+    "column_name": "place_10",
+    "data_type": "numeric",
+    "udt_name": "numeric",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "breed_rules_matrix",
+    "column_name": "uses_variety_points",
+    "data_type": "boolean",
+    "udt_name": "bool",
+    "column_default": "false",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "breed_rules_matrix",
+    "column_name": "uses_group_points",
+    "data_type": "boolean",
+    "udt_name": "bool",
+    "column_default": "false",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "breed_rules_matrix",
+    "column_name": "uses_bob_points",
+    "data_type": "boolean",
+    "udt_name": "bool",
+    "column_default": "true",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "breed_rules_matrix",
+    "column_name": "uses_bos_points",
+    "data_type": "boolean",
+    "udt_name": "bool",
+    "column_default": "true",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "breed_rules_matrix",
+    "column_name": "uses_bis_points",
+    "data_type": "boolean",
+    "udt_name": "bool",
+    "column_default": "false",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "breed_rules_matrix",
+    "column_name": "uses_ris_points",
+    "data_type": "boolean",
+    "udt_name": "bool",
+    "column_default": "false",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "breed_rules_matrix",
+    "column_name": "uses_fur_points",
+    "data_type": "boolean",
+    "udt_name": "bool",
+    "column_default": "false",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "breed_rules_matrix",
+    "column_name": "uses_best4class_points",
+    "data_type": "boolean",
+    "udt_name": "bool",
+    "column_default": "false",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "breed_rules_matrix",
+    "column_name": "uses_participation_points",
+    "data_type": "boolean",
+    "udt_name": "bool",
+    "column_default": "false",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "breed_rules_matrix",
+    "column_name": "bov_points",
+    "data_type": "numeric",
+    "udt_name": "numeric",
+    "column_default": "0",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "breed_rules_matrix",
+    "column_name": "bosv_points",
+    "data_type": "numeric",
+    "udt_name": "numeric",
+    "column_default": "0",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "breed_rules_matrix",
+    "column_name": "bog_points",
+    "data_type": "numeric",
+    "udt_name": "numeric",
+    "column_default": "0",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "breed_rules_matrix",
+    "column_name": "bosg_points",
+    "data_type": "numeric",
+    "udt_name": "numeric",
+    "column_default": "0",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "breed_rules_matrix",
+    "column_name": "bob_points",
+    "data_type": "numeric",
+    "udt_name": "numeric",
+    "column_default": "0",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "breed_rules_matrix",
+    "column_name": "bosb_points",
+    "data_type": "numeric",
+    "udt_name": "numeric",
+    "column_default": "0",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "breed_rules_matrix",
+    "column_name": "bis_points",
+    "data_type": "numeric",
+    "udt_name": "numeric",
+    "column_default": "0",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "breed_rules_matrix",
+    "column_name": "bris_points",
+    "data_type": "numeric",
+    "udt_name": "numeric",
+    "column_default": "0",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "breed_rules_matrix",
+    "column_name": "fur_points",
+    "data_type": "numeric",
+    "udt_name": "numeric",
+    "column_default": "0",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "breed_rules_matrix",
+    "column_name": "best4class_points",
+    "data_type": "numeric",
+    "udt_name": "numeric",
+    "column_default": "0",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "breed_rules_matrix",
+    "column_name": "participation_points",
+    "data_type": "numeric",
+    "udt_name": "numeric",
+    "column_default": "0",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "breed_rules_matrix",
+    "column_name": "bob_basis",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": "'BREED_COUNT'::text",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "breed_rules_matrix",
+    "column_name": "bos_basis",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": "'BREED_COUNT'::text",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "breed_rules_matrix",
+    "column_name": "bov_basis",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": "'VARIETY_COUNT'::text",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "breed_rules_matrix",
+    "column_name": "bosv_basis",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": "'VARIETY_COUNT'::text",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "breed_rules_matrix",
+    "column_name": "bis_basis",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": "'FLAT'::text",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "breed_rules_matrix",
+    "column_name": "ris_basis",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": "'FLAT'::text",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "breed_rules_matrix",
+    "column_name": "fur_basis",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": "'FLAT'::text",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "breed_rules_matrix",
+    "column_name": "convention_override",
+    "data_type": "boolean",
+    "udt_name": "bool",
+    "column_default": "false",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "breed_rules_matrix",
+    "column_name": "national_override",
+    "data_type": "boolean",
+    "udt_name": "bool",
+    "column_default": "false",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "breed_rules_matrix",
+    "column_name": "specialty_override",
+    "data_type": "boolean",
+    "udt_name": "bool",
+    "column_default": "false",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "breed_rules_matrix",
+    "column_name": "convention_notes",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "breed_rules_matrix",
+    "column_name": "national_notes",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "breed_rules_matrix",
+    "column_name": "specialty_notes",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "breed_rules_matrix",
+    "column_name": "membership_required",
+    "data_type": "boolean",
+    "udt_name": "bool",
+    "column_default": "false",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "breed_rules_matrix",
+    "column_name": "sanction_required",
+    "data_type": "boolean",
+    "udt_name": "bool",
+    "column_default": "false",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "breed_rules_matrix",
+    "column_name": "tracks_open",
+    "data_type": "boolean",
+    "udt_name": "bool",
+    "column_default": "true",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "breed_rules_matrix",
+    "column_name": "tracks_youth",
+    "data_type": "boolean",
+    "udt_name": "bool",
+    "column_default": "true",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "breed_rules_matrix",
+    "column_name": "rule_source",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "breed_rules_matrix",
+    "column_name": "verification_status",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": "'pending'::text",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "breed_rules_matrix",
+    "column_name": "status",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": "'draft'::text",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "breed_rules_matrix",
+    "column_name": "notes",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "breed_rules_matrix",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone",
+    "udt_name": "timestamptz",
+    "column_default": "now()",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "breed_rules_matrix",
+    "column_name": "updated_at",
+    "data_type": "timestamp with time zone",
+    "udt_name": "timestamptz",
+    "column_default": "now()",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "breed_rules_matrix",
+    "column_name": "uses_age_division_points",
+    "data_type": "boolean",
+    "udt_name": "bool",
+    "column_default": "false",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "breed_rules_matrix",
+    "column_name": "best_junior_points",
+    "data_type": "numeric",
+    "udt_name": "numeric",
+    "column_default": "0",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "breed_rules_matrix",
+    "column_name": "best_intermediate_points",
+    "data_type": "numeric",
+    "udt_name": "numeric",
+    "column_default": "0",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "breed_rules_matrix",
+    "column_name": "best_senior_points",
+    "data_type": "numeric",
+    "udt_name": "numeric",
+    "column_default": "0",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "breed_rules_matrix",
+    "column_name": "age_division_basis",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": "'FLAT'::text",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "breed_rules_matrix",
+    "column_name": "uses_variety_age_division_points",
+    "data_type": "boolean",
+    "udt_name": "bool",
+    "column_default": "false",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "breed_rules_matrix",
+    "column_name": "variety_best_junior_points",
+    "data_type": "numeric",
+    "udt_name": "numeric",
+    "column_default": "0",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "breed_rules_matrix",
+    "column_name": "variety_best_intermediate_points",
+    "data_type": "numeric",
+    "udt_name": "numeric",
+    "column_default": "0",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "breed_rules_matrix",
+    "column_name": "variety_best_senior_points",
+    "data_type": "numeric",
+    "udt_name": "numeric",
+    "column_default": "0",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "breed_rules_matrix",
+    "column_name": "variety_age_division_basis",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": "'FLAT'::text",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "breed_rules_profiles",
+    "column_name": "id",
+    "data_type": "uuid",
+    "udt_name": "uuid",
+    "column_default": "gen_random_uuid()",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "breed_rules_profiles",
+    "column_name": "breed_name",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": null,
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "breed_rules_profiles",
+    "column_name": "engine_type",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": null,
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "breed_rules_profiles",
+    "column_name": "rule_source",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": null,
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "breed_rules_profiles",
+    "column_name": "verification_status",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": "'PROVISIONAL'::text",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "breed_rules_profiles",
+    "column_name": "uses_class_points",
+    "data_type": "boolean",
+    "udt_name": "bool",
+    "column_default": "true",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "breed_rules_profiles",
+    "column_name": "uses_variety_points",
+    "data_type": "boolean",
+    "udt_name": "bool",
+    "column_default": "false",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "breed_rules_profiles",
+    "column_name": "uses_group_points",
+    "data_type": "boolean",
+    "udt_name": "bool",
+    "column_default": "false",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "breed_rules_profiles",
+    "column_name": "uses_bob_points",
+    "data_type": "boolean",
+    "udt_name": "bool",
+    "column_default": "false",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "breed_rules_profiles",
+    "column_name": "uses_bis_points",
+    "data_type": "boolean",
+    "udt_name": "bool",
+    "column_default": "false",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "breed_rules_profiles",
+    "column_name": "uses_fur_wool",
+    "data_type": "boolean",
+    "udt_name": "bool",
+    "column_default": "false",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "breed_rules_profiles",
+    "column_name": "has_special_classes",
+    "data_type": "boolean",
+    "udt_name": "bool",
+    "column_default": "false",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "breed_rules_profiles",
+    "column_name": "notes",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "breed_rules_profiles",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone",
+    "udt_name": "timestamptz",
+    "column_default": "now()",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "breed_rules_profiles",
+    "column_name": "updated_at",
+    "data_type": "timestamp with time zone",
+    "udt_name": "timestamptz",
+    "column_default": "now()",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "entry_carts",
+    "column_name": "id",
+    "data_type": "uuid",
+    "udt_name": "uuid",
+    "column_default": "gen_random_uuid()",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "entry_carts",
+    "column_name": "user_id",
+    "data_type": "uuid",
+    "udt_name": "uuid",
+    "column_default": null,
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "entry_carts",
+    "column_name": "show_id",
+    "data_type": "uuid",
+    "udt_name": "uuid",
+    "column_default": null,
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "entry_carts",
+    "column_name": "status",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": "'active'::text",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "entry_carts",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone",
+    "udt_name": "timestamptz",
+    "column_default": "now()",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "entry_carts",
+    "column_name": "updated_at",
+    "data_type": "timestamp with time zone",
+    "udt_name": "timestamptz",
+    "column_default": "now()",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "entry_carts",
+    "column_name": "payment_status",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": "'unpaid'::text",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "entry_carts",
+    "column_name": "show_payment_id",
+    "data_type": "uuid",
+    "udt_name": "uuid",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "entry_carts",
+    "column_name": "submitted_at",
+    "data_type": "timestamp with time zone",
+    "udt_name": "timestamptz",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "entry_carts",
+    "column_name": "paid_at",
+    "data_type": "timestamp with time zone",
+    "udt_name": "timestamptz",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "entry_carts",
+    "column_name": "subtotal_cents",
+    "data_type": "integer",
+    "udt_name": "int4",
+    "column_default": "0",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "entry_carts",
+    "column_name": "total_cents",
+    "data_type": "integer",
+    "udt_name": "int4",
+    "column_default": "0",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "entry_carts",
+    "column_name": "currency",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": "'usd'::text",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "entry_carts",
+    "column_name": "payment_provider",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "entry_carts",
+    "column_name": "payment_intent_id",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "entry_carts",
+    "column_name": "checkout_session_id",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "entry_carts",
+    "column_name": "payment_amount_total",
+    "data_type": "numeric",
+    "udt_name": "numeric",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "entry_carts",
+    "column_name": "payment_currency",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "entry_carts",
+    "column_name": "selected_payment_timing",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "entry_carts",
+    "column_name": "selected_payment_provider",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "entry_carts",
+    "column_name": "active_payment_session_id",
+    "data_type": "uuid",
+    "udt_name": "uuid",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "entry_carts",
+    "column_name": "completed_payment_session_id",
+    "data_type": "uuid",
+    "udt_name": "uuid",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "entry_carts",
+    "column_name": "provider_payment_id",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "entry_carts",
+    "column_name": "payment_finalized_at",
+    "data_type": "timestamp with time zone",
+    "udt_name": "timestamptz",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "entry_carts",
+    "column_name": "payment_attempt_started_at",
+    "data_type": "timestamp with time zone",
+    "udt_name": "timestamptz",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "exhibitors",
+    "column_name": "id",
+    "data_type": "uuid",
+    "udt_name": "uuid",
+    "column_default": "gen_random_uuid()",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "exhibitors",
+    "column_name": "owner_user_id",
+    "data_type": "uuid",
+    "udt_name": "uuid",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "exhibitors",
+    "column_name": "type",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": null,
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "exhibitors",
+    "column_name": "display_name",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": null,
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "exhibitors",
+    "column_name": "birth_date",
+    "data_type": "date",
+    "udt_name": "date",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "exhibitors",
+    "column_name": "arba_number",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "exhibitors",
+    "column_name": "is_active",
+    "data_type": "boolean",
+    "udt_name": "bool",
+    "column_default": "true",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "exhibitors",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone",
+    "udt_name": "timestamptz",
+    "column_default": "now()",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "exhibitors",
+    "column_name": "updated_at",
+    "data_type": "timestamp with time zone",
+    "udt_name": "timestamptz",
+    "column_default": "now()",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "exhibitors",
+    "column_name": "first_name",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "exhibitors",
+    "column_name": "last_name",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "exhibitors",
+    "column_name": "email",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "exhibitors",
+    "column_name": "phone",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "exhibitors",
+    "column_name": "address_line1",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "exhibitors",
+    "column_name": "address_line2",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "exhibitors",
+    "column_name": "city",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "exhibitors",
+    "column_name": "state",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "exhibitors",
+    "column_name": "zip",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "exhibitors",
+    "column_name": "showing_name",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "exhibitors",
+    "column_name": "created_for_show_id",
+    "data_type": "uuid",
+    "udt_name": "uuid",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "exhibitors",
+    "column_name": "is_local_only",
+    "data_type": "boolean",
+    "udt_name": "bool",
+    "column_default": "false",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "exhibitors",
+    "column_name": "is_test",
+    "data_type": "boolean",
+    "udt_name": "bool",
+    "column_default": "false",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "exhibitors",
+    "column_name": "group_members",
+    "data_type": "jsonb",
+    "udt_name": "jsonb",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "exhibitors",
+    "column_name": "group_shows_as_youth",
+    "data_type": "boolean",
+    "udt_name": "bool",
+    "column_default": "false",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "exhibitors",
+    "column_name": "exhibitor_number",
+    "data_type": "bigint",
+    "udt_name": "int8",
+    "column_default": null,
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "exhibitors",
+    "column_name": "is_merged",
+    "data_type": "boolean",
+    "udt_name": "bool",
+    "column_default": "false",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "exhibitors",
+    "column_name": "merged_into_exhibitor_id",
+    "data_type": "uuid",
+    "udt_name": "uuid",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "exhibitors",
+    "column_name": "merged_at",
+    "data_type": "timestamp with time zone",
+    "udt_name": "timestamptz",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "exhibitors",
+    "column_name": "claimed_at",
+    "data_type": "timestamp with time zone",
+    "udt_name": "timestamptz",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "exhibitors",
+    "column_name": "claimed_by_user_id",
+    "data_type": "uuid",
+    "udt_name": "uuid",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "exhibitors",
+    "column_name": "imported_from",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "exhibitors",
+    "column_name": "imported_source_id",
+    "data_type": "uuid",
+    "udt_name": "uuid",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "exhibitors",
+    "column_name": "imported_at",
+    "data_type": "timestamp with time zone",
+    "udt_name": "timestamptz",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "show_judges",
+    "column_name": "show_id",
+    "data_type": "uuid",
+    "udt_name": "uuid",
+    "column_default": null,
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "show_judges",
+    "column_name": "judge_id",
+    "data_type": "uuid",
+    "udt_name": "uuid",
+    "column_default": null,
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "show_judges",
+    "column_name": "is_enabled",
+    "data_type": "boolean",
+    "udt_name": "bool",
+    "column_default": "true",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "show_judges",
+    "column_name": "sort_order",
+    "data_type": "integer",
+    "udt_name": "int4",
+    "column_default": "0",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "show_judges",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone",
+    "udt_name": "timestamptz",
+    "column_default": "now()",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "show_points_entries",
+    "column_name": "id",
+    "data_type": "uuid",
+    "udt_name": "uuid",
+    "column_default": "gen_random_uuid()",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "show_points_entries",
+    "column_name": "show_id",
+    "data_type": "uuid",
+    "udt_name": "uuid",
+    "column_default": null,
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "show_points_entries",
+    "column_name": "finalize_run_id",
+    "data_type": "uuid",
+    "udt_name": "uuid",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "show_points_entries",
+    "column_name": "exhibitor_id",
+    "data_type": "uuid",
+    "udt_name": "uuid",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "show_points_entries",
+    "column_name": "animal_id",
+    "data_type": "uuid",
+    "udt_name": "uuid",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "show_points_entries",
+    "column_name": "breed_id",
+    "data_type": "uuid",
+    "udt_name": "uuid",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "show_points_entries",
+    "column_name": "variety_id",
+    "data_type": "uuid",
+    "udt_name": "uuid",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "show_points_entries",
+    "column_name": "group_id",
+    "data_type": "uuid",
+    "udt_name": "uuid",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "show_points_entries",
+    "column_name": "class_key",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "show_points_entries",
+    "column_name": "points_category",
+    "data_type": "USER-DEFINED",
+    "udt_name": "points_category",
+    "column_default": null,
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "show_points_entries",
+    "column_name": "source_type",
+    "data_type": "USER-DEFINED",
+    "udt_name": "point_source_type",
+    "column_default": null,
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "show_points_entries",
+    "column_name": "placement",
+    "data_type": "integer",
+    "udt_name": "int4",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "show_points_entries",
+    "column_name": "class_size",
+    "data_type": "integer",
+    "udt_name": "int4",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "show_points_entries",
+    "column_name": "base_points",
+    "data_type": "numeric",
+    "udt_name": "numeric",
+    "column_default": "0",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "show_points_entries",
+    "column_name": "multiplier",
+    "data_type": "numeric",
+    "udt_name": "numeric",
+    "column_default": "1",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "show_points_entries",
+    "column_name": "total_points",
+    "data_type": "numeric",
+    "udt_name": "numeric",
+    "column_default": "0",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "show_points_entries",
+    "column_name": "qualified",
+    "data_type": "boolean",
+    "udt_name": "bool",
+    "column_default": "true",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "show_points_entries",
+    "column_name": "qualification_note",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "show_points_entries",
+    "column_name": "source_result_id",
+    "data_type": "uuid",
+    "udt_name": "uuid",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "show_points_entries",
+    "column_name": "metadata",
+    "data_type": "jsonb",
+    "udt_name": "jsonb",
+    "column_default": "'{}'::jsonb",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "show_points_entries",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone",
+    "udt_name": "timestamptz",
+    "column_default": "now()",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "shows",
+    "column_name": "id",
+    "data_type": "uuid",
+    "udt_name": "uuid",
+    "column_default": "gen_random_uuid()",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "shows",
+    "column_name": "created_by",
+    "data_type": "uuid",
+    "udt_name": "uuid",
+    "column_default": null,
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "shows",
+    "column_name": "name",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": null,
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "shows",
+    "column_name": "start_date",
+    "data_type": "date",
+    "udt_name": "date",
+    "column_default": null,
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "shows",
+    "column_name": "end_date",
+    "data_type": "date",
+    "udt_name": "date",
+    "column_default": null,
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "shows",
+    "column_name": "location_name",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "shows",
+    "column_name": "location_address",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "shows",
+    "column_name": "timezone",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": "'America/Indiana/Indianapolis'::text",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "shows",
+    "column_name": "entry_open_at",
+    "data_type": "timestamp with time zone",
+    "udt_name": "timestamptz",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "shows",
+    "column_name": "entry_close_at",
+    "data_type": "timestamp with time zone",
+    "udt_name": "timestamptz",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "shows",
+    "column_name": "allow_edits_until_close",
+    "data_type": "boolean",
+    "udt_name": "bool",
+    "column_default": "true",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "shows",
+    "column_name": "is_published",
+    "data_type": "boolean",
+    "udt_name": "bool",
+    "column_default": "false",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "shows",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone",
+    "udt_name": "timestamptz",
+    "column_default": "now()",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "shows",
+    "column_name": "is_single_breed_show",
+    "data_type": "boolean",
+    "udt_name": "bool",
+    "column_default": "false",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "shows",
+    "column_name": "single_breed_id",
+    "data_type": "uuid",
+    "udt_name": "uuid",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "shows",
+    "column_name": "secretary_name",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "shows",
+    "column_name": "secretary_phone",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "shows",
+    "column_name": "secretary_email",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "shows",
+    "column_name": "final_award_mode",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": "'four_six_bis'::text",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "shows",
+    "column_name": "use_group_awards",
+    "data_type": "boolean",
+    "udt_name": "bool",
+    "column_default": "false",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "shows",
+    "column_name": "results_version",
+    "data_type": "bigint",
+    "udt_name": "int8",
+    "column_default": "1",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "shows",
+    "column_name": "results_last_changed_at",
+    "data_type": "timestamp with time zone",
+    "udt_name": "timestamptz",
+    "column_default": "now()",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "shows",
+    "column_name": "owner_user_id",
+    "data_type": "uuid",
+    "udt_name": "uuid",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "shows",
+    "column_name": "show_days",
+    "data_type": "integer",
+    "udt_name": "int4",
+    "column_default": "1",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "shows",
+    "column_name": "license_days_consumed",
+    "data_type": "integer",
+    "udt_name": "int4",
+    "column_default": "0",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "shows",
+    "column_name": "is_closed",
+    "data_type": "boolean",
+    "udt_name": "bool",
+    "column_default": "false",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "shows",
+    "column_name": "is_test",
+    "data_type": "boolean",
+    "udt_name": "bool",
+    "column_default": "false",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "shows",
+    "column_name": "accepts_online_payment",
+    "data_type": "boolean",
+    "udt_name": "bool",
+    "column_default": "false",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "shows",
+    "column_name": "stripe_connected_account_id",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "shows",
+    "column_name": "stripe_onboarding_complete",
+    "data_type": "boolean",
+    "udt_name": "bool",
+    "column_default": "false",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "shows",
+    "column_name": "stripe_charges_enabled",
+    "data_type": "boolean",
+    "udt_name": "bool",
+    "column_default": "false",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "shows",
+    "column_name": "stripe_payouts_enabled",
+    "data_type": "boolean",
+    "udt_name": "bool",
+    "column_default": "false",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "shows",
+    "column_name": "stripe_details_submitted",
+    "data_type": "boolean",
+    "udt_name": "bool",
+    "column_default": "false",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "shows",
+    "column_name": "platform_fee_percent",
+    "data_type": "numeric",
+    "udt_name": "numeric",
+    "column_default": "2.00",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "shows",
+    "column_name": "payment_terms_text",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "shows",
+    "column_name": "payment_success_url",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "shows",
+    "column_name": "payment_cancel_url",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "shows",
+    "column_name": "updated_at",
+    "data_type": "timestamp with time zone",
+    "udt_name": "timestamptz",
+    "column_default": "now()",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "shows",
+    "column_name": "online_payment_enabled",
+    "data_type": "boolean",
+    "udt_name": "bool",
+    "column_default": "false",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "shows",
+    "column_name": "online_payment_provider",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": "'stripe'::text",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "shows",
+    "column_name": "payment_required_before_submission",
+    "data_type": "boolean",
+    "udt_name": "bool",
+    "column_default": "false",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "shows",
+    "column_name": "payment_instructions",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "shows",
+    "column_name": "club_id",
+    "data_type": "uuid",
+    "udt_name": "uuid",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "shows",
+    "column_name": "club_name",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "shows",
+    "column_name": "exhibitors_emailed_at",
+    "data_type": "timestamp without time zone",
+    "udt_name": "timestamp",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "shows",
+    "column_name": "club_reports_emailed_at",
+    "data_type": "timestamp without time zone",
+    "udt_name": "timestamp",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "shows",
+    "column_name": "is_locked",
+    "data_type": "boolean",
+    "udt_name": "bool",
+    "column_default": "false",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "shows",
+    "column_name": "locked_at",
+    "data_type": "timestamp with time zone",
+    "udt_name": "timestamptz",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "shows",
+    "column_name": "locked_by",
+    "data_type": "uuid",
+    "udt_name": "uuid",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "shows",
+    "column_name": "archive_storage_path",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "shows",
+    "column_name": "archive_created_at",
+    "data_type": "timestamp with time zone",
+    "udt_name": "timestamptz",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "shows",
+    "column_name": "archive_expires_at",
+    "data_type": "timestamp with time zone",
+    "udt_name": "timestamptz",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "shows",
+    "column_name": "finalized_at",
+    "data_type": "timestamp with time zone",
+    "udt_name": "timestamptz",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "shows",
+    "column_name": "use_show_superintendent",
+    "data_type": "boolean",
+    "udt_name": "bool",
+    "column_default": "false",
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "shows",
+    "column_name": "allow_qr_result_entry",
+    "data_type": "boolean",
+    "udt_name": "bool",
+    "column_default": "false",
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "shows",
+    "column_name": "is_national_show",
+    "data_type": "boolean",
+    "udt_name": "bool",
+    "column_default": "false",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "shows",
+    "column_name": "is_demo",
+    "data_type": "boolean",
+    "udt_name": "bool",
+    "column_default": "false",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "shows",
+    "column_name": "demo_resets_at",
+    "data_type": "timestamp with time zone",
+    "udt_name": "timestamptz",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "shows",
+    "column_name": "email_sending_disabled",
+    "data_type": "boolean",
+    "udt_name": "bool",
+    "column_default": "false",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "shows",
+    "column_name": "payments_disabled",
+    "data_type": "boolean",
+    "udt_name": "bool",
+    "column_default": "false",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "shows",
+    "column_name": "finalize_disabled",
+    "data_type": "boolean",
+    "udt_name": "bool",
+    "column_default": "false",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "shows",
+    "column_name": "auto_email_checkin_sheets",
+    "data_type": "boolean",
+    "udt_name": "bool",
+    "column_default": "false",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "shows",
+    "column_name": "checkin_sheets_auto_emailed_at",
+    "data_type": "timestamp with time zone",
+    "udt_name": "timestamptz",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "shows",
+    "column_name": "checkin_sheets_auto_email_error",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "shows",
+    "column_name": "superintendent_judge_order_published",
+    "data_type": "boolean",
+    "udt_name": "bool",
+    "column_default": "false",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "shows",
+    "column_name": "superintendent_judge_order_published_at",
+    "data_type": "timestamp with time zone",
+    "udt_name": "timestamptz",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "shows",
+    "column_name": "superintendent_judge_order_published_by",
+    "data_type": "uuid",
+    "udt_name": "uuid",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "shows",
+    "column_name": "secretary_address",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "shows",
+    "column_name": "coop_numbering_mode",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": "'separate'::text",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "shows",
+    "column_name": "online_payment_fee_mode",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": "'club_absorbs'::text",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "shows",
+    "column_name": "online_payment_fee_label",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": "'Online Payment Fee'::text",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "shows",
+    "column_name": "online_payment_fee_description",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": "'This show charges an Online Payment Fee for electronic payments. This fee helps cover payment processing costs, payment provider charges, and online entry services.'::text",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "shows",
+    "column_name": "online_payment_fee_updated_at",
+    "data_type": "timestamp with time zone",
+    "udt_name": "timestamptz",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "shows",
+    "column_name": "online_payment_fee_updated_by",
+    "data_type": "uuid",
+    "udt_name": "uuid",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "shows",
+    "column_name": "payment_timing_mode",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": "'pay_at_show_only'::text",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "shows",
+    "column_name": "national_show_section_id",
+    "data_type": "uuid",
+    "udt_name": "uuid",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "sweepstakes_entry_results",
+    "column_name": "id",
+    "data_type": "uuid",
+    "udt_name": "uuid",
+    "column_default": "gen_random_uuid()",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "sweepstakes_entry_results",
+    "column_name": "show_id",
+    "data_type": "uuid",
+    "udt_name": "uuid",
+    "column_default": null,
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "sweepstakes_entry_results",
+    "column_name": "exhibitor_id",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": null,
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "sweepstakes_entry_results",
+    "column_name": "entry_id",
+    "data_type": "uuid",
+    "udt_name": "uuid",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "sweepstakes_entry_results",
+    "column_name": "animal_id",
+    "data_type": "uuid",
+    "udt_name": "uuid",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "sweepstakes_entry_results",
+    "column_name": "breed_name",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": null,
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "sweepstakes_entry_results",
+    "column_name": "variety_name",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "sweepstakes_entry_results",
+    "column_name": "class_name",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "sweepstakes_entry_results",
+    "column_name": "sex",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "sweepstakes_entry_results",
+    "column_name": "tattoo",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "sweepstakes_entry_results",
+    "column_name": "show_letter",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": null,
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "sweepstakes_entry_results",
+    "column_name": "scope",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": null,
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "sweepstakes_entry_results",
+    "column_name": "points_source",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": null,
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "sweepstakes_entry_results",
+    "column_name": "points",
+    "data_type": "numeric",
+    "udt_name": "numeric",
+    "column_default": "0",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "sweepstakes_entry_results",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone",
+    "udt_name": "timestamptz",
+    "column_default": "now()",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "breed_abbreviations",
+    "column_name": "id",
+    "data_type": "uuid",
+    "udt_name": "uuid",
+    "column_default": "gen_random_uuid()",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "breed_abbreviations",
+    "column_name": "species",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": null,
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "breed_abbreviations",
+    "column_name": "breed_name",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": null,
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "breed_abbreviations",
+    "column_name": "abbreviation",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": null,
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "breed_abbreviations",
+    "column_name": "source",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": "'ARBA'::text",
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "breed_abbreviations",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone",
+    "udt_name": "timestamptz",
+    "column_default": "now()",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "breed_abbreviations",
+    "column_name": "updated_at",
+    "data_type": "timestamp with time zone",
+    "udt_name": "timestamptz",
+    "column_default": "now()",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "show_animal_coop_numbers",
+    "column_name": "id",
+    "data_type": "uuid",
+    "udt_name": "uuid",
+    "column_default": "gen_random_uuid()",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "show_animal_coop_numbers",
+    "column_name": "show_id",
+    "data_type": "uuid",
+    "udt_name": "uuid",
+    "column_default": null,
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "show_animal_coop_numbers",
+    "column_name": "animal_id",
+    "data_type": "uuid",
+    "udt_name": "uuid",
+    "column_default": null,
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "show_animal_coop_numbers",
+    "column_name": "breed_name",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": null,
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "show_animal_coop_numbers",
+    "column_name": "coop_number",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "show_animal_coop_numbers",
+    "column_name": "is_manual",
+    "data_type": "boolean",
+    "udt_name": "bool",
+    "column_default": "false",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "show_animal_coop_numbers",
+    "column_name": "generated_at",
+    "data_type": "timestamp with time zone",
+    "udt_name": "timestamptz",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "show_animal_coop_numbers",
+    "column_name": "updated_at",
+    "data_type": "timestamp with time zone",
+    "udt_name": "timestamptz",
+    "column_default": "now()",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "show_animal_coop_numbers",
+    "column_name": "scope",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": "'open'::text",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "show_exhibitor_balances",
+    "column_name": "id",
+    "data_type": "uuid",
+    "udt_name": "uuid",
+    "column_default": "gen_random_uuid()",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "show_exhibitor_balances",
+    "column_name": "show_id",
+    "data_type": "uuid",
+    "udt_name": "uuid",
+    "column_default": null,
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "show_exhibitor_balances",
+    "column_name": "exhibitor_id",
+    "data_type": "uuid",
+    "udt_name": "uuid",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "show_exhibitor_balances",
+    "column_name": "exhibitor_user_id",
+    "data_type": "uuid",
+    "udt_name": "uuid",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "show_exhibitor_balances",
+    "column_name": "entry_cart_id",
+    "data_type": "uuid",
+    "udt_name": "uuid",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "show_exhibitor_balances",
+    "column_name": "cart_id",
+    "data_type": "uuid",
+    "udt_name": "uuid",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "show_exhibitor_balances",
+    "column_name": "currency",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": "'usd'::text",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "show_exhibitor_balances",
+    "column_name": "entry_count",
+    "data_type": "integer",
+    "udt_name": "int4",
+    "column_default": "0",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "show_exhibitor_balances",
+    "column_name": "fur_count",
+    "data_type": "integer",
+    "udt_name": "int4",
+    "column_default": "0",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "show_exhibitor_balances",
+    "column_name": "entries_subtotal_cents",
+    "data_type": "integer",
+    "udt_name": "int4",
+    "column_default": "0",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "show_exhibitor_balances",
+    "column_name": "fur_subtotal_cents",
+    "data_type": "integer",
+    "udt_name": "int4",
+    "column_default": "0",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "show_exhibitor_balances",
+    "column_name": "show_fee_subtotal_cents",
+    "data_type": "integer",
+    "udt_name": "int4",
+    "column_default": "0",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "show_exhibitor_balances",
+    "column_name": "subtotal_before_discount_cents",
+    "data_type": "integer",
+    "udt_name": "int4",
+    "column_default": "0",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "show_exhibitor_balances",
+    "column_name": "discount_cents",
+    "data_type": "integer",
+    "udt_name": "int4",
+    "column_default": "0",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "show_exhibitor_balances",
+    "column_name": "calculated_total_cents",
+    "data_type": "integer",
+    "udt_name": "int4",
+    "column_default": "0",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "show_exhibitor_balances",
+    "column_name": "paid_online_cents",
+    "data_type": "integer",
+    "udt_name": "int4",
+    "column_default": "0",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "show_exhibitor_balances",
+    "column_name": "paid_manual_cents",
+    "data_type": "integer",
+    "udt_name": "int4",
+    "column_default": "0",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "show_exhibitor_balances",
+    "column_name": "refunded_cents",
+    "data_type": "integer",
+    "udt_name": "int4",
+    "column_default": "0",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "show_exhibitor_balances",
+    "column_name": "balance_due_cents",
+    "data_type": "integer",
+    "udt_name": "int4",
+    "column_default": "0",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "show_exhibitor_balances",
+    "column_name": "payment_status",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": "'unpaid'::text",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "show_exhibitor_balances",
+    "column_name": "latest_show_payment_id",
+    "data_type": "uuid",
+    "udt_name": "uuid",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "show_exhibitor_balances",
+    "column_name": "latest_checkout_session_id",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "show_exhibitor_balances",
+    "column_name": "latest_payment_intent_id",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "show_exhibitor_balances",
+    "column_name": "section_breakdown",
+    "data_type": "jsonb",
+    "udt_name": "jsonb",
+    "column_default": "'[]'::jsonb",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "show_exhibitor_balances",
+    "column_name": "fee_snapshot",
+    "data_type": "jsonb",
+    "udt_name": "jsonb",
+    "column_default": "'{}'::jsonb",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "show_exhibitor_balances",
+    "column_name": "source",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": "'entries'::text",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "show_exhibitor_balances",
+    "column_name": "calculated_at",
+    "data_type": "timestamp with time zone",
+    "udt_name": "timestamptz",
+    "column_default": "now()",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "show_exhibitor_balances",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone",
+    "udt_name": "timestamptz",
+    "column_default": "now()",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "show_exhibitor_balances",
+    "column_name": "updated_at",
+    "data_type": "timestamp with time zone",
+    "udt_name": "timestamptz",
+    "column_default": "now()",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "closeout_jobs",
+    "column_name": "id",
+    "data_type": "uuid",
+    "udt_name": "uuid",
+    "column_default": "gen_random_uuid()",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "closeout_jobs",
+    "column_name": "show_id",
+    "data_type": "uuid",
+    "udt_name": "uuid",
+    "column_default": null,
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "closeout_jobs",
+    "column_name": "status",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": "'queued'::text",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "closeout_jobs",
+    "column_name": "step",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "closeout_jobs",
+    "column_name": "error",
+    "data_type": "text",
+    "udt_name": "text",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "closeout_jobs",
+    "column_name": "started_at",
+    "data_type": "timestamp with time zone",
+    "udt_name": "timestamptz",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "closeout_jobs",
+    "column_name": "finished_at",
+    "data_type": "timestamp with time zone",
+    "udt_name": "timestamptz",
+    "column_default": null,
+    "is_nullable": "YES"
+  },
+  {
+    "table_name": "closeout_jobs",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone",
+    "udt_name": "timestamptz",
+    "column_default": "now()",
+    "is_nullable": "NO"
+  }
+]
