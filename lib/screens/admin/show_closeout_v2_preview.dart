@@ -5361,6 +5361,7 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
   }
 
   String _friendlyReportName(String reportName) => switch (reportName) {
+    'exhibitor_mailing_labels' => 'Exhibitor Labels',
     'arba_report' => 'ARBA Report',
     'entered_exhibitors_list_report' => 'Exhibitor Number Lookup Report',
     'entered_exhibitors_contact_report' => 'Entered Exhibitors Contact Report',

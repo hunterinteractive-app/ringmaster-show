@@ -43,7 +43,7 @@ class ExhibitorMailingLabelsPdf {
     final rows = sortExhibitorMailingLabels(eligible, sort);
     final pdf = pw.Document(
       theme: await buildReportPdfTheme(assets),
-      title: 'Exhibitor Mailing Labels — Avery 5160/8160',
+      title: 'Exhibitor Labels — Avery 5160/8160',
       author: 'RingMaster Show',
       creator: 'RingMaster Show',
       subject:
@@ -115,7 +115,7 @@ class ExhibitorMailingLabelsPdf {
     }
     return ReportFileResult(
       fileName:
-          'Exhibitor Mailing Labels - ${mode.name} - ${sort.name} - Avery 5160.pdf',
+          'Exhibitor Labels - ${mode.name} - ${sort.name} - Avery 5160.pdf',
       mimeType: 'application/pdf',
       bytes: await pdf.save(),
       metadata: {
