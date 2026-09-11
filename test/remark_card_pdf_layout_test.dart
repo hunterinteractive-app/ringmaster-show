@@ -1,394 +1,68 @@
+import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
-
-const double _runnerCardHeight = 2 * PdfPageFormat.inch;
-
-pw.Widget _lineField({
-  required String label,
-  required String value,
-  double height = 16,
-}) {
-  return pw.Container(
-    height: height,
-    child: pw.Row(
-      crossAxisAlignment: pw.CrossAxisAlignment.end,
-      children: [
-        pw.Text(
-          label,
-          style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold),
-        ),
-        pw.SizedBox(width: 3),
-        pw.Expanded(
-          child: pw.Container(
-            padding: const pw.EdgeInsets.only(left: 2, bottom: 2),
-            decoration: const pw.BoxDecoration(
-              border: pw.Border(bottom: pw.BorderSide(width: .7)),
-            ),
-            child: pw.Text(
-              value,
-              maxLines: 1,
-              style: const pw.TextStyle(fontSize: 8),
-            ),
-          ),
-        ),
-      ],
-    ),
-  );
-}
-
-pw.Widget _checkRow(List<String> labels, Set<String> selectedLabels) {
-  return pw.Row(
-    mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-    children: labels.map((label) {
-      final isSelected = selectedLabels
-          .map((value) => value.toLowerCase())
-          .contains(label.toLowerCase());
-      return pw.Text(
-        isSelected ? '[$label]' : label,
-        style: pw.TextStyle(
-          fontSize: 8,
-          fontWeight: isSelected ? pw.FontWeight.bold : pw.FontWeight.normal,
-        ),
-      );
-    }).toList(),
-  );
-}
-
-pw.Widget _scoreGrid(List<String> rows, {bool fourCols = true}) {
-  final headers = fourCols ? ['VG', 'G', 'F', 'P'] : ['VG', 'G', 'F'];
-
-  return pw.Row(
-    crossAxisAlignment: pw.CrossAxisAlignment.start,
-    children: [
-      pw.SizedBox(
-        width: 72,
-        child: pw.Column(
-          crossAxisAlignment: pw.CrossAxisAlignment.start,
-          children: [
-            pw.SizedBox(height: 12),
-            ...rows.map(
-              (r) => pw.Container(
-                height: 15,
-                alignment: pw.Alignment.centerLeft,
-                child: pw.Text(
-                  r,
-                  style: pw.TextStyle(
-                    fontSize: 7.5,
-                    fontWeight: pw.FontWeight.bold,
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-      pw.Expanded(
-        child: pw.Column(
-          children: [
-            pw.Row(
-              children: headers
-                  .map(
-                    (h) => pw.Expanded(
-                      child: pw.Center(
-                        child: pw.Text(
-                          h,
-                          style: pw.TextStyle(
-                            fontSize: 7,
-                            fontWeight: pw.FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ),
-                  )
-                  .toList(),
-            ),
-            pw.Column(
-              children: rows
-                  .map(
-                    (_) => pw.Row(
-                      children: headers
-                          .map(
-                            (_) => pw.Expanded(
-                              child: pw.Container(
-                                height: 15,
-                                decoration: pw.BoxDecoration(
-                                  border: pw.Border.all(width: .55),
-                                ),
-                              ),
-                            ),
-                          )
-                          .toList(),
-                    ),
-                  )
-                  .toList(),
-            ),
-          ],
-        ),
-      ),
-    ],
-  );
-}
-
-pw.Widget _runnerCard() {
-  return pw.Column(
-    crossAxisAlignment: pw.CrossAxisAlignment.stretch,
-    children: [
-      pw.Row(
-        children: [
-          pw.Expanded(
-            child: pw.Container(height: .7, color: PdfColors.grey700),
-          ),
-          pw.Padding(
-            padding: const pw.EdgeInsets.symmetric(horizontal: 6),
-            child: pw.Text(
-              'DETACHABLE RUNNER CARD',
-              style: pw.TextStyle(
-                fontSize: 6.5,
-                fontWeight: pw.FontWeight.bold,
-              ),
-            ),
-          ),
-          pw.Expanded(
-            child: pw.Container(height: .7, color: PdfColors.grey700),
-          ),
-        ],
-      ),
-      pw.SizedBox(height: 5),
-      pw.Text(
-        'RUNNER CARD',
-        textAlign: pw.TextAlign.center,
-        style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold),
-      ),
-      pw.SizedBox(height: 4),
-      pw.Row(
-        children: [
-          pw.Expanded(
-            child: _lineField(label: 'Ear No.', value: 'ABC'),
-          ),
-          pw.SizedBox(width: 8),
-          pw.Expanded(
-            child: _lineField(label: 'Coop No.', value: '12'),
-          ),
-        ],
-      ),
-      pw.Row(
-        children: [
-          pw.Expanded(
-            child: _lineField(label: 'Breed', value: 'American'),
-          ),
-          pw.SizedBox(width: 8),
-          pw.Expanded(
-            child: _lineField(label: 'Variety', value: 'Blue'),
-          ),
-        ],
-      ),
-      pw.Row(
-        children: [
-          pw.Expanded(
-            child: _lineField(label: 'Class', value: 'Sr.'),
-          ),
-          pw.SizedBox(width: 8),
-          pw.Expanded(
-            child: _lineField(label: 'Sex', value: 'Buck'),
-          ),
-        ],
-      ),
-    ],
-  );
-}
-
-pw.Widget _remarkCard() {
-  const leftRows = [
-    'Head',
-    'Ears',
-    'Crown',
-    'Bone',
-    'Type',
-    'Shoulders',
-    'Midsection',
-    'Hindquarters',
-    'Fur/Wool',
-    'Sheen',
-    'Density',
-    'Texture',
-    'Color',
-  ];
-
-  const rightRows = [
-    'Condition',
-    'Butterfly',
-    'Eye Circles',
-    'Cheek Spots',
-    'Ear Base',
-    'Side Markings',
-    'Spine/Herringbone',
-    'Blaze',
-    'Cheeks',
-    'Neck',
-    'Saddle',
-    'Undercut',
-    'Stops',
-  ];
-
-  return pw.Container(
-    padding: const pw.EdgeInsets.fromLTRB(14, 10, 14, 0),
-    decoration: pw.BoxDecoration(border: pw.Border.all(width: .8)),
-    child: pw.Column(
-      crossAxisAlignment: pw.CrossAxisAlignment.stretch,
-      children: [
-        pw.Text(
-          'RABBIT SHOW REMARK CARD',
-          textAlign: pw.TextAlign.center,
-          style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold),
-        ),
-        pw.Text(
-          'American Rabbit Breeders Association, Inc.',
-          textAlign: pw.TextAlign.center,
-          style: pw.TextStyle(fontSize: 10.5, fontWeight: pw.FontWeight.bold),
-        ),
-        pw.SizedBox(height: 7),
-        pw.Row(
-          children: [
-            pw.Expanded(
-              child: _lineField(label: 'Ear No.', value: 'ABC'),
-            ),
-            pw.SizedBox(width: 8),
-            pw.Expanded(
-              child: _lineField(label: 'Coop No.', value: '12'),
-            ),
-            pw.SizedBox(width: 8),
-            pw.Expanded(
-              child: _lineField(label: 'Entry No.', value: '2376'),
-            ),
-          ],
-        ),
-        _lineField(label: 'Exhibitor', value: 'Jane Doe'),
-        pw.Row(
-          children: [
-            pw.Expanded(
-              flex: 3,
-              child: _lineField(label: 'Show', value: 'Example Show'),
-            ),
-            pw.SizedBox(width: 8),
-            pw.Expanded(
-              flex: 2,
-              child: _lineField(label: 'Date', value: '06/29/2026'),
-            ),
-          ],
-        ),
-        pw.Row(
-          children: [
-            pw.Expanded(
-              child: _lineField(label: 'Breed', value: 'American'),
-            ),
-            pw.SizedBox(width: 8),
-            pw.Expanded(
-              child: _lineField(label: 'Variety', value: 'Blue'),
-            ),
-          ],
-        ),
-        pw.SizedBox(height: 5),
-        _checkRow(
-          [
-            'Buck',
-            'Doe',
-            'Sr.',
-            '6/8',
-            'Jr.',
-            'Pre Jr.',
-            'Fryer',
-            'Meat Pen',
-            'Fur',
-          ],
-          {'Buck', 'Sr.'},
-        ),
-        pw.Container(
-          margin: const pw.EdgeInsets.only(top: 3, bottom: 5),
-          height: .8,
-          color: PdfColors.black,
-        ),
-        pw.Row(
-          children: [
-            pw.Expanded(
-              child: _lineField(label: 'No. in Class', value: ''),
-            ),
-            pw.SizedBox(width: 8),
-            pw.Expanded(
-              child: _lineField(label: 'Award', value: ''),
-            ),
-            pw.SizedBox(width: 8),
-            pw.Expanded(
-              child: _lineField(label: 'No. Exhibitors', value: ''),
-            ),
-          ],
-        ),
-        pw.SizedBox(height: 4),
-        _checkRow([
-          'B.O.B.',
-          'B.O.S.',
-          'B.O.G.',
-          'B.O.S.G.',
-          'B.O.V.',
-          'B.O.S.V.',
-        ], {}),
-        pw.SizedBox(height: 4),
-        _checkRow(['Best Sr.', 'Best 6/8', 'Best Jr.', 'Best Pre-Jr.'], {}),
-        pw.SizedBox(height: 4),
-        pw.Row(
-          crossAxisAlignment: pw.CrossAxisAlignment.start,
-          children: [
-            pw.Expanded(child: _scoreGrid(leftRows, fourCols: true)),
-            pw.SizedBox(width: 10),
-            pw.Expanded(child: _scoreGrid(rightRows, fourCols: false)),
-          ],
-        ),
-        pw.SizedBox(height: 5),
-        _lineField(label: 'Remarks', value: '', height: 15),
-        _lineField(label: '', value: '', height: 13),
-        _lineField(label: 'Judge', value: '', height: 15),
-        pw.Spacer(),
-        pw.SizedBox(height: _runnerCardHeight, child: _runnerCard()),
-      ],
-    ),
-  );
-}
+import 'package:ringmaster_show/screens/admin/print_packs/remark_cards_pdf.dart';
 
 void main() {
-  test('remark card pdf layout saves', () async {
-    final doc = pw.Document();
-    final pageFormat = PdfPageFormat(
-      11 * PdfPageFormat.inch,
-      8.5 * PdfPageFormat.inch,
+  final hasPoppler = Process.runSync('which', ['pdftotext']).exitCode == 0;
+  for (final runners in [true, false]) {
+    test(
+      'remark cards keep all fields on page with runners=$runners',
+      () async {
+        pw.Font font(String name) => pw.Font.ttf(
+          ByteData.sublistView(
+            File('assets/fonts/$name.ttf').readAsBytesSync(),
+          ),
+        );
+        final theme = pw.ThemeData.withFont(
+          base: font('NotoSans-Regular'),
+          bold: font('NotoSans-Bold'),
+        );
+        final rows = List.generate(
+          3,
+          (i) => <String, dynamic>{
+            'tattoo': 'EAR$i',
+            'coop_number': 'COOP$i',
+            'exhibitor_label': 'Test Exhibitor',
+            'breed': 'American Fuzzy Lop',
+            'variety': 'Broken',
+            'class_name': 'Senior',
+            'sex': 'Doe',
+          },
+        );
+        final doc = RemarkCardsPdfBuilder(
+          showName: 'North Country R&CBA Triple Fall Show',
+          includeRunnerCards: runners,
+        ).build(entries: rows, theme: theme, showDateLabel: '09/12/2026');
+        final dir = Directory('tmp/pdfs')..createSync(recursive: true);
+        final file = File(
+          '${dir.path}/remark-cards-${runners ? 'runners' : 'plain'}.pdf',
+        );
+        await file.writeAsBytes(await doc.save());
+        final result = await Process.run('pdftotext', [
+          '-bbox',
+          file.path,
+          '-',
+        ]);
+        expect(result.exitCode, 0);
+        final xml = result.stdout.toString();
+        expect(RegExp('<page ').allMatches(xml).length, 2);
+        expect(RegExp('>DETACHABLE<').allMatches(xml).length, runners ? 3 : 0);
+        // Every tattoo must appear in the main card and (when enabled) its runner.
+        for (var i = 0; i < 3; i++) {
+          expect(RegExp('>EAR$i<').allMatches(xml).length, runners ? 2 : 1);
+          expect(RegExp('>COOP$i<').allMatches(xml).length, runners ? 2 : 1);
+        }
+        for (final match in RegExp('yMax="([0-9.]+)"').allMatches(xml)) {
+          expect(
+            double.parse(match[1]!),
+            lessThanOrEqualTo(592.1),
+            reason: 'Text must remain inside the bottom page margin',
+          );
+        }
+      },
+      skip: hasPoppler ? false : 'Install Poppler to verify PDF text positions',
     );
-    const pageMargin = 20.0;
-    const cardGap = 14.0;
-    final cardWidth = (pageFormat.width - (pageMargin * 2) - cardGap) / 2;
-    final cardHeight = pageFormat.height - (pageMargin * 2);
-
-    doc.addPage(
-      pw.Page(
-        pageFormat: pageFormat,
-        margin: pw.EdgeInsets.all(pageMargin),
-        build: (_) => pw.Row(
-          crossAxisAlignment: pw.CrossAxisAlignment.start,
-          children: [
-            pw.SizedBox(
-              width: cardWidth,
-              height: cardHeight,
-              child: _remarkCard(),
-            ),
-            pw.SizedBox(width: cardGap),
-            pw.SizedBox(
-              width: cardWidth,
-              height: cardHeight,
-              child: _remarkCard(),
-            ),
-          ],
-        ),
-      ),
-    );
-
-    expect(await doc.save(), isNotEmpty);
-  });
+  }
 }
