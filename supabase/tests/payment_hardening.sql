@@ -111,7 +111,11 @@ begin
     class_name, exhibitor_id, is_fur
   ) values
     (v_cart, v_section, 'rabbit', 'PAY-1', 'Test Breed', 'Test Variety',
+      'Buck', 'Senior', v_exhibitor, false),
+    (v_cart, v_section, 'rabbit', 'PAY-1', 'Test Breed', 'White',
       'Buck', 'Senior', v_exhibitor, true),
+    (v_day_cart, v_day_section, 'rabbit', 'DAY-1', 'Test Breed',
+      'White', 'Doe', 'Senior', v_day_exhibitor, true),
     (v_day_cart, v_day_section, 'rabbit', 'DAY-1', 'Test Breed',
       'Test Variety', 'Doe', 'Senior', v_day_exhibitor, false);
 
@@ -267,6 +271,16 @@ begin
   );
   perform pg_temp.assert_true((v_result ->> 'finalized')::boolean,
     'first finalization did not finalize');
+  perform pg_temp.assert_true((v_result ->> 'entries_created')::integer = 2,
+    'regular plus fur cart items must create exactly two paid entries');
+  perform pg_temp.assert_true((select count(*) = 1 from public.entries
+    where source_cart_id = v_ctx.cart_id and is_fur
+      and class_name = 'Fur / Wool' and variety = 'White'),
+    'paid fur item must create its fur entry');
+  perform pg_temp.assert_true((select count(*) = 1 from public.entries
+    where source_cart_id = v_ctx.cart_id and not is_fur
+      and variety = 'Test Variety' and class_name = 'Senior'),
+    'paid regular entry must retain its own variety');
 end;
 $$;
 
@@ -462,8 +476,16 @@ begin
   select * into v_ctx from payment_test_context;
   v_first := public.commit_entry_cart_day_of(v_ctx.day_cart_id);
   v_second := public.commit_entry_cart_day_of(v_ctx.day_cart_id);
-  perform pg_temp.assert_true(v_first > 0, 'first day-of submit inserted nothing');
+  perform pg_temp.assert_true(v_first = 2, 'regular plus fur cart items must create exactly two day-of entries');
   perform pg_temp.assert_true(v_second = 0, 'repeated day-of submit was not idempotent');
+  perform pg_temp.assert_true((select count(*) = 1 from public.entries
+    where source_cart_id = v_ctx.day_cart_id and is_fur
+      and class_name = 'Fur / Wool' and variety = 'White'),
+    'day-of fur item must create its fur entry');
+  perform pg_temp.assert_true((select count(*) = 1 from public.entries
+    where source_cart_id = v_ctx.day_cart_id and not is_fur
+      and variety = 'Test Variety' and class_name = 'Senior'),
+    'day-of regular entry must retain its own variety');
 end;
 $$;
 
