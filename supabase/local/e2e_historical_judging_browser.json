@@ -1,0 +1,285 @@
+{
+  "inspected_at": "2026-09-12",
+  "purpose": "Selected production browser contracts for isolated, signed-in synthetic rehearsals. Not a production migration or full schema/permission snapshot.",
+  "columns": [
+    {
+      "table_name": "judge_assignments",
+      "column_name": "assignment_label",
+      "data_type": "text",
+      "udt_name": "text",
+      "column_default": null,
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "judges",
+      "column_name": "judge_type",
+      "data_type": "text",
+      "udt_name": "text",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "judges",
+      "column_name": "is_active",
+      "data_type": "boolean",
+      "udt_name": "bool",
+      "column_default": "true",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "show_result_entry_locks",
+      "column_name": "id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "column_default": "gen_random_uuid()",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "show_result_entry_locks",
+      "column_name": "show_id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "column_default": null,
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "show_result_entry_locks",
+      "column_name": "section_id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "column_default": null,
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "show_result_entry_locks",
+      "column_name": "breed_id",
+      "data_type": "text",
+      "udt_name": "text",
+      "column_default": null,
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "show_result_entry_locks",
+      "column_name": "lock_starts_at",
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "show_result_entry_locks",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "column_default": "now()",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "show_result_entry_locks",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "column_default": "now()",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "varieties",
+      "column_name": "is_active",
+      "data_type": "boolean",
+      "udt_name": "bool",
+      "column_default": "true",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "variety_groups",
+      "column_name": "is_active",
+      "data_type": "boolean",
+      "udt_name": "bool",
+      "column_default": "true",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "judge_judging_sessions",
+      "column_name": "id",
+      "data_type": "uuid",
+      "column_default": "gen_random_uuid()",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "judge_judging_sessions",
+      "column_name": "show_id",
+      "data_type": "uuid",
+      "column_default": null,
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "judge_judging_sessions",
+      "column_name": "judge_id",
+      "data_type": "uuid",
+      "column_default": null,
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "judge_judging_sessions",
+      "column_name": "table_number",
+      "data_type": "text",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "judge_judging_sessions",
+      "column_name": "started_at",
+      "data_type": "timestamp with time zone",
+      "column_default": "now()",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "judge_judging_sessions",
+      "column_name": "ended_at",
+      "data_type": "timestamp with time zone",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "judge_judging_sessions",
+      "column_name": "entries_judged",
+      "data_type": "integer",
+      "column_default": "0",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "judge_judging_sessions",
+      "column_name": "calculated_entries_per_hour",
+      "data_type": "numeric",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "judge_judging_sessions",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "column_default": "now()",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "judge_judging_sessions",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "column_default": "now()",
+      "is_nullable": "NO"
+    }
+  ],
+  "read_policies": [
+    {
+      "schemaname": "public",
+      "tablename": "breeds",
+      "policyname": "breeds_read_all",
+      "permissive": "PERMISSIVE",
+      "roles": "{authenticated}",
+      "cmd": "SELECT",
+      "qual": "true",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "judge_assignments",
+      "policyname": "QR can read judge assignments",
+      "permissive": "PERMISSIVE",
+      "roles": "{anon}",
+      "cmd": "SELECT",
+      "qual": "true",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "judge_assignments",
+      "policyname": "Users can read judge assignments for their shows",
+      "permissive": "PERMISSIVE",
+      "roles": "{authenticated}",
+      "cmd": "SELECT",
+      "qual": "(EXISTS ( SELECT 1\n   FROM role_assignments ra\n  WHERE ((ra.show_id = judge_assignments.show_id) AND (ra.user_id = auth.uid()))))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "judges",
+      "policyname": "Authenticated users can read active judges",
+      "permissive": "PERMISSIVE",
+      "roles": "{authenticated}",
+      "cmd": "SELECT",
+      "qual": "(is_active = true)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "judges",
+      "policyname": "Authenticated users can view active judges for published judge ",
+      "permissive": "PERMISSIVE",
+      "roles": "{authenticated}",
+      "cmd": "SELECT",
+      "qual": "(is_active = true)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "judges",
+      "policyname": "QR can read judges",
+      "permissive": "PERMISSIVE",
+      "roles": "{anon}",
+      "cmd": "SELECT",
+      "qual": "true",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "varieties",
+      "policyname": "varieties_read_all",
+      "permissive": "PERMISSIVE",
+      "roles": "{authenticated}",
+      "cmd": "SELECT",
+      "qual": "true",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "variety_groups",
+      "policyname": "Public can read variety groups",
+      "permissive": "PERMISSIVE",
+      "roles": "{anon,authenticated}",
+      "cmd": "SELECT",
+      "qual": "(COALESCE(is_active, true) = true)",
+      "with_check": null
+    },
+    {
+      "cmd": "SELECT",
+      "qual": "true",
+      "roles": [
+        "anon"
+      ],
+      "tablename": "show_result_entry_locks",
+      "permissive": "PERMISSIVE",
+      "policyname": "anon can read qr result locks",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "SELECT",
+      "qual": "true",
+      "roles": [
+        "authenticated"
+      ],
+      "tablename": "show_result_entry_locks",
+      "permissive": "PERMISSIVE",
+      "policyname": "authenticated can read qr result locks",
+      "schemaname": "public",
+      "with_check": null
+    }
+  ],
+  "functions": [
+    {
+      "proname": "record_judging_session_entry",
+      "arguments": "p_show_id uuid, p_judge_id uuid, p_entry_id uuid, p_table_number text",
+      "definition": "CREATE OR REPLACE FUNCTION public.record_judging_session_entry(p_show_id uuid, p_judge_id uuid, p_entry_id uuid, p_table_number text DEFAULT NULL::text)\n RETURNS void\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\ndeclare\n  v_session_id uuid;\n  v_entries int;\n  v_started_at timestamptz;\n  v_ended_at timestamptz;\nbegin\n  select id\n  into v_session_id\n  from public.judge_judging_sessions\n  where show_id = p_show_id\n    and judge_id = p_judge_id\n    and ended_at is null\n  order by started_at desc\n  limit 1;\n\n  if v_session_id is null then\n    insert into public.judge_judging_sessions (\n      show_id,\n      judge_id,\n      table_number,\n      started_at,\n      entries_judged\n    )\n    values (\n      p_show_id,\n      p_judge_id,\n      p_table_number,\n      now(),\n      1\n    );\n    return;\n  end if;\n\n  update public.judge_judging_sessions\n  set\n    entries_judged = entries_judged + 1,\n    updated_at = now()\n  where id = v_session_id;\n\n  select entries_judged, started_at, updated_at\n  into v_entries, v_started_at, v_ended_at\n  from public.judge_judging_sessions\n  where id = v_session_id;\n\n  update public.judge_judging_sessions\n  set calculated_entries_per_hour =\n    case\n      when extract(epoch from (v_ended_at - v_started_at)) > 0 then\n        v_entries / (extract(epoch from (v_ended_at - v_started_at)) / 3600.0)\n      else null\n    end\n  where id = v_session_id;\nend;\n$function$\n"
+    }
+  ]
+}

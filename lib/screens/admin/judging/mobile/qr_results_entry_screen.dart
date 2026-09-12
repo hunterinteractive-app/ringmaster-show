@@ -409,6 +409,7 @@ class _QrResultsEntryScreenState extends State<QrResultsEntryScreen> {
       entry['animal_id'] = animalId;
       // The report projection omits species; use the authoritative entry row.
       entry['species'] = speciesByEntryId[entryId] ?? entry['species'];
+      normalizeSpeciesSexPresentation(entry);
       entry['coop_number'] = animalId.isEmpty
           ? ''
           : (coopNumberByAnimalAndScope['$animalId|$coopScope'] ?? '');

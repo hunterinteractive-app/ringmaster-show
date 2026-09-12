@@ -130,6 +130,8 @@ def prepare(lab, output, scale=1, staff_scale=None):
     restore_print_reports(lab)
     from restore_staff_pins import restore as restore_staff_pins
     restore_staff_pins(lab)
+    from restore_judging_browser import restore as restore_judging_browser
+    restore_judging_browser(lab)
     # This historical function is installed after the loader-only migrations.
     lab.sql((ROOT/'supabase/migrations/20260912125700_optimize_coop_assignment_existing_lookup.sql').read_text())
     assert int(lab.sql(f"select count(*) from public.entries where show_id='{SHOW}'")) == 0

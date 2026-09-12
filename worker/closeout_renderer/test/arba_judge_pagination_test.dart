@@ -7,7 +7,7 @@ import 'package:ringmaster_show/screens/admin/closeout/pdf/builders/arba_report_
 import 'package:test/test.dart';
 
 void main() {
-  for (final count in [0, 12, 13, 110]) {
+  for (final count in [0, 12, 13, 110, 440]) {
     test(
       '$count judges are printed once with automatic continuation',
       () async {

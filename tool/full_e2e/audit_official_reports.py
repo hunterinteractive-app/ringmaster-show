@@ -80,7 +80,8 @@ with zipfile.ZipFile(out/'report-files.zip') as archive:
             checks['animal_coverage']=dict(expected=len(want),actual=len(actual),missing=sorted(want-actual),unexpected=sorted(actual-want))
             if actual!=want:issues.append('Incomplete breed-report animal coverage')
         elif a['report_name']=='judge_report':
-            checks['all_named_judges']={int(n) for n in re.findall(r'Synthetic Judge\s+(\d+)',text)}==set(range(1,staff_counts(manifest)['judges']+1))
+            wanted_judges=set().union(*(judges_by_section[s] for s in sections)) if judge_plan.exists() else set(range(1,staff_counts(manifest)['judges']+1))
+            checks['all_named_judges']={int(n) for n in re.findall(r'Synthetic\s*Judge\s*(\d+)',text)}==wanted_judges
             checks['no_unknown_judges']='Unknown Judge' not in text and 'Unassigned Judge' not in text
             checks['total_judged']=bool(re.search(r'\b'+str(len(population))+r'\s+Total Judged',text))
         elif a['report_name']=='paid_exhibitor_report':
@@ -95,7 +96,8 @@ with zipfile.ZipFile(out/'report-files.zip') as archive:
         for name,value in checks.items():
             if value is False:issues.append('Failed '+name)
         results.append(dict(artifact_id=a['id'],report_name=a['report_name'],section_ids=sections,pages=len(pdf.pages),checks=checks,issues=issues))
-expected_counts={'breed_results_detail_report':104}
+# Meat classes do not have the sanctioned breed-detail reports in this fixture.
+expected_counts={'breed_results_detail_report':len({(b['section'],b['breed']) for b in manifest['breeds'] if b['bob'] and b['count']>0})}
 if not checkout_only:expected_counts['arba_report']=2
 if profile:expected_counts.update({name:1 if combined else 2 for name in ('judge_report','paid_exhibitor_report','unpaid_balances_report')})
 counts=dict(Counter(r['report_name'] for r in results))
