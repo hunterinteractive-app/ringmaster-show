@@ -1,3 +1,4 @@
+import { throwDatabaseError } from "./request_fetch.ts";
 import { SupabaseClient } from "npm:@supabase/supabase-js@2";
 
 export type PaymentProvider = "stripe" | "square" | "paypal";
@@ -125,7 +126,7 @@ export async function createPaymentQuoteAttempt(
     p_processing_fee_percent: args.processingFeePercent,
     p_processing_fee_fixed_cents: args.processingFeeFixedCents,
   });
-  if (error) throw new Error(error.message);
+  if (error) throwDatabaseError(error);
   return requireObject(data, "Payment quote") as unknown as PaymentAttempt;
 }
 
@@ -146,7 +147,7 @@ export async function attachProviderSession(
     p_checkout_url: args.checkoutUrl,
     p_expires_at: args.expiresAt ?? null,
   });
-  if (error) throw new Error(error.message);
+  if (error) throwDatabaseError(error);
 }
 
 export async function attachProviderHostedCheckout(
@@ -174,7 +175,7 @@ export async function attachProviderHostedCheckout(
     p_checkout_url: args.checkoutUrl,
     p_provider_metadata: args.providerMetadata ?? {},
   });
-  if (error) throw new Error(error.message);
+  if (error) throwDatabaseError(error);
   const attached = requireObject(data, "Hosted checkout attachment");
   if (
     attached.attached !== true ||
@@ -198,7 +199,7 @@ export async function supersedeProviderCheckout(
     p_provider: args.provider,
     p_link_deactivated: args.linkDeactivated,
   });
-  if (error) throw new Error(error.message);
+  if (error) throwDatabaseError(error);
 }
 
 export async function claimPaymentAttemptClientKey(
@@ -214,7 +215,7 @@ export async function claimPaymentAttemptClientKey(
     p_provider: args.provider,
     p_client_attempt_key_hash: args.clientAttemptKeyHash,
   });
-  if (error) throw new Error(error.message);
+  if (error) throwDatabaseError(error);
   return requireObject(data, "Payment attempt claim");
 }
 
@@ -233,7 +234,7 @@ export async function setProviderPaymentState(
     p_provider_payment_id: args.providerPaymentId,
     p_provider_status: args.providerStatus,
   });
-  if (error) throw new Error(error.message);
+  if (error) throwDatabaseError(error);
 }
 
 export async function markPaymentAttemptTerminal(
@@ -255,7 +256,7 @@ export async function markPaymentAttemptTerminal(
     p_failure_message: args.failureMessage ?? null,
     p_provider_payment_id: args.providerPaymentId ?? null,
   });
-  if (error) throw new Error(error.message);
+  if (error) throwDatabaseError(error);
 }
 
 export async function recordPaymentEvent(
@@ -277,7 +278,7 @@ export async function recordPaymentEvent(
     p_payment_session_id: args.paymentSessionId ?? null,
     p_provider_payment_id: args.providerPaymentId ?? null,
   });
-  if (error) throw new Error(error.message);
+  if (error) throwDatabaseError(error);
   return requireObject(
     data,
     "Payment event",
@@ -303,7 +304,7 @@ export async function setPaymentEventStatus(
     p_payment_session_id: args.paymentSessionId ?? null,
     p_provider_payment_id: args.providerPaymentId ?? null,
   });
-  if (error) throw new Error(error.message);
+  if (error) throwDatabaseError(error);
 }
 
 export async function finalizePaidCart(
@@ -325,7 +326,7 @@ export async function finalizePaidCart(
     p_amount_cents: args.amountCents,
     p_currency: args.currency,
   });
-  if (error) throw new Error(error.message);
+  if (error) throwDatabaseError(error);
   return requireObject(data, "Payment finalization");
 }
 

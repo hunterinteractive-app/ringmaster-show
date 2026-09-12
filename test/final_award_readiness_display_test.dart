@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ringmaster_show/services/results/final_award_readiness.dart';
 
@@ -45,13 +43,6 @@ void main() {
     expect(issues[1].message, contains('1 final award selection'));
   });
 
-  test('Results Entry scopes the canonical validator to selected section', () {
-    final source = File(
-      'lib/screens/admin/results/admin_results_entry_screen.dart',
-    ).readAsStringSync();
-
-    expect(source, contains("'show_results_readiness_scoped'"));
-    expect(source, contains("'p_section_ids': [sectionId]"));
-    expect(source, contains('blockingFinalAwardReadinessIssues'));
-  });
+  // Section selection and the staff readiness endpoint are exercised by
+  // manual_judging_navigation_widget_test.dart and the local scope audit.
 }

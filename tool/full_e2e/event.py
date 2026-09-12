@@ -26,16 +26,18 @@ def specification(out):
     if target.exists(): return json.loads(target.read_text())
     entries=json.loads((out/'expected-entries.json').read_text())
     rng=random.Random(20260910)
-    exhibitors=list(range(1,2529));rng.shuffle(exhibitors)
+    manifest=json.loads((out/'manifest.json').read_text())
+    client_scale=manifest.get('staff_scale',1)
+    exhibitors=sorted({e['exhibitor'] for e in entries});rng.shuffle(exhibitors)
     counts=Counter(e['exhibitor'] for e in entries)
     cohorts=[];cursor=0
     for start,end,fraction,concurrency in ((1,14,.25,20),(15,29,.45,100),(30,30,.30,250)):
         group=[];total=0
-        while cursor<len(exhibitors) and (total<round(25711*fraction) or end==30):
+        while cursor<len(exhibitors) and (total<round(len(entries)*fraction) or end==30):
             n=exhibitors[cursor];cursor+=1;group.append(n);total+=counts[n]
         for day in range(start,end+1):
             daily=group[day-start::end-start+1]
-            cohorts.append(dict(day=day,exhibitors=daily,entries=sum(counts[n] for n in daily),concurrency=min(concurrency,len(daily))))
+            cohorts.append(dict(day=day,exhibitors=daily,entries=sum(counts[n] for n in daily),concurrency=min(concurrency*client_scale,len(daily))))
     candidates=entries.copy();rng.shuffle(candidates)
     ears={e['n'] for e in candidates[:round(len(entries)*.30)]}
     other={e['n'] for e in candidates if e['n'] not in ears and e['sex'] in ('Buck','Doe')}
@@ -49,12 +51,23 @@ def specification(out):
             changes.append(dict(n=e['n'],exhibitor=e['exhibitor'],values=values,fee_cents=0 if e['n'] in scratches else 500,
                                 kind='scratch_entry' if e['n'] in scratches else 'entry_edit'))
     checkin_order=exhibitors.copy();rng.shuffle(checkin_order)
-    profile=dict(seed=20260910,calendar_days=30,calendar_compressed=True,entries=25711,exhibitors=2528,
-        registration_days=cohorts,last_day_share_of_all_entries=.30,peak_concurrency_assumption=250,
+    # Retain the same changes/percentages, but defer one existing fee for up to
+    # one returning exhibitor per check-in clerk. Their first balance is paid
+    # on day one, exercising a new charged change on day two.
+    followups=[]
+    charged=defaultdict(list)
+    for c in changes:
+        if c['fee_cents']:charged[c['exhibitor']].append(c)
+    for n in checkin_order[:len(exhibitors)//2]:
+        if len(charged[n])>=2:followups.append(charged[n][-1]['n'])
+        if len(followups)==30*client_scale:break
+    profile=dict(seed=20260910,calendar_days=30,calendar_compressed=True,entries=len(entries),exhibitors=len(exhibitors),
+        registration_days=cohorts,last_day_share_of_all_entries=.30,peak_concurrency_assumption=250*client_scale,
         change_counts=dict(ear_number=len(ears),other_sex=len(other),scratches=len(scratches)),changes=changes,
-        checkin_days=[checkin_order[:1264],checkin_order[1264:]],judging_days=2,judge_sessions=110,
-        qr_sessions=55,manual_sessions=55,checkin_sessions=30,admins=10,superintendents=15,
+        checkin_days=[checkin_order[:len(exhibitors)//2],checkin_order[len(exhibitors)//2:]],judging_days=2,judge_sessions=110*client_scale,
+        qr_sessions=55*client_scale,manual_sessions=55*client_scale,checkin_sessions=30*client_scale,admins=10*client_scale,superintendents=15*client_scale,
         fee_per_approved_ear_or_sex_change_cents=500,scratch_fee_cents=0,
+        followup_change_entries=followups,
         final_report_deadline_seconds=7200,physical_printer_tested=False)
     write(target,profile);return profile
 
@@ -79,10 +92,10 @@ class EventFlow(Workflows):
 
     @contextmanager
     def support_activity(self,phase):
-        gate=threading.Barrier(26);stop=threading.Event()
-        with ThreadPoolExecutor(max_workers=25) as pool:
-            jobs=[pool.submit(self.support,p,gate,stop) for p in self.people[110:]]
-            gate.wait();self.t.log('support_started',phase=phase,admins=10,superintendents=15)
+        gate=threading.Barrier(self.t.staff_counts['support']+1);stop=threading.Event()
+        with ThreadPoolExecutor(max_workers=self.t.staff_counts['support']) as pool:
+            jobs=[pool.submit(self.support,p,gate,stop) for p in self.people[self.judge_count:]]
+            gate.wait();self.t.log('support_started',phase=phase,admins=self.t.staff_counts['admins'],superintendents=self.t.staff_counts['superintendents'])
             try:yield
             finally:
                 stop.set()
@@ -122,12 +135,12 @@ class EventFlow(Workflows):
                 self.t.log('registration_day_completed',**{k:v for k,v in record.items() if k!='elapsed_s'},duration_s=record['elapsed_s'])
                 if failures:raise RuntimeError(f'Registration day {day["day"]} failed; dependent stages paused')
         counts=self.lab.rows(f"select count(*) entries,count(distinct exhibitor_id) exhibitors,sum(case when payment_status='paid' then 1 else 0 end) paid from entries where show_id='{SHOW}'")[0]
-        assert counts==dict(entries=25711,exhibitors=2528,paid=25711),counts
+        assert counts==dict(entries=len(self.t.entries),exhibitors=len(self.t.by_exhibitor),paid=len(self.t.entries)),counts
         self.t.summary['checks']['registration']=counts
 
     def print_stage(self,stage):
         if stage=='preprint':
-            self.rpc('assign_show_coop_numbers',dict(p_show_id=SHOW,p_scope_mode='separate',p_overwrite_existing=False),self.people[110],'assign_coops')
+            self.rpc('assign_show_coop_numbers',dict(p_show_id=SHOW,p_scope_mode='separate',p_overwrite_existing=False),self.people[self.judge_count],'assign_coops')
             collisions=self.lab.rows(f"select scope,coop_number from show_animal_coop_numbers where show_id='{SHOW}' group by scope,coop_number having count(*)>1")
             assert not collisions,collisions
         modes=['coop-recheck'] if stage=='coop-recheck' else ['coop','checkin-open','checkin-youth'] if stage=='preprint' else ['control-open','control-youth','remark-open','remark-youth']
@@ -136,7 +149,7 @@ class EventFlow(Workflows):
             for mode in modes:
                 out=self.t.output/'print-packs'/mode;out.mkdir(parents=True,exist_ok=True)
                 env={**os.environ,'EVENT_API_URL':self.lab.url,'EVENT_ANON_KEY':self.lab.anon,
-                     'EVENT_STAFF_ACCESS_TOKEN':self.lab.session_token(self.people[110]),'EVENT_PRINT_MODE':mode,'EVENT_PRINT_OUTPUT':str(out.resolve())}
+                     'EVENT_STAFF_ACCESS_TOKEN':self.lab.session_token(self.people[self.judge_count]),'EVENT_PRINT_MODE':mode,'EVENT_PRINT_OUTPUT':str(out.resolve())}
                 start=time.monotonic()
                 with (out/'flutter.log').open('w') as log:
                     result=subprocess.run(['flutter','test','test/local_event_print_rehearsal_test.dart','--reporter','expanded'],cwd=ROOT,env=env,stdout=log,stderr=subprocess.STDOUT,timeout=1800)
@@ -150,7 +163,7 @@ class EventFlow(Workflows):
         original=json.loads((self.t.output/'registration-day-30.json').read_text())
         assert original['failures'],'This continuation requires a recorded failed burst'
         existing={int(r['exhibitor_id'][-12:]) for r in self.lab.rows(f"select distinct exhibitor_id from entries where show_id='{SHOW}'")}
-        missing=sorted(set(range(1,2529))-existing)
+        missing=sorted(set(self.t.by_exhibitor)-existing)
         partial=self.lab.rows(f"select x.id,x.owner_user_id,u.email,c.id cart_id from exhibitors x join auth.users u on u.id=x.owner_user_id join entry_cart_items i on i.exhibitor_id=x.id join entry_carts c on c.id=i.cart_id where c.show_id='{SHOW}' and c.status='active' group by x.id,u.email,c.id")
         partial_ids={int(r['id'][-12:]) for r in partial}
         self.t.verify_account_lookup=True;self.t.registration_people={}
@@ -167,7 +180,8 @@ class EventFlow(Workflows):
                 quote=self.t.measured('resumed_cart_checkout',n,lambda:self.lab.edge('stripe-create-checkout-session',{'cart_id':r['cart_id']},token))
                 import uuid
                 self.t.measured('resumed_cart_webhook',n,lambda:self.t.webhook(self.t.providers.checkout(quote['checkout_session_id']),'evt_local_'+str(uuid.uuid4())))
-            failures=[];todo=[n for n in missing if n not in partial_ids];gate=threading.Barrier(min(250,len(todo)))
+            peak=self.profile['peak_concurrency_assumption']
+            failures=[];todo=[n for n in missing if n not in partial_ids];gate=threading.Barrier(min(peak,len(todo)))
             lock=threading.Lock();started=0
             def purchase(n):
                 nonlocal started
@@ -175,18 +189,18 @@ class EventFlow(Workflows):
                 if order<gate.parties:gate.wait(timeout=60)
                 return self.t.register(n)
             began=time.monotonic()
-            with ThreadPoolExecutor(max_workers=250) as pool:
+            with ThreadPoolExecutor(max_workers=peak) as pool:
                 jobs={pool.submit(purchase,n):n for n in todo}
                 for job in as_completed(jobs):
                     try:job.result()
                     except Exception as e:failures.append(dict(exhibitor=jobs[job],error=str(e)))
             result=dict(original_burst_status='failed',original_failed_purchasers=len(original['failures']),
-                        preauthenticated_purchasers=len(todo),resumed_carts=len(partial),concurrency=250,
+                        preauthenticated_purchasers=len(todo),resumed_carts=len(partial),concurrency=peak,
                         elapsed_s=time.monotonic()-began,failures=failures)
             write(self.t.output/'registration-recovery-detail.json',result)
             assert not failures,failures[:3]
         counts=self.lab.rows(f"select count(*) entries,count(distinct exhibitor_id) exhibitors from entries where show_id='{SHOW}'")[0]
-        assert counts==dict(entries=25711,exhibitors=2528),counts
+        assert counts==dict(entries=len(self.t.entries),exhibitors=len(self.t.by_exhibitor)),counts
         self.t.summary['checks']['recovered_registration']=counts
         self.t.summary['original_registration_burst_passed']=False
 
@@ -195,25 +209,39 @@ class EventFlow(Workflows):
         self.lab.sql(f"update show_checkin_settings set is_enabled=true,entry_edit_permissions='{{\"ear_number\":\"approval\",\"sex\":\"approval\",\"scratch_entry\":\"approval\"}}',entry_edit_fee_cents='{{\"ear_number\":500,\"sex\":500,\"scratch_entry\":0}}' where show_id='{SHOW}';")
         changes=defaultdict(list)
         for c in self.profile['changes']:changes[c['exhibitor']].append(c)
+        deferred=set(self.profile.get('followup_change_entries',[]))
+        returning=sorted({c['exhibitor'] for c in self.profile['changes'] if c['n'] in deferred})
+        original_payments={}
         for day,exhibitors in enumerate(self.profile['checkin_days'],1):
+            scheduled=exhibitors+(returning if day==2 else [])
             def action(p):
-                for n in exhibitors[p['index']::30]:
+                for n in scheduled[p['index']::self.t.staff_counts['checkin']]:
                     params=dict(p_show_id=SHOW,p_exhibitor_id=uid('952',n))
-                    if changes[n]:
+                    todays_changes=[c for c in changes[n] if (c['n'] not in deferred if day==1 else n in exhibitors or c['n'] in deferred)]
+                    if todays_changes:
                         session=self.t.measured('checkin_portal_auth',p['index'],lambda:self.lab.rpc('authenticate_exhibitor_checkin',dict(p_portal_token=portal,p_exhibitor_number=str(n),p_last_name=f'Exhibitor {n:04d}'),self.lab.anon))
-                        for c in changes[n]:
+                        for c in todays_changes:
                             e=self.by_n[c['n']]
                             result=self.t.measured('change_request',p['index'],lambda:self.lab.rpc('submit_exhibitor_checkin_change_request',dict(p_session_token=session['session_token'],p_entry_id=e['id'],p_request_type=c['kind'],p_requested_changes=c['values'],p_note='Synthetic event rehearsal'),self.lab.anon))
                             request_id=result.get('id') or result.get('request_id');assert request_id,result
                             self.rpc('review_checkin_change_request',dict(p_request_id=request_id,p_approved=True,p_review_note='Synthetic event approval'),p,'change_approval')
-                        due=sum(c['fee_cents'] for c in changes[n])
+                        due=sum(c['fee_cents'] for c in todays_changes)
                         context=self.rpc('get_show_checkin_payment_context',params,p,'cash_payment_context')
                         assert context['balance_due_cents']==due,(n,context,due)
-                        if due:self.rpc('record_checkin_manual_payment',dict(params,p_amount_cents=due,p_method='cash',p_reference=f'LOCAL-EVENT-{n}',p_receipt_preference='no_receipt'),p,'cash_change_payment')
+                        if due:self.rpc('record_checkin_manual_payment',dict(params,p_amount_cents=due,p_method='cash',p_reference=f'LOCAL-EVENT-{n}-DAY-{day}',p_receipt_preference='no_receipt'),p,'cash_change_payment')
+                        after=self.rpc('get_show_checkin_payment_context',params,p,'paid_change_balance')
+                        assert after['balance_due_cents']==0,(n,after)
                     result=self.rpc('complete_exhibitor_checkin_by_secretary_with_receipt',dict(params,p_entries_confirmed=True,p_initials=f'S{p["index"]}',p_note='Local event rehearsal',p_receipt_preference='no_receipt'),p,'checkin_save')
                     assert result['status']=='completed',result
-            self.parallel_phase('checkin_day_'+str(day),self.people[:30],action)
+            self.parallel_phase('checkin_day_'+str(day),self.people[:self.t.staff_counts['checkin']],action)
+            if day==1 and returning:
+                original_payments={r['id']:r for r in self.lab.rows(f"select id,exhibitor_id,total_cents,refunded_cents,payment_status,provider from show_payments where show_id='{SHOW}'")}
+                write(self.t.output/'payments-before-followup.json',original_payments)
             self.t.log('checkin_day_completed',day=day)
+        if original_payments:
+            after={r['id']:r for r in self.lab.rows(f"select id,exhibitor_id,total_cents,refunded_cents,payment_status,provider from show_payments where show_id='{SHOW}'")}
+            assert all(after.get(k)==v for k,v in original_payments.items()),'Earlier payments changed'
+            self.t.summary['checks']['later_day_fees']=dict(returning_exhibitors=len(returning),existing_payments_preserved=len(original_payments),passed=True)
         # Build independent expectations from the requested changes, not DB outcomes.
         for c in self.profile['changes']:
             e=self.by_n[c['n']]
@@ -242,10 +270,17 @@ class EventFlow(Workflows):
         classes=defaultdict(list)
         for e in self.t.entries:
             if not e.get('scratched'):classes[tuple(e[k] for k in ('section_id','breed','variety','class_name','sex'))].append(e)
-        assignments=[[] for _ in range(110)]
+        assignments=[[] for _ in range(self.judge_count)]
         groups=sorted(classes.values(),key=lambda rows:(rows[0]['section_id'],rows[0]['n']))
         random.Random(20260911).shuffle(groups)
-        for i,rows in enumerate(groups):assignments[i%110].append(rows)
+        for i,rows in enumerate(groups):assignments[i%self.judge_count].append(rows)
+        # A judge can work both days while serving only one section. Official
+        # reports must list judges for that section, not the global staff count.
+        section_judges=defaultdict(set)
+        for index,assigned in enumerate(assignments):
+            for rows in assigned:section_judges[rows[0]['section_id']].add(index+1)
+        write(self.t.output/'expected-judges-by-section.json',
+              {section:sorted(judges) for section,judges in section_judges.items()})
         plan=[]
         for day in (1,2):
             def action(p):
@@ -253,10 +288,10 @@ class EventFlow(Workflows):
                     for e in rows:self.save(p,e,'qr' if p['index']%2==0 else 'manual')
             selected=[e for groups_for_staff in assignments for rows in groups_for_staff[day-1::2] for e in rows]
             plan.append(dict(day=day,entries=len(selected),sections=dict(Counter(e['section_id'] for e in selected))))
-            self.parallel_phase('simultaneous_open_youth_day_'+str(day),self.people[:110],action)
+            self.parallel_phase('simultaneous_open_youth_day_'+str(day),self.people[:self.judge_count],action)
         write(self.t.output/'judging-day-plan.json',plan)
         for section in (1,2):
-            ready=self.lab.readiness(section,self.people[110]['token']);assert ready['ready'],ready
+            ready=self.lab.readiness(section,self.people[self.judge_count]['token']);assert ready['ready'],ready
             self.t.summary['checks']['readiness_'+str(section)]=ready
         self.t.log('all_judging_completed_before_closeout')
         write(self.t.output/'judging-completed.json',dict(unix_time=time.time(),both_sections_ready=True))
@@ -266,7 +301,7 @@ class EventFlow(Workflows):
         started=time.time()
         with self.support_activity('finalization'):
             for section in (1,2):
-                assert self.lab.readiness(section,self.people[110]['token'])['ready']
+                assert self.lab.readiness(section,self.people[self.judge_count]['token'])['ready']
             # Match the current V2 screen: both sections, one combined run.
             self.finalize_combined()
         self.start_workers()

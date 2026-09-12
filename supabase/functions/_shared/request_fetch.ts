@@ -6,6 +6,27 @@ export class UpstreamUnavailable extends Error {
   }
 }
 
+/** Preserve retryable database failures across Supabase's error objects. */
+export function throwDatabaseError(
+  error: { code?: string; message: string },
+): never {
+  if (
+    new Set([
+      "PGRST003",
+      "53300",
+      "57P01",
+      "08000",
+      "08006",
+      "502",
+      "503",
+      "504",
+    ]).has(error.code ?? "")
+  ) {
+    throw new UpstreamUnavailable();
+  }
+  throw new Error(error.message);
+}
+
 /** Share one deadline across all upstream stages of an account lookup. */
 export function budgetedFetch(
   label: string,

@@ -1,3 +1,5 @@
+import 'package:ringmaster_show/services/registration_write.dart';
+import 'package:ringmaster_show/reporting_core/network/transient_retry.dart';
 // lib/screens/enter_show_screen.dart
 // ignore_for_file: deprecated_member_use, use_build_context_synchronously
 
@@ -32,6 +34,10 @@ class EnterShowScreen extends StatefulWidget {
 }
 
 class _EnterShowScreenState extends State<EnterShowScreen> {
+  final _cartCreation = RegistrationWrite();
+  final _cartItemsWrite = RegistrationWrite();
+  final _commercialItemsWrite = RegistrationWrite();
+  final _meatItemsWrite = RegistrationWrite();
   bool get isDemo => widget.showId == '0f432fe8-2be2-467a-842f-ff3777436992';
   bool get _allowsSameLetterOpenYouthEntries =>
       allowsSameLetterOpenYouthEntries(
@@ -515,14 +521,15 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
     required String showId,
     required String userId,
   }) async {
-    final existing = await supabase
-        .from('entry_carts')
-        .select('id')
-        .eq('show_id', showId)
-        .eq('user_id', userId)
-        .eq('status', 'active')
-        .maybeSingle();
-
+    final existing = await retryTransient(
+      () => supabase
+          .from('entry_carts')
+          .select('id')
+          .eq('show_id', showId)
+          .eq('user_id', userId)
+          .eq('status', 'active')
+          .maybeSingle(),
+    );
     return existing == null ? null : existing['id'].toString();
   }
 
@@ -530,23 +537,20 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
     required String showId,
     required String userId,
   }) async {
-    final existing = await supabase
-        .from('entry_carts')
-        .select('id')
-        .eq('show_id', showId)
-        .eq('user_id', userId)
-        .eq('status', 'active')
-        .maybeSingle();
-
-    if (existing != null) return existing['id'].toString();
-
-    final created = await supabase
-        .from('entry_carts')
-        .insert({'show_id': showId, 'user_id': userId, 'status': 'active'})
-        .select('id')
-        .single();
-
-    return created['id'].toString();
+    final existing = await _getActiveCartIdIfExists(
+      showId: showId,
+      userId: userId,
+    );
+    if (existing != null) {
+      // The lookup has verified the same owner, show and active status. A
+      // formerly ambiguous creation must not remain pending after recovery.
+      _cartCreation.acknowledgeExistingRow(existing);
+      return existing;
+    }
+    final created = await _cartCreation.save(supabase, 'entry_carts', [
+      {'show_id': showId, 'user_id': userId, 'status': 'active'},
+    ]);
+    return created.single['id'].toString();
   }
 
   Future<void> _refreshAnimalsInCart() async {
@@ -1655,14 +1659,16 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
       final chosenAnimalIds = chosen.map((a) => (a['id'] as String)).toList();
       final chosenSectionIds = _selectedSectionIds.toList();
 
-      await supabase
-          .from('entry_cart_items')
-          .delete()
-          .eq('cart_id', cartId)
-          .inFilter('animal_id', chosenAnimalIds)
-          .inFilter('section_id', chosenSectionIds);
+      await retryTransient(
+        () => supabase
+            .from('entry_cart_items')
+            .delete()
+            .eq('cart_id', cartId)
+            .inFilter('animal_id', chosenAnimalIds)
+            .inFilter('section_id', chosenSectionIds),
+      );
 
-      await supabase.from('entry_cart_items').insert(itemsToAdd);
+      await _cartItemsWrite.save(supabase, 'entry_cart_items', itemsToAdd);
 
       await _refreshAnimalsInCart();
 
@@ -2289,7 +2295,7 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
         };
       }).toList();
 
-      await supabase.from('entry_cart_items').insert(rows);
+      await _commercialItemsWrite.save(supabase, 'entry_cart_items', rows);
 
       await _refreshAnimalsInCart();
 
@@ -2377,7 +2383,7 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
         };
       }).toList();
 
-      await supabase.from('entry_cart_items').insert(rows);
+      await _meatItemsWrite.save(supabase, 'entry_cart_items', rows);
 
       if (!mounted) return;
       setState(() {

@@ -1,4 +1,4 @@
-"""Phased 55/135-session workload using the same API paths as the app."""
+"""Phased configurable staff workload using the same API paths as the app."""
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import json
 import secrets
@@ -9,11 +9,15 @@ from local import ROOT, SHOW, uid, sql_quote
 
 
 class Workflows:
+    @property
+    def judge_count(self):
+        return self.t.staff_counts['judges']
+
     def __init__(self,test):
         self.t=test; self.lab=test.lab; self.people=[];self.support_stop=threading.Event()
         actual=self.lab.rows(f"select id,tattoo from public.entries where show_id='{SHOW}'")
         ids={r['tattoo']:r['id'] for r in actual}
-        assert len(ids)==25711
+        assert len(ids)==len(test.entries)
         for e in test.entries: e['id']=ids[e['tattoo']]
         self.awards={}
         for b in test.manifest['breeds']:
@@ -28,10 +32,10 @@ class Workflows:
     def staff(self):
         def create(i):
             p=self.lab.person('staff-'+str(i));p['index']=i
-            p['role']='reporting_clerk' if i<110 else 'admin' if i<120 else 'superintendent'
-            self.lab.sql(f"insert into public.role_assignments(show_id,user_id,role) values ('{SHOW}','{p['user_id']}','{p['role']}'); insert into public.show_managers(show_id,user_id,can_manage_entries,can_manage_settings,can_finalize) values ('{SHOW}','{p['user_id']}',true,{str(i>=110).lower()},{str(110<=i<120).lower()});")
+            p['role']='reporting_clerk' if i<self.judge_count else 'admin' if i<self.judge_count+self.t.staff_counts['admins'] else 'superintendent'
+            self.lab.sql(f"insert into public.role_assignments(show_id,user_id,role) values ('{SHOW}','{p['user_id']}','{p['role']}'); insert into public.show_managers(show_id,user_id,can_manage_entries,can_manage_settings,can_finalize) values ('{SHOW}','{p['user_id']}',true,{str(i>=self.judge_count).lower()},{str(self.judge_count<=i<self.judge_count+self.t.staff_counts['admins']).lower()});")
             return p
-        with ThreadPoolExecutor(max_workers=12) as pool: self.people=list(pool.map(create,range(135)))
+        with ThreadPoolExecutor(max_workers=12) as pool: self.people=list(pool.map(create,range(self.t.staff_counts['total'])))
         self.t.log('staff_authenticated',unique_users=len({p['user_id'] for p in self.people}))
         # Preserve honest role permissions: superintendents do not use admin RPCs.
         self.t.summary['checks']['staff_roles']={r:sum(p['role']==r for p in self.people) for r in ('reporting_clerk','admin','superintendent')}
@@ -51,20 +55,20 @@ class Workflows:
             stop.wait(2)
 
     def parallel_phase(self,name,people,action):
-        gate=threading.Barrier(len(people)+26);stop=threading.Event();began=time.monotonic()
+        gate=threading.Barrier(len(people)+self.t.staff_counts['support']+1);stop=threading.Event();began=time.monotonic()
         failures=[]
         def work(p): gate.wait();return action(p)
-        with ThreadPoolExecutor(max_workers=len(people)+25) as pool:
-            support=[pool.submit(self.support,p,gate,stop) for p in self.people[110:]]
+        with ThreadPoolExecutor(max_workers=len(people)+self.t.staff_counts['support']) as pool:
+            support=[pool.submit(self.support,p,gate,stop) for p in self.people[self.judge_count:]]
             workers=[pool.submit(work,p) for p in people]
-            gate.wait();self.t.log('staff_phase_started',phase=name,sessions=len(people)+25)
+            gate.wait();self.t.log('staff_phase_started',phase=name,sessions=len(people)+self.t.staff_counts['support'])
             try:
                 for job in as_completed(workers):
                     try: job.result()
                     except Exception as e: failures.append(str(e));self.t.log('staff_error',phase=name,error=str(e))
             finally: stop.set()
             for job in support: job.result()
-        self.t.summary['phases'][name]=dict(sessions=len(people)+25,elapsed_s=round(time.monotonic()-began,2),failures=failures)
+        self.t.summary['phases'][name]=dict(sessions=len(people)+self.t.staff_counts['support'],elapsed_s=round(time.monotonic()-began,2),failures=failures)
         if failures: raise RuntimeError(name+' failed')
         self.t.log('staff_phase_completed',phase=name)
 
@@ -74,9 +78,9 @@ class Workflows:
         portal=self.lab.rpc('regenerate_show_checkin_portal_token',{'p_show_id':SHOW})
         self.lab.sql(f"update public.show_checkin_settings set is_enabled=true,entry_edit_permissions='{{\"ear_number\":\"approval\"}}',entry_edit_fee_cents='{{\"ear_number\":500}}' where show_id='{SHOW}';")
         def action(p):
-            for n in range(p['index']+1,2529,30):
+            for n in range(p['index']+1,len(self.t.by_exhibitor)+1,self.t.staff_counts['checkin']):
                 params=dict(p_show_id=SHOW,p_exhibitor_id=uid('952',n))
-                if n<=30:
+                if n<=self.t.staff_counts['checkin']:
                     session=self.t.measured('checkin_portal_auth',p['index'],lambda:self.lab.rpc('authenticate_exhibitor_checkin',dict(p_portal_token=portal,p_exhibitor_number=str(n),p_last_name=f'Exhibitor {n:04d}'),self.lab.anon))
                     e=self.t.by_exhibitor[n][0]
                     request=self.t.measured('change_request',p['index'],lambda:self.lab.rpc('submit_exhibitor_checkin_change_request',dict(p_session_token=session['session_token'],p_entry_id=e['id'],p_request_type='entry_edit',p_requested_changes={'ear_number':e['tattoo']+'X'},p_note='Synthetic cash change fee'),self.lab.anon))
@@ -89,24 +93,27 @@ class Workflows:
                     self.rpc('record_checkin_manual_payment',dict(params,p_amount_cents=500,p_method='cash',p_reference=f'LOCAL-CHANGE-{n}',p_receipt_preference='no_receipt'),p,'cash_change_payment')
                 result=self.rpc('complete_exhibitor_checkin_by_secretary_with_receipt',dict(params,p_entries_confirmed=True,p_initials=f'S{p["index"]}',p_note='Local E2E',p_receipt_preference='no_receipt'),p,'checkin_save')
                 assert result['status']=='completed',result
-                if n<=30:
+                if n<=self.t.staff_counts['checkin']:
                     retry=self.rpc('complete_exhibitor_checkin_by_secretary_with_receipt',dict(params,p_entries_confirmed=True,p_initials=f'S{p["index"]}',p_receipt_preference='no_receipt'),p,'checkin_retry')
                     assert retry['id']==result['id']
-        self.parallel_phase('checkin',self.people[:30],action)
+        self.parallel_phase('checkin',self.people[:self.t.staff_counts['checkin']],action)
         (self.t.output/'expected-final-entries.json').write_text(json.dumps(self.t.entries))
         roster=[];after=None
         while True:
-            page=self.rpc('get_show_checkin_roster_page',dict(p_show_id=SHOW,p_after_exhibitor_id=after,p_page_size=1000),self.people[110],'complete_roster_read')
+            page=self.rpc('get_show_checkin_roster_page',dict(p_show_id=SHOW,p_after_exhibitor_id=after,p_page_size=1000),self.people[self.judge_count],'complete_roster_read')
             if not page: break
             roster.extend(page);after=page[-1]['exhibitor_id']
-        assert len(roster)==2528 and len({r['exhibitor_id'] for r in roster})==2528
+        assert len(roster)==len(self.t.by_exhibitor) and len({r['exhibitor_id'] for r in roster})==len(self.t.by_exhibitor)
         self.t.summary['checks']['complete_checkin_roster']=len(roster)
 
     def navigation(self,p,mode):
         b=self.t.manifest['breeds'][p['index']%len(self.t.manifest['breeds'])]
         section=uid('951',b['section'])
-        params=dict(p_show_id=SHOW,p_section_id=section,p_page_size=1000 if mode=='qr' else 250)
-        if mode=='qr': params['p_breed']=b['breed']
+        params=dict(p_show_id=SHOW,p_section_id=section,p_page_size=1000 if mode=='qr' else 250,p_breed=b['breed'])
+        if mode=='manual':
+            index=self.rpc('get_judging_breed_index',dict(p_show_id=SHOW,p_section_id=section),p,'manual_breed_index')
+            assert sum(row['entry_count'] for row in index)==sum(e['section_id']==section for e in self.t.entries)
+            assert any(row['breed_key']==b['breed'].strip().lower() for row in index)
         function='report_results_entry_rows_page' if mode=='qr' else 'get_judging_entry_rows_page'
         ids=set();after=None
         while True:
@@ -120,8 +127,8 @@ class Workflows:
                     assert isinstance(row['_awards'],list)
                 ids.add(row['entry_id'])
             after=page[-1]['entry_id']
-        expected=b['count'] if mode=='qr' else sum(e['section_id']==section for e in self.t.entries)
-        assert len(ids)==expected,(mode,len(ids),expected)
+        expected={e['id'] for e in self.t.entries if e['section_id']==section and e['breed'].strip().lower()==b['breed'].strip().lower()}
+        assert ids==expected,(mode,len(ids),len(expected))
 
     def save(self,p,e,mode):
         params=dict(p_show_id=SHOW,p_entry_id=e['id'],p_placement=str(e['placement']),p_result_status='Shown',
@@ -130,33 +137,33 @@ class Workflows:
             p_result_entered_by_phone=None,p_awards=self.awards.get(e['n'],[]),p_is_qr_entry_mode=mode=='qr')
         result=self.rpc('save_results_entry',params,p,mode+'_result_save')
         assert result and int(result[0]['placement'])==e['placement'],result
-        if e['n']<=110: self.rpc('save_results_entry',params,p,'result_save_retry')
+        if e['n']<=self.judge_count: self.rpc('save_results_entry',params,p,'result_save_retry')
 
     def judge_section(self,section):
         entries=[e for e in self.t.entries if e['section_id']==uid('951',section)]
         def action(p):
-            for e in entries[p['index']::110]:
+            for e in entries[p['index']::self.judge_count]:
                 self.save(p,e,'qr' if p['index']%2==0 else 'manual')
-        self.parallel_phase('judging_'+str(section),self.people[:110],action)
-        readiness=self.lab.readiness(section,self.people[110]['token'])
+        self.parallel_phase('judging_'+str(section),self.people[:self.judge_count],action)
+        readiness=self.lab.readiness(section,self.people[self.judge_count]['token'])
         self.t.summary['checks']['readiness_'+str(section)]=readiness
         assert readiness['ready'],readiness
 
     def finalize(self,section):
         sid=uid('951',section)
-        result=self.t.measured('edge_finalize',110,lambda:self.lab.edge('run-closeout',
-            dict(show_id=SHOW,section_ids=[sid],scope_key=SHOW+':'+sid,scope_label='Open A' if section==1 else 'Youth A',species_filter='rabbit'),self.people[110]['token']))
+        result=self.t.measured('edge_finalize',self.judge_count,lambda:self.lab.edge('run-closeout',
+            dict(show_id=SHOW,section_ids=[sid],scope_key=SHOW+':'+sid,scope_label='Open A' if section==1 else 'Youth A',species_filter='rabbit'),self.people[self.judge_count]['token']))
         self.t.summary['checks']['finalize_'+str(section)]=result
         self.t.log('scope_finalized',section=section,result=result)
 
     def finalize_combined(self):
         sections=[uid('951',1),uid('951',2)]
         scope=SHOW+':'+','.join(sorted(sections))
-        result=self.t.measured('edge_finalize_combined',110,lambda:self.lab.edge('run-closeout',
-            dict(show_id=SHOW,section_ids=sections,scope_key=scope,scope_label='Open A + Youth A',species_filter='rabbit'),self.people[110]['token']))
+        result=self.t.measured('edge_finalize_combined',self.judge_count,lambda:self.lab.edge('run-closeout',
+            dict(show_id=SHOW,section_ids=sections,scope_key=scope,scope_label='Open A + Youth A',species_filter='rabbit'),self.people[self.judge_count]['token']))
         self.t.summary['checks']['finalize_combined']=result
         dashboard=self.rpc('get_closeout_dashboard_scoped_for_species',dict(p_show_id=SHOW,
-            p_scope_key=scope,p_section_ids=sections,p_artifact_limit=100,p_artifact_offset=0,p_species_filter='rabbit'),self.people[110])
+            p_scope_key=scope,p_section_ids=sections,p_artifact_limit=100,p_artifact_offset=0,p_species_filter='rabbit'),self.people[self.judge_count])
         self.t.summary['checks']['combined_dashboard']=dashboard
         assert dashboard['latest_finalize']['scope_key']==scope,dashboard['latest_finalize']
         assert dashboard['latest_finalize']['id']==result['finalize_run_id'],result
@@ -180,7 +187,7 @@ class Workflows:
         return {r['status']:r['n'] for r in self.lab.rows(f"select task_status::text status,count(*) n from public.show_task_queue where show_id='{SHOW}' group by task_status")}
 
     def closeout(self,max_minutes=45,fail_on_tasks=True):
-        gate=threading.Barrier(136);stop=threading.Event();began=time.monotonic();deadline=time.time()+max_minutes*60
+        gate=threading.Barrier(self.t.staff_counts['total']+1);stop=threading.Event();began=time.monotonic();deadline=time.time()+max_minutes*60
         def observer(p):
             gate.wait()
             while not stop.is_set():
@@ -189,8 +196,8 @@ class Workflows:
                     self.rpc('report_results_entry_rows_page',dict(p_show_id=SHOW,p_entry_ids=[e['id']]),p,'judging_read_during_closeout')
                 except Exception: pass
                 stop.wait(3)
-        with ThreadPoolExecutor(max_workers=135) as pool:
-            jobs=[pool.submit(observer,p) for p in self.people[:110]]+[pool.submit(self.support,p,gate,stop) for p in self.people[110:]]
+        with ThreadPoolExecutor(max_workers=self.t.staff_counts['total']) as pool:
+            jobs=[pool.submit(observer,p) for p in self.people[:self.judge_count]]+[pool.submit(self.support,p,gate,stop) for p in self.people[self.judge_count:]]
             gate.wait()
             try:
                 while time.time()<deadline:
@@ -202,31 +209,31 @@ class Workflows:
                 else: raise RuntimeError('Closeout deadline reached with unfinished tasks')
             finally: stop.set()
             for job in jobs: job.result()
-        self.t.summary['phases']['closeout']=dict(elapsed_s=round(time.monotonic()-began,2),sessions=135,status=self.queue())
+        self.t.summary['phases']['closeout']=dict(elapsed_s=round(time.monotonic()-began,2),sessions=self.t.staff_counts['total'],status=self.queue())
         if fail_on_tasks: assert not self.queue().get('failed',0)
 
     def run(self,resume_after_checkin=False):
         self.staff()
         if resume_after_checkin:
-            assert int(self.lab.sql(f"select count(*) from public.show_checkin_records where show_id='{SHOW}' and status='completed'"))==2528
+            assert int(self.lab.sql(f"select count(*) from public.show_checkin_records where show_id='{SHOW}' and status='completed'"))==len(self.t.by_exhibitor)
             self.t.summary['resumed_after']='checkin; prior navigation failures remain in staff-navigation-summary.json'
         else:
-            self.rpc('assign_show_coop_numbers',dict(p_show_id=SHOW,p_scope_mode='separate',p_overwrite_existing=False),self.people[110],'assign_coops')
+            self.rpc('assign_show_coop_numbers',dict(p_show_id=SHOW,p_scope_mode='separate',p_overwrite_existing=False),self.people[self.judge_count],'assign_coops')
             collisions=self.lab.rows(f"select scope,coop_number from show_animal_coop_numbers where show_id='{SHOW}' group by scope,coop_number having count(*)>1")
             assert not collisions, 'Coop labels must be unique before check-in'
             self.t.summary['checks']['unique_coop_labels']=True
             self.checkin()
             for mode in ('qr','manual'):
-                try: self.parallel_phase('all_'+mode+'_navigation',self.people[:110],lambda p:self.navigation(p,mode))
+                try: self.parallel_phase('all_'+mode+'_navigation',self.people[:self.judge_count],lambda p:self.navigation(p,mode))
                 except RuntimeError: pass # Read-only load failure does not prevent independent save coverage.
-        if resume_after_checkin and self.lab.readiness(1,self.people[110]['token'])['ready']:
+        if resume_after_checkin and self.lab.readiness(1,self.people[self.judge_count]['token'])['ready']:
             actual={r['id']:str(r['placement']) for r in self.lab.rows(f"select id,placement from entries where show_id='{SHOW}' and section_id='{uid('951',1)}'")}
             assert all(actual.get(e['id'])==str(e['placement']) for e in self.t.entries if e['section_id']==uid('951',1))
             self.t.summary['checks']['resumed_open_results_verified']=len(actual)
         else: self.judge_section(1)
         self.judge_section(2)
         # Final reports begin only after all Open and Youth judging is complete.
-        assert all(self.lab.readiness(s,self.people[110]['token'])['ready'] for s in (1,2))
+        assert all(self.lab.readiness(s,self.people[self.judge_count]['token'])['ready'] for s in (1,2))
         self.t.log('all_judging_completed_before_closeout')
         started=False;failures=[]
         for section in (1,2):

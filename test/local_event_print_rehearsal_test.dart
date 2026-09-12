@@ -57,6 +57,7 @@ void main() {
       FileSelectorPlatform.instance = dialog;
       SharedPreferences.setMockInitialValues({});
       const showId = '95000000-0000-0000-0000-000000000001';
+      late String showName;
       final sections = await tester.runAsync(() async {
         await Supabase.initialize(
           url: uri.toString(),
@@ -71,10 +72,11 @@ void main() {
         final client = Supabase.instance.client;
         final show = await client
             .from('shows')
-            .select('is_test')
+            .select('is_test,name')
             .eq('id', showId)
             .single();
         expect(show['is_test'], true);
+        showName = show['name'] as String;
         return List<Map<String, dynamic>>.from(
           await client
               .from('show_sections')
@@ -89,11 +91,11 @@ void main() {
       );
       final sid = section['id'] as String;
       final label = section['display_name'] as String;
-      const name = 'LOCAL E2E Convention 25711';
+      final name = showName;
       final Widget sheet;
       String button;
       if (mode.startsWith('coop')) {
-        sheet = const CoopCardsGeneratorSheet(showId: showId, showName: name);
+        sheet = CoopCardsGeneratorSheet(showId: showId, showName: name);
         button = 'Save PDF';
       } else if (mode.startsWith('checkin')) {
         sheet = CheckInGeneratorSheet(

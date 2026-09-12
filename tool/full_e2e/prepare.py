@@ -1,13 +1,15 @@
 """Prepare a fresh local-only workflow fixture; never insert entries or payments."""
+import argparse
 import json
 from pathlib import Path
 import sys
 from local import Local, ROOT, SHOW, uid, sql_quote as q
 sys.path.insert(0, str(ROOT / 'tool/national_scale'))
 from convention_2024 import build
+from workload import scale_manifest, staff_counts
 
 
-def prepare(lab, output):
+def prepare(lab, output, scale=1, staff_scale=None):
     if int(lab.sql(f"select count(*) from public.shows where id='{SHOW}'")):
         raise RuntimeError('Fresh show required; preserve previous run evidence')
     contracts = json.loads((ROOT / 'supabase/local/e2e_historical_contracts.json').read_text())
@@ -77,8 +79,9 @@ def prepare(lab, output):
     statements += ['grant insert,update,delete on public.entry_carts, public.entry_cart_items, public.animals, public.exhibitors to authenticated;',
                    'revoke all on function public.calculate_sweepstakes_for_show(uuid,text,text), public.calculate_sweepstakes_for_breed_baseline(uuid,text,text,text), public.user_can_enter_results(uuid,uuid) from public,anon;',
                    'grant execute on function public.calculate_sweepstakes_for_show(uuid,text,text), public.calculate_sweepstakes_for_breed_baseline(uuid,text,text,text), public.user_can_enter_results(uuid,uuid) to authenticated,service_role;']
-    _, manifest = build()
-    statements.append(f"insert into public.shows(id,name,start_date,end_date,coop_numbering_mode,secretary_name,secretary_email,is_national_show,is_published,is_test,payment_timing_mode,final_award_mode,club_name,location_name,secretary_address) values ('{SHOW}','LOCAL E2E Convention 25711','2026-09-10','2026-09-10','separate','Synthetic Secretary','secretary@example.invalid',true,true,true,'online_or_at_show','bis_ris','Synthetic Convention Club','LOCAL ONLY','1 Synthetic Lane, Localtown IN 00000');")
+    _, historical = build()
+    manifest = scale_manifest(historical, scale, staff_scale)
+    statements.append(f"insert into public.shows(id,name,start_date,end_date,coop_numbering_mode,secretary_name,secretary_email,is_national_show,is_published,is_test,payment_timing_mode,final_award_mode,club_name,location_name,secretary_address) values ('{SHOW}','LOCAL E2E Convention {manifest['totals']['entries']}','2026-09-10','2026-09-10','separate','Synthetic Secretary','secretary@example.invalid',true,true,true,'online_or_at_show','bis_ris','Synthetic Convention Club','LOCAL ONLY','1 Synthetic Lane, Localtown IN 00000');")
     for s in manifest['sections']:
         statements.append(f"insert into public.show_sections(id,show_id,kind,letter,display_name,sort_order) values ('{s['id']}','{SHOW}','{s['kind']}','A','{s['kind'].title()} A',{1 if s['kind']=='open' else 2});")
         statements.append(f"insert into public.show_section_fee_settings(section_id,fee_per_entry) values ('{s['id']}',5);")
@@ -105,7 +108,7 @@ def prepare(lab, output):
                 section_id=s['id'],species='rabbit',tattoo=f'C{n:05d}',animal_name=f'Synthetic Animal {n}',
                 breed=c['breed'],variety=c['variety'],class_name=age,sex=sex,placement=n-c['first']+1,
                 group=c['group']))
-    for i in range(1,111):
+    for i in range(1,staff_counts(manifest)['judges']+1):
         statements.append(f"insert into public.judges(id,display_name,name,first_name,last_name,arba_number,arba_judge_number) values ('{uid('958',i)}','Synthetic Judge {i}','Synthetic Judge {i}','Synthetic','Judge {i}','LOCAL-{i}','LOCAL-{i}'); insert into public.show_judges(show_id,judge_id,section_id,is_enabled) values ('{SHOW}','{uid('958',i)}','{uid('951',1+(i%2))}',true);")
     statements += ['commit;', "notify pgrst, 'reload schema';"]
     script='\n'.join(statements)
@@ -127,9 +130,16 @@ def prepare(lab, output):
     restore_print_reports(lab)
     from restore_staff_pins import restore as restore_staff_pins
     restore_staff_pins(lab)
+    # This historical function is installed after the loader-only migrations.
+    lab.sql((ROOT/'supabase/migrations/20260912125700_optimize_coop_assignment_existing_lookup.sql').read_text())
     assert int(lab.sql(f"select count(*) from public.entries where show_id='{SHOW}'")) == 0
     return manifest, entries
 
 if __name__ == '__main__':
-    prepare(Local(sys.argv[1]),Path(sys.argv[2]))
+    parser=argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('workspace');parser.add_argument('output',type=Path)
+    parser.add_argument('--scale',type=int,default=1)
+    parser.add_argument('--staff-scale',type=int)
+    args=parser.parse_args()
+    prepare(Local(args.workspace),args.output,args.scale,args.staff_scale)
     print('Fresh show prepared with zero entries and zero payments.')

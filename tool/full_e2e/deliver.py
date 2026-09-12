@@ -58,10 +58,10 @@ def main():
                 subject=name+' - '+label+' Club Reports',message='Synthetic local rehearsal club reports.'))
         club_result=test.measured('club_batch_email',0,lambda:lab.edge('send-club-report-batch',dict(show_id=SHOW,deliveries=requests),admin['token']))
         (out/'club-delivery-results.json').write_text(json.dumps(dict(requests=requests,result=club_result),indent=2))
-        test.summary['checks']['exhibitor_delivery']=dict(targets=2528,attempted=len(sent)+len(errors),responses=len(sent),errors=errors)
+        test.summary['checks']['exhibitor_delivery']=dict(targets=len(test.by_exhibitor),attempted=len(sent)+len(errors),responses=len(sent),errors=errors)
         test.summary['checks']['club_delivery']=club_result
         # The real UI records these only after sending. Do not pre-seed them.
-        if not errors and len(sent)==2528 and not club_result.get('failed_count'):
+        if not errors and len(sent)==len(test.by_exhibitor) and not club_result.get('failed_count'):
             stamp=datetime.now(timezone.utc).isoformat()
             try:
                 lab.request('/rest/v1/show_closeout_state?show_id=eq.'+SHOW,

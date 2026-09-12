@@ -7,11 +7,16 @@ import re
 import sys
 import zipfile
 from pypdf import PdfReader
+from workload import staff_counts
 
 out=Path(sys.argv[1]);entries=json.loads((out/'expected-final-entries.json').read_text())
 artifacts=json.loads((out/'generated-artifacts.json').read_text());results=[]
 manifest=json.loads((out/'manifest.json').read_text());by_n={e['n']:e for e in entries}
 profile=json.loads((out/'event-profile.json').read_text()) if (out/'event-profile.json').exists() else None
+judge_plan=out/'expected-judges-by-section.json'
+if profile and '--checkout-only' not in sys.argv[2:] and not judge_plan.exists():
+    raise RuntimeError('Event audit requires the independently planned expected-judges-by-section.json; do not infer every judge served every section')
+judges_by_section={k:set(v) for k,v in json.loads(judge_plan.read_text()).items()} if judge_plan.exists() else {}
 combined='--combined' in sys.argv[2:]
 checkout_only='--checkout-only' in sys.argv[2:]
 show_winners=defaultdict(set)
@@ -44,19 +49,21 @@ with zipfile.ZipFile(out/'report-files.zip') as archive:
             actual=int(found[1].replace(',','')) if found else None
             checks['rabbits_shown']=dict(expected=len(population),actual=actual)
             judges={int(n) for n in re.findall(r'Synthetic\s*Judge\s*(\d+)',text)}
-            checks['judges_printed']=dict(expected=110,actual=len(judges))
+            wanted_judges=judges_by_section[section] if judge_plan.exists() else set(range(1,staff_counts(manifest)['judges']+1))
+            checks['judges_printed']=dict(expected=len(wanted_judges),actual=len(judges),
+                missing=sorted(wanted_judges-judges),unexpected=sorted(judges-wanted_judges))
             if actual!=len(population):issues.append('Incorrect rabbit total')
-            if judges!=set(range(1,111)):issues.append('Incomplete judge list')
+            if judges!=wanted_judges:issues.append('Incomplete judge list')
         elif a['report_name']=='breed_results_detail_report':
             population=[e for e in population if e['breed']==a['metadata']['breed_name']]
             # This report promises top-five class placings plus show awards,
             # rather than printing every lower placing from the full population.
             want={e['tattoo'] for e in population if e['placement']<=5}|show_winners[section]
-            actual=set(re.findall(r'\bC\d{5}X?\b',text))
+            actual=set(re.findall(r'\bC\d{5,}X?\b',text))
             checks['animal_coverage']=dict(expected=len(want),actual=len(actual),missing=sorted(want-actual),unexpected=sorted(actual-want))
             if actual!=want:issues.append('Incomplete breed-report animal coverage')
         elif a['report_name']=='judge_report':
-            checks['all_named_judges']={int(n) for n in re.findall(r'Synthetic Judge\s+(\d+)',text)}==set(range(1,111))
+            checks['all_named_judges']={int(n) for n in re.findall(r'Synthetic Judge\s+(\d+)',text)}==set(range(1,staff_counts(manifest)['judges']+1))
             checks['no_unknown_judges']='Unknown Judge' not in text and 'Unassigned Judge' not in text
             checks['total_judged']=bool(re.search(r'\b'+str(len(population))+r'\s+Total Judged',text))
         elif a['report_name']=='paid_exhibitor_report':

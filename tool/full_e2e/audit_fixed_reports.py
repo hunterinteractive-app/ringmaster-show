@@ -23,7 +23,7 @@ for r in rows:
         sn=1 if section.endswith('1') else 2
         winners={by_n[b['first']]['tattoo'] for b in [b for b in manifest['breeds'] if b['section']==sn and b['bob']][:2]}
         want={e['tattoo'] for e in pop if e['breed']==r['metadata']['breed_name'] and e['placement']<=5}|winners
-        actual=set(re.findall(r'\bC\d{5}X?\b',text))
+        actual=set(re.findall(r'\bC\d{5,}X?\b',text))
         checks['exact_top_five_and_show_winners']=actual==want
         if actual!=want:errors.append(dict(missing=sorted(want-actual),unexpected=sorted(actual-want)))
     elif r['report_name']=='judge_report':

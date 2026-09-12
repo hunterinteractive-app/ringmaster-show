@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:math';
+import 'package:http/http.dart' show ClientException;
 
 import 'package:supabase/supabase.dart';
 
@@ -24,6 +26,7 @@ Future<T> retryTransient<T>(
 }
 
 bool isTransientServiceError(Object error) {
+  if (error is TimeoutException || error is ClientException) return true;
   if (error is PostgrestException) {
     return const {
       'PGRST003',

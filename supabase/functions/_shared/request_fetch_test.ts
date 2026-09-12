@@ -111,3 +111,24 @@ Deno.test("one deadline bounds every account lookup stage without retrying a tim
     "Later stages must not restart an expired request budget",
   );
 });
+
+Deno.test("database pool failures retain a retryable type; validation and permission errors do not", async () => {
+  const { throwDatabaseError } = await import("./request_fetch.ts");
+  for (const code of ["PGRST003", "53300", "57P01", "08006", "503", "504"]) {
+    try {
+      throwDatabaseError({ code, message: "database unavailable" });
+    } catch (error) {
+      assert(error instanceof UpstreamUnavailable);
+    }
+  }
+  for (const code of ["23505", "42501", "P0001", "22P02"]) {
+    try {
+      throwDatabaseError({ code, message: "rejected" });
+    } catch (error) {
+      assert(
+        error instanceof Error && !(error instanceof UpstreamUnavailable) &&
+          error.message === "rejected",
+      );
+    }
+  }
+});

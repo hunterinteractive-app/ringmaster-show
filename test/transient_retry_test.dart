@@ -4,6 +4,23 @@ import 'package:supabase/supabase.dart';
 
 void main() {
   test(
+    'an Edge worker 500 uses its HTTP status despite its diagnostic code',
+    () {
+      expect(
+        isTransientServiceError(
+          const FunctionException(
+            status: 500,
+            details: {
+              'code': 'Internal Server Error',
+              'message': 'WorkerAlreadyRetired',
+            },
+          ),
+        ),
+        isTrue,
+      );
+    },
+  );
+  test(
     'a retried page keeps the cursor and recovers from pool exhaustion',
     () async {
       var attempts = 0;

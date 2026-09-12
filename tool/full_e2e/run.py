@@ -18,6 +18,8 @@ import urllib.request
 import uuid
 from local import Local, ApiError, ROOT, SHOW, uid, sql_quote
 from providers import Providers, WEBHOOK_SECRET, prepare_functions
+from workload import staff_counts
+from registration_retry import insert as registration_insert, retry as registration_retry
 
 
 class Rehearsal:
@@ -27,13 +29,14 @@ class Rehearsal:
         if not expected.exists(): expected=output/'expected-entries.json'
         self.entries = json.loads(expected.read_text())
         self.manifest = json.loads((output/'manifest.json').read_text())
+        self.staff_counts = staff_counts(self.manifest)
         self.by_exhibitor=defaultdict(list)
         for e in self.entries: self.by_exhibitor[e['exhibitor']].append(e)
         self.lock=threading.Lock(); self.events=[]; self.children=[]; self.logs=[]
         self.started=time.monotonic(); self.stop=threading.Event()
         self.providers=None
         self.summary={'status':'running','checks':{},'phases':{},'limitations':[
-            'Local API concurrency, not 135 rendered browsers or hosted capacity.',
+            'Local API concurrency, not rendered browser sessions or hosted capacity.',
             'Stripe and Resend protocol responses are emulated locally; external provider behavior is not certified.',
             'Historical local contracts were restored selectively; complete production schema parity is not claimed.',
             'Exact breed totals; synthetic ownership, placements and winners; Open class sizes are proportional.']}
@@ -120,21 +123,21 @@ class Rehearsal:
             p=dict(user_id=login['user']['id'],token=login['access_token'],email=email)
         token=p['token']; rows=self.by_exhibitor[n]
         if getattr(self, 'verify_account_lookup', False):
-            lookup=self.measured('account_lookup',n,lambda:self.lab.edge('claim-or-import-exhibitor',{'action':'lookup'},token))
+            lookup=self.measured('account_lookup',n,lambda:registration_retry(self,'account_lookup',n,lambda:self.lab.edge('claim-or-import-exhibitor',{'action':'lookup'},token),function=True))
             assert lookup['status']=='club_not_found',lookup
         exhibitor=dict(id=uid('952',n),owner_user_id=p['user_id'],display_name=f'Synthetic Exhibitor {n}',
             first_name='Synthetic',last_name=f'Exhibitor {n:04d}',exhibitor_number=str(n),
             email=p['email'],city='Localtown',state='IN',zip='46000',arba_number=f'LOCAL-{n}',
-            address_line1='1 Synthetic Lane',type='open' if n<=1855 else 'youth',created_for_show_id=SHOW)
-        self.measured('create_exhibitor',n,lambda:self.lab.request('/rest/v1/exhibitors',exhibitor,token))
+            address_line1='1 Synthetic Lane',type='open' if n<=self.manifest['sections'][0]['exhibitors'] else 'youth',created_for_show_id=SHOW)
+        self.measured('create_exhibitor',n,lambda:registration_insert(self,'exhibitors',exhibitor,token,n))
         animals=[dict(id=uid('953',e['n']),owner_user_id=p['user_id'],species=e['species'],tattoo=e['tattoo'],
             name=e['animal_name'],breed=e['breed'],variety=e['variety'],class_name=e['class_name'],sex=e['sex']) for e in rows]
-        self.measured('create_animals',n,lambda:self.lab.request('/rest/v1/animals',animals,token))
+        self.measured('create_animals',n,lambda:registration_insert(self,'animals',animals,token,n))
         cart=str(uuid.uuid4())
-        self.measured('create_cart',n,lambda:self.lab.request('/rest/v1/entry_carts',dict(id=cart,show_id=SHOW,user_id=p['user_id'],status='active'),token))
+        self.measured('create_cart',n,lambda:registration_insert(self,'entry_carts',dict(id=cart,show_id=SHOW,user_id=p['user_id'],status='active'),token,n))
         items=[dict(id=uid('959',e['n']),cart_id=cart,exhibitor_id=exhibitor['id'],animal_id=uid('953',e['n']),
             **{k:e[k] for k in ('section_id','species','tattoo','animal_name','breed','variety','class_name','sex')}) for e in rows]
-        self.measured('add_cart_items',n,lambda:self.lab.request('/rest/v1/entry_cart_items',items,token))
+        self.measured('add_cart_items',n,lambda:registration_insert(self,'entry_cart_items',items,token,n))
         quote=self.measured('checkout_session',n,lambda:self.checkout_with_client_retry(cart,token,n))
         assert quote['show_balance_total_cents']==len(rows)*500, quote
         assert quote['amount_total_cents']==len(rows)*500, quote # fees absorbed for this fixture
@@ -158,6 +161,15 @@ class Rehearsal:
             except ApiError as error:
                 retry=error.code in (500,502,503,504) and attempt<3
                 record=dict(session=session,cart_id=cart,attempt=attempt,status=error.code,retry=retry)
+                with self.lock:
+                    with (self.output/'checkout-http-failures.jsonl').open('a') as f:
+                        f.write(json.dumps(record)+'\n')
+                self.log('checkout_http_failure',**record)
+                if not retry:raise
+                self.stop.wait(((250 << (attempt-1))+random.randrange(250))/1000)
+            except (urllib.error.URLError,TimeoutError,ConnectionError):
+                retry=attempt<3
+                record=dict(session=session,cart_id=cart,attempt=attempt,status='transport',retry=retry)
                 with self.lock:
                     with (self.output/'checkout-http-failures.jsonl').open('a') as f:
                         f.write(json.dumps(record)+'\n')
@@ -213,10 +225,12 @@ class Rehearsal:
 def main():
     p=argparse.ArgumentParser(description=__doc__);p.add_argument('workspace');p.add_argument('output',type=Path)
     p.add_argument('--resume-after-checkin',action='store_true')
-    p.add_argument('--registration-limit',type=int,default=2528);p.add_argument('--registration-only',action='store_true')
+    p.add_argument('--registration-limit',type=int);p.add_argument('--registration-only',action='store_true')
     args=p.parse_args()
-    if not 1<=args.registration_limit<=2528: p.error('registration limit must be 1–2528')
-    if not args.registration_only and args.registration_limit != 2528:
+    total=json.loads((args.output/'manifest.json').read_text())['totals']['exhibitors']
+    if args.registration_limit is None:args.registration_limit=total
+    if not 1<=args.registration_limit<=total:p.error(f'registration limit must be 1–{total}')
+    if not args.registration_only and args.registration_limit != total:
         p.error('Partial registration requires --registration-only')
     test=Rehearsal(Local(args.workspace),args.output)
     try:

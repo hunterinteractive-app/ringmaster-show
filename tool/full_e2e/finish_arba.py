@@ -29,7 +29,7 @@ def main():
         # Administrative form writes, with the same authenticated Data API.
         fields=save_synthetic_details(lab,p)
         delivered=lab.rows(f"select report_name,count(distinct artifact_id) n from show_email_deliveries where show_id='{SHOW}' and delivery_status='sent' group by 1")
-        assert next(r['n'] for r in delivered if r['report_name']=='exhibitor_report')==2528
+        assert next(r['n'] for r in delivered if r['report_name']=='exhibitor_report')==len(test.by_exhibitor)
         stamp=datetime.now(timezone.utc).isoformat()
         lab.request('/rest/v1/show_closeout_state?show_id=eq.'+SHOW,dict(exhibitor_emails_sent_at=stamp,club_reports_sent_at=stamp),p['token'],method='PATCH')
         dates=lab.rows(f"select exhibitor_emails_sent_at,club_reports_sent_at from show_closeout_state where show_id='{SHOW}'")[0]
@@ -45,7 +45,7 @@ def main():
         ready=lab.rows(f"select id,artifact_status from show_report_artifacts where show_id='{SHOW}' and report_name='arba_report' and is_current")
         test.summary['checks']['arba_generation']=ready
         assert len(ready)==2 and all(r['artifact_status']=='generated' for r in ready),ready
-        test.summary['checks']['arba_delivery']=test.measured('arba_email',0,lambda:lab.edge('send-report-email',dict(show_id=SHOW,artifact_ids=[r['id'] for r in ready],to='arba@example.invalid',subject='LOCAL E2E Convention 25711 - ARBA Show Report'),p['token']))
+        test.summary['checks']['arba_delivery']=test.measured('arba_email',0,lambda:lab.edge('send-report-email',dict(show_id=SHOW,artifact_ids=[r['id'] for r in ready],to='arba@example.invalid',subject=f'LOCAL E2E Convention {len(test.entries)} - ARBA Show Report'),p['token']))
         test.summary['status']='arba_passed_after_fixture_completion'
     except Exception as e:test.summary.update(status='failed',error=str(e));raise
     finally:

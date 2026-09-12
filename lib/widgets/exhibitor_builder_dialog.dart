@@ -1,3 +1,5 @@
+import 'package:ringmaster_show/services/registration_write.dart';
+import 'package:ringmaster_show/reporting_core/network/transient_retry.dart';
 // lib/widgets/exhibitor_builder_dialog.dart
 
 import 'dart:math' as math;
@@ -18,6 +20,7 @@ class ExhibitorBuilderDialog extends StatefulWidget {
 }
 
 class _ExhibitorBuilderDialogState extends State<ExhibitorBuilderDialog> {
+  final _creation = RegistrationWrite();
   bool _loading = true;
   bool _saving = false;
   String? _msg;
@@ -600,18 +603,18 @@ class _ExhibitorBuilderDialogState extends State<ExhibitorBuilderDialog> {
       Map<String, dynamic> savedRow;
 
       if (_isEdit) {
-        savedRow = await supabase
-            .from('exhibitors')
-            .update(payload)
-            .eq('id', widget.exhibitorId!)
-            .select()
-            .single();
+        savedRow = await retryTransient(
+          () => supabase
+              .from('exhibitors')
+              .update(payload)
+              .eq('id', widget.exhibitorId!)
+              .select()
+              .single(),
+        );
       } else {
-        savedRow = await supabase
-            .from('exhibitors')
-            .insert(payload)
-            .select()
-            .single();
+        savedRow = (await _creation.save(supabase, 'exhibitors', [
+          payload,
+        ])).single;
       }
 
       if (!mounted) return;

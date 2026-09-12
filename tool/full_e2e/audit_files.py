@@ -83,7 +83,7 @@ def main():
             kind=a['report_name'];meta=a['metadata'];issues=[];empty=False;ears=set()
             if kind in ('exhibitor_report','legs'):
                 text='\n'.join(page.extract_text() or '' for page in pdf.pages)
-                ears=set(re.findall(r'\bC\d{5}X?\b',text))
+                ears=set(re.findall(r'\bC\d{5,}X?\b',text))
                 exhibitor=int(meta['exhibitor_id'][-12:])
                 want=entries_by_exhibitor[exhibitor] if kind=='exhibitor_report' else leg_ears[exhibitor]
                 if ears!=want:issues.append(dict(expected_ears=sorted(want),actual_ears=sorted(ears)))

@@ -1,3 +1,4 @@
+import 'package:ringmaster_show/reporting_core/network/transient_retry.dart';
 // lib/screens/show_list_screen.dart
 // ignore_for_file: deprecated_member_use
 
@@ -143,9 +144,11 @@ class _ShowListScreenState extends State<ShowListScreen> {
     _resolvingExhibitorAccount = true;
 
     try {
-      final response = await supabase.functions.invoke(
-        'claim-or-import-exhibitor',
-        body: const {'action': 'lookup'},
+      final response = await retryTransient(
+        () => supabase.functions.invoke(
+          'claim-or-import-exhibitor',
+          body: const {'action': 'lookup'},
+        ),
       );
 
       final data = response.data is Map

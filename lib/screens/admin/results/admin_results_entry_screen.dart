@@ -1,5 +1,5 @@
 import 'package:ringmaster_show/screens/admin/closeout/data/results_entry_reader.dart';
-import 'package:ringmaster_show/screens/admin/closeout/data/report_data_reader.dart';
+import 'package:ringmaster_show/screens/admin/closeout/data/manual_judging_reader.dart';
 //lib/screens/admin/results/admin_results_entry_screen.dart
 // ignore_for_file: use_build_context_synchronously
 
@@ -690,6 +690,9 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
 
   List<Map<String, dynamic>> _sections = [];
   String? _selectedSectionId;
+  List<Map<String, dynamic>> _breedIndex = [];
+  String? _selectedBreed;
+  static const _allBreeds = '\u0000all';
 
   List<Map<String, dynamic>> _entries = [];
   List<Map<String, dynamic>> _judges = [];
@@ -869,15 +872,14 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
   }
 
   Future<void> _jumpToIssue(_ValidationIssue issue) async {
-    final allEntries = await _fetchHydratedEntries(sectionId: null);
-
     final targetEntryId = (issue.entry['entry_id'] ?? issue.entry['id'] ?? '')
         .toString()
         .trim();
 
+    final targetRows = await _fetchHydratedEntries(entryId: targetEntryId);
     Map<String, dynamic> targetEntry;
     try {
-      targetEntry = allEntries.firstWhere((e) {
+      targetEntry = targetRows.firstWhere((e) {
         return (e['entry_id'] ?? e['id'] ?? '').toString().trim() ==
             targetEntryId;
       });
@@ -885,6 +887,12 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
       targetEntry = Map<String, dynamic>.from(issue.entry);
     }
 
+    final allEntries = await _fetchHydratedEntries(
+      sectionId: targetEntry['section_id']?.toString(),
+      breed: (targetEntry['breed'] ?? issue.breed).toString(),
+    );
+    _selectedSectionId = targetEntry['section_id']?.toString();
+    _selectedBreed = (targetEntry['breed'] ?? issue.breed).toString();
     final breedEntries = allEntries.where((e) {
       final rowBreed = (e['breed'] ?? '').toString().trim();
       final rowBreedName = (e['breed_name'] ?? '').toString().trim();
@@ -1159,21 +1167,15 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
 
   Future<List<Map<String, dynamic>>> _fetchHydratedEntries({
     String? sectionId,
+    String? breed,
+    String? entryId,
   }) async {
-    final params = <String, dynamic>{
-      'p_show_id': widget.showId,
-      'p_section_id': (sectionId == null || sectionId.isEmpty)
-          ? null
-          : sectionId,
-      'p_show_letter': null,
-    };
-
-    final rows = await loadReportCursorRows(
+    final rows = await loadManualJudgingRows(
       supabase,
-      'get_judging_entry_rows_page',
-      params: {...params, 'p_page_size': 250},
-      cursorParameter: 'p_after_entry_id',
-      idColumn: 'entry_id',
+      showId: widget.showId,
+      sectionId: sectionId,
+      breed: breed,
+      entryId: entryId,
     );
     final entries = _dedupeResultsEntryRows(rows);
 
@@ -1278,7 +1280,7 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
         );
 
     if (target.isEmpty) {
-      allEntries = await _fetchHydratedEntries(sectionId: null);
+      allEntries = await _fetchHydratedEntries(entryId: targetId);
       target = allEntries.firstWhere(
         (e) => ((e['entry_id'] ?? e['id'] ?? '').toString().trim() == targetId),
         orElse: () => <String, dynamic>{},
@@ -1292,11 +1294,17 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
     final targetBreed = (target['breed'] ?? '').toString().trim();
     final targetBreedName = (target['breed_name'] ?? '').toString().trim();
     final breed = targetBreed.isNotEmpty ? targetBreed : targetBreedName;
+    allEntries = await _fetchHydratedEntries(
+      sectionId: target['section_id']?.toString(),
+      breed: breed,
+    );
+    _selectedBreed = breed;
     final breedEntries = allEntries.where((e) {
       final rowBreed = (e['breed'] ?? '').toString().trim();
       final rowBreedName = (e['breed_name'] ?? '').toString().trim();
       final rowBreedLabel = rowBreed.isNotEmpty ? rowBreed : rowBreedName;
-      return rowBreedLabel.toLowerCase() == breed.toLowerCase();
+      return rowBreedLabel.toLowerCase() == breed.toLowerCase() &&
+          _speciesDisplayNameForEntry(e) == _speciesDisplayNameForEntry(target);
     }).toList();
 
     if (breedEntries.isEmpty) return;
@@ -1404,24 +1412,60 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
   }
 
   Future<void> _loadEntries() async {
-    final sectionId =
-        (_selectedSectionId == null || _selectedSectionId!.isEmpty)
-        ? null
-        : _selectedSectionId;
-    _entries = await _fetchHydratedEntries(sectionId: sectionId);
-    if (sectionId == null) {
-      _sectionReadiness = const {};
+    final sectionId = _selectedSectionId;
+    _entries = [];
+    _sectionReadiness = const {};
+    if (sectionId == null || sectionId.isEmpty) {
+      _breedIndex = [];
+      _selectedBreed = null;
       return;
     }
-
-    final response = await supabase.rpc(
-      'show_results_readiness_scoped',
-      params: {
-        'p_show_id': widget.showId,
-        'p_section_ids': [sectionId],
-      },
+    _breedIndex = await loadJudgingBreedIndex(
+      supabase,
+      showId: widget.showId,
+      sectionId: sectionId,
     );
-    _sectionReadiness = Map<String, dynamic>.from(response as Map? ?? const {});
+    if (_selectedBreed != null && _selectedBreed != _allBreeds) {
+      final selected = _selectedBreed!.trim().toLowerCase();
+      final matches = _breedIndex.where(
+        (row) => (row['breed'] as String).trim().toLowerCase() == selected,
+      );
+      _selectedBreed = matches.isEmpty
+          ? null
+          : matches.first['breed'] as String;
+    }
+    if (_selectedBreed == null) return;
+    _entries = await _fetchHydratedEntries(
+      sectionId: sectionId,
+      breed: _selectedBreed == _allBreeds ? null : _selectedBreed,
+    );
+    if (_selectedBreed == _allBreeds) {
+      _sectionReadiness = await _loadSectionReadiness(sectionId);
+    }
+  }
+
+  Future<Map<String, dynamic>> _loadSectionReadiness(String sectionId) async {
+    final response = await supabase.rpc(
+      'get_judging_section_readiness',
+      params: {'p_show_id': widget.showId, 'p_section_id': sectionId},
+    );
+    return Map<String, dynamic>.from(response as Map? ?? const {});
+  }
+
+  Future<void> _onChangeBreed(String? value) async {
+    setState(() {
+      _selectedBreed = value;
+      _loading = true;
+      _msg = null;
+    });
+    try {
+      await _loadEntries();
+    } catch (error) {
+      _entries = [];
+      _msg = 'Load failed: $error';
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
   }
 
   String _classSexLabelFromEntry(Map<String, dynamic> e) {
@@ -1493,13 +1537,20 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
     if (value == null || value.isEmpty) return;
     setState(() {
       _selectedSectionId = value;
+      _selectedBreed = null;
+      _breedIndex = [];
       _loading = true;
       _msg = null;
     });
 
-    await _loadEntries();
-    if (!mounted) return;
-    setState(() => _loading = false);
+    try {
+      await _loadEntries();
+    } catch (error) {
+      _entries = [];
+      _msg = 'Load failed: $error';
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
   }
 
   Map<String, List<Map<String, dynamic>>> _groupByBreed(
@@ -1666,7 +1717,10 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
     return _issuesForEntries(refreshed, breedEntries);
   }
 
-  List<_ValidationIssue> _buildValidationIssues() {
+  List<_ValidationIssue> _buildValidationIssues({
+    List<Map<String, dynamic>>? entries,
+  }) {
+    final validationEntries = entries ?? _entries;
     final issues = <_ValidationIssue>[];
 
     _ValidationIssue makeIssue({
@@ -1774,7 +1828,7 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
     // Breed cards and this dialog consume the same completion analysis. This
     // guarantees that every issue withholding the green check is actionable
     // here instead of being hidden in the card-status calculation.
-    for (final breedEntries in _groupByBreed(_entries).values) {
+    for (final breedEntries in _groupByBreed(validationEntries).values) {
       if (breedEntries.isEmpty) continue;
       late final ResultsRules rules;
       try {
@@ -1846,7 +1900,7 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
 
     final awardBuckets = <String, List<Map<String, dynamic>>>{};
 
-    for (final e in _entries) {
+    for (final e in validationEntries) {
       if (_isFurEntry(e)) continue;
 
       final entryAwards = awards(e);
@@ -1996,7 +2050,9 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
       required String Function(Map<String, dynamic>) scopeKey,
     }) {
       final shared = buildOppositeSexAwardIssues(
-        entries: _entries.where((entry) => !_isFurEntry(entry)).toList(),
+        entries: validationEntries
+            .where((entry) => !_isFurEntry(entry))
+            .toList(),
         winnerCode: winCode,
         oppositeCode: oppCode,
         scopeLabel: scopeLabel,
@@ -2056,7 +2112,7 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
       scopeKey: (e) => '${sectionId(e)}|${breed(e).toLowerCase()}',
     );
 
-    for (final e in _entries) {
+    for (final e in validationEntries) {
       if (_isFurEntry(e)) continue;
 
       final a = awards(e);
@@ -2289,11 +2345,27 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
     ].join(' • ');
   }
 
-  void _openValidationSheet() {
-    final issues = _buildValidationIssues();
-    final finalAwardIssues = blockingFinalAwardReadinessIssues(
-      _sectionReadiness,
-    );
+  Future<void> _openValidationSheet() async {
+    final sectionId = _selectedSectionId;
+    if (sectionId == null) return;
+    setState(() {
+      _loading = true;
+      _msg = null;
+    });
+    late final List<_ValidationIssue> issues;
+    late final Map<String, dynamic> readiness;
+    try {
+      final entries = await _fetchHydratedEntries(sectionId: sectionId);
+      issues = _buildValidationIssues(entries: entries);
+      readiness = await _loadSectionReadiness(sectionId);
+    } catch (error) {
+      if (mounted) setState(() => _msg = 'Section validation failed: $error');
+      return;
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+    if (!mounted) return;
+    final finalAwardIssues = blockingFinalAwardReadinessIssues(readiness);
     final issueCount = issues.length + finalAwardIssues.length;
 
     showModalBottomSheet(
@@ -2323,7 +2395,7 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
                       Align(
                         alignment: Alignment.centerLeft,
                         child: Text(
-                          'Results Validation',
+                          'Full Section Results Validation',
                           style: Theme.of(context).textTheme.titleLarge
                               ?.copyWith(
                                 color: AppColors.text,
@@ -2470,7 +2542,7 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
       bodyPadding: EdgeInsets.zero,
       actions: [
         IconButton(
-          tooltip: 'Validation',
+          tooltip: 'Validate full section',
           onPressed: _loading ? null : _openValidationSheet,
           icon: const Icon(Icons.rule_folder_outlined),
         ),
@@ -2621,6 +2693,31 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
                                   : _onChangeSection,
                             ),
                             const SizedBox(height: 14),
+                            DropdownButtonFormField<String>(
+                              initialValue: _selectedBreed,
+                              isExpanded: true,
+                              decoration: const InputDecoration(
+                                labelText: 'Breed',
+                              ),
+                              items: [
+                                ..._breedIndex.map(
+                                  (row) => DropdownMenuItem<String>(
+                                    value: row['breed'] as String,
+                                    child: Text(
+                                      '${(row['breed'] as String).isEmpty ? '(Unknown Breed)' : row['breed']} (${row['entry_count']} entries)',
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ),
+                                if (_breedIndex.isNotEmpty)
+                                  const DropdownMenuItem(
+                                    value: _allBreeds,
+                                    child: Text('All breeds — full section'),
+                                  ),
+                              ],
+                              onChanged: _onChangeBreed,
+                            ),
+                            const SizedBox(height: 14),
                             Container(
                               decoration: BoxDecoration(
                                 color: validationIssueCount == 0
@@ -2644,7 +2741,9 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
                                 ),
                                 title: Text(
                                   validationIssueCount == 0
-                                      ? 'Validation looks good'
+                                      ? (_selectedBreed == null
+                                            ? 'Choose a breed to enter results'
+                                            : 'Loaded results validation looks good')
                                       : 'Validation issues found',
                                   style: const TextStyle(
                                     color: AppColors.text,
@@ -2653,7 +2752,7 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
                                 ),
                                 subtitle: Text(
                                   validationIssueCount == 0
-                                      ? 'No current award/result conflicts found.'
+                                      ? 'Tap to validate the full section, including final awards.'
                                       : '$validationIssueCount issue${validationIssueCount == 1 ? '' : 's'} to review.',
                                   style: const TextStyle(
                                     color: AppColors.muted,
@@ -2676,7 +2775,9 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
                 Expanded(
                   child: breeds.isEmpty
                       ? const Center(
-                          child: Text('No entries found for this section.'),
+                          child: Text(
+                            'Choose a breed above to load its entries.',
+                          ),
                         )
                       : ListView.builder(
                           padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),

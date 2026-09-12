@@ -31,7 +31,7 @@ def main():
     else:
         with dump.open('xb') as target:
             subprocess.run(['docker','exec',container,'pg_dump','-U','postgres','-d','postgres','-Fc',
-                '--schema=public','--schema=auth','--schema=storage','--schema=report_generation_private','--no-owner'],stdout=target,check=True)
+                '--schema=public','--schema=auth','--schema=storage','--schema=report_generation_private','--schema=judging_private','--no-owner'],stdout=target,check=True)
     dump.chmod(0o600)
     lab.sql(f'create database {database};')
     def sql(statement):
@@ -42,13 +42,24 @@ def main():
     with dump.open('rb') as source,(out/'database-restore.log').open('w') as log:
         restored=subprocess.run(['docker','exec','-i',container,'pg_restore','-U','postgres','-d',database,'--no-owner','--no-acl','--exit-on-error'],stdin=source,stdout=log,stderr=subprocess.STDOUT)
     if restored.returncode:raise RuntimeError('Database restore failed; inspect database-restore.log')
-    tables=lab.rows("select schemaname,tablename from pg_tables where schemaname in ('public','auth','storage','report_generation_private') order by 1,2")
+    tables=lab.rows("select schemaname,tablename from pg_tables where schemaname in ('public','auth','storage','report_generation_private','judging_private') order by 1,2")
     results=[]
     for row in tables:
         table='"'+row['schemaname']+'"."'+row['tablename']+'"'
         query=f"select count(*)::text||':'||coalesce(md5(string_agg(row_to_json(t)::text,'|' order by row_to_json(t)::text)),md5('')) from {table} t;"
         original=lab.sql(query).strip();recovered=sql(query).strip()
         results.append(dict(table=table,original=original,restored=recovered,passed=original==recovered))
+    # A table-only checksum misses private helper functions needed by the app.
+    function_query = """select coalesce(jsonb_agg(jsonb_build_object(
+        'schema', n.nspname, 'name', p.proname,
+        'arguments', pg_get_function_identity_arguments(p.oid),
+        'definition', md5(pg_get_functiondef(p.oid)))
+        order by n.nspname, p.proname, pg_get_function_identity_arguments(p.oid)), '[]'::jsonb)
+        from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+        where n.nspname in ('report_generation_private','judging_private') and p.prokind='f';"""
+    original_functions=json.loads(lab.sql(function_query))
+    recovered_functions=json.loads(sql(function_query))
+    private_functions_match=original_functions==recovered_functions
     hashes={a['id']+'.pdf':a['file_hash_sha256'] for a in json.loads((out/'generated-artifacts.json').read_text())}
     destination=out/'temporary-restored-report-files'
     destination.mkdir(exist_ok=False);files=[]
@@ -66,8 +77,9 @@ def main():
                 target.unlink()
     finally:
         if not any(destination.iterdir()):destination.rmdir()
-    result=dict(status='passed' if all(r['passed'] for r in results) and len(files)==len(hashes) else 'failed',
+    result=dict(status='passed' if all(r['passed'] for r in results) and private_functions_match and len(files)==len(hashes) else 'failed',
         restored_database=database,database_bytes=dump.stat().st_size,tables=results,acl_restore_excluded=True,
+        private_functions_match=private_functions_match,private_functions=original_functions,
         restored_files=len(files),expected_files=len(hashes),file_failures=[r for r in files if not r['passed']],
         limitations=['Separate database is not connected to Auth, REST, or Storage services.',
             'Roles, ownership, extensions, provider secrets and a hosted disaster-recovery switchover are not certified.',

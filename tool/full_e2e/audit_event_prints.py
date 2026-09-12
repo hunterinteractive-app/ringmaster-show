@@ -20,7 +20,7 @@ for mode in modes:
         text_path=folder/'extracted-text.txt'
         subprocess.run(['pdftotext',str(path),str(text_path)],check=True)
         text=text_path.read_text()
-        ears=re.findall(r'\bC\d{5}X?\b',text)
+        ears=re.findall(r'\bC\d{5,}X?\b',text)
         actual=set(ears);occurrences=len(ears)
         coop_labels=text.upper().count('COOP NO.');entry_labels=text.upper().count('ENTRY NO.')
         pop=[e for e in entries if not e.get('scratched') and
@@ -44,7 +44,7 @@ for mode in modes:
             height=round(float(pdf.pages[0].mediabox.height));boundary=height-20-144
             for part,y,h in (('main',0,boundary),('runner',boundary,height-boundary)):
                 cropped=subprocess.run(['pdftotext','-r','72','-x','0','-y',str(y),'-W',str(round(float(pdf.pages[0].mediabox.width))),'-H',str(h),str(path),'-'],check=True,capture_output=True,text=True).stdout
-                found=Counter(re.findall(r'\bC\d{5}X?\b',cropped))
+                found=Counter(re.findall(r'\bC\d{5,}X?\b',cropped))
                 result[part+'_card_population_correct']=found==Counter(expected)
                 result['passed']=result['passed'] and result[part+'_card_population_correct']
         if mode.startswith('coop'):

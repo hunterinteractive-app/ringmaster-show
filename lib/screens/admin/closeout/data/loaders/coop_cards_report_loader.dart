@@ -332,10 +332,12 @@ class CoopCardsReportLoader {
   }) async {
     final rows = <Map<String, dynamic>>[];
     final normalizedScope = scope?.trim().toLowerCase() ?? '';
-
-    for (var from = 0; ; from = rows.length) {
-      final to = from + _rpcPageSize - 1;
-
+    String? afterAnimal;
+    String? afterScope;
+    final uuid = RegExp(
+      r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$',
+    );
+    while (true) {
       var query = supabase
           .from('show_animal_coop_numbers')
           .select('animal_id,scope,coop_number')
@@ -344,16 +346,41 @@ class CoopCardsReportLoader {
       if (normalizedScope.isNotEmpty) {
         query = query.eq('scope', normalizedScope);
       }
+      if (afterAnimal != null) {
+        // The same animal can have both Open and Youth assignments. Retain
+        // scope in the cursor so a page boundary cannot omit its second card.
+        query = query.or(
+          'animal_id.gt.$afterAnimal,and(animal_id.eq.$afterAnimal,scope.gt.$afterScope)',
+        );
+      }
 
       final result = await query
           .order('animal_id', ascending: true)
           .order('scope', ascending: true)
-          .order('coop_number', ascending: true)
-          .range(from, to);
+          .limit(_rpcPageSize);
       final page = List<Map<String, dynamic>>.from(result);
-      rows.addAll(page);
-
       if (page.isEmpty) break;
+      for (final row in page) {
+        final animal = _safe(row, 'animal_id');
+        final assignmentScope = _safe(row, 'scope');
+        if (!uuid.hasMatch(animal) ||
+            !const {'all', 'open', 'youth'}.contains(assignmentScope)) {
+          throw StateError(
+            'Invalid coop assignment cursor. Reload the report.',
+          );
+        }
+        if (afterAnimal != null &&
+            (animal.compareTo(afterAnimal) < 0 ||
+                (animal == afterAnimal &&
+                    assignmentScope.compareTo(afterScope!) <= 0))) {
+          throw StateError(
+            'Coop assignment pages did not advance. Reload the report.',
+          );
+        }
+        afterAnimal = animal;
+        afterScope = assignmentScope;
+      }
+      rows.addAll(page);
     }
 
     return rows;

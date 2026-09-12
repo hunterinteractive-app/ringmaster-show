@@ -40,23 +40,51 @@ class EnteredExhibitorsContactReportPdf {
       pw.MultiPage(
         pageFormat: PdfPageFormat.letter.landscape,
         margin: const pw.EdgeInsets.all(24),
+        // Bound each table's layout work. A single table repeatedly measures
+        // thousands of remaining rows while MultiPage finds page breaks.
+        maxPages: rows.length + 2,
+        header: (context) => pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.Text(
+              'Entered Exhibitors Contact List',
+              style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold),
+            ),
+            pw.SizedBox(height: 6),
+            pw.Text(data.showName),
+            pw.SizedBox(height: 12),
+          ],
+        ),
+        footer: (context) => pw.Padding(
+          padding: const pw.EdgeInsets.only(top: 8),
+          child: pw.Text(
+            '${rows.length} exhibitors • Page ${context.pageNumber} of ${context.pagesCount}',
+            style: const pw.TextStyle(fontSize: 9),
+          ),
+        ),
         build: (context) => [
-          pw.Text(
-            'Entered Exhibitors Contact List',
-            style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold),
-          ),
-          pw.SizedBox(height: 6),
-          pw.Text(data.showName),
-          pw.SizedBox(height: 16),
-          pw.TableHelper.fromTextArray(
-            headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-            headerDecoration: const pw.BoxDecoration(color: PdfColors.grey300),
-            cellAlignment: pw.Alignment.centerLeft,
-            headers: const ['Exhibitor', 'Address', 'Email', 'Phone'],
-            data: rows
-                .map((r) => [r.exhibitorName, r.address, r.email, r.phone])
-                .toList(),
-          ),
+          if (rows.isEmpty) pw.Text('No entered exhibitors.'),
+          for (var offset = 0; offset < rows.length; offset += 100)
+            pw.TableHelper.fromTextArray(
+              columnWidths: const {
+                0: pw.FlexColumnWidth(2.2),
+                1: pw.FlexColumnWidth(3.5),
+                2: pw.FlexColumnWidth(3.1),
+                3: pw.FlexColumnWidth(1.5),
+              },
+              cellStyle: const pw.TextStyle(fontSize: 9),
+              headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+              headerDecoration: const pw.BoxDecoration(
+                color: PdfColors.grey300,
+              ),
+              cellAlignment: pw.Alignment.centerLeft,
+              headers: const ['Exhibitor', 'Address', 'Email', 'Phone'],
+              data: rows
+                  .skip(offset)
+                  .take(100)
+                  .map((r) => [r.exhibitorName, r.address, r.email, r.phone])
+                  .toList(),
+            ),
         ],
       ),
     );

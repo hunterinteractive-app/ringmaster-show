@@ -1,3 +1,5 @@
+import 'package:ringmaster_show/services/registration_write.dart';
+import 'package:ringmaster_show/reporting_core/network/transient_retry.dart';
 // lib/widgets/animal_editor/animal_editor_dialog.dart
 
 import 'package:flutter/material.dart';
@@ -22,6 +24,7 @@ class AnimalEditorDialog extends StatefulWidget {
 }
 
 class _AnimalEditorDialogState extends State<AnimalEditorDialog> {
+  final _creation = RegistrationWrite();
   final _name = TextEditingController();
   final _tattoo = TextEditingController();
   final _breedText = TextEditingController();
@@ -387,12 +390,14 @@ class _AnimalEditorDialogState extends State<AnimalEditorDialog> {
 
     try {
       if (_isEdit) {
-        await supabase
-            .from('animals')
-            .update(payload)
-            .eq('id', widget.existing!['id']);
+        await retryTransient(
+          () => supabase
+              .from('animals')
+              .update(payload)
+              .eq('id', widget.existing!['id']),
+        );
       } else {
-        await supabase.from('animals').insert(payload);
+        await _creation.save(supabase, 'animals', [payload]);
       }
 
       if (!mounted) return;

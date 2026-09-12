@@ -64,10 +64,12 @@ class Lab:
             raise RuntimeError(result.stderr[-3500:])
         return result.stdout
 
-    def request(self, path, data=None, token=None, method=None, timeout=65):
+    def request(self, path, data=None, token=None, method=None, timeout=65, prefer=None):
         key = self.anon if token else self.key
         headers = {'apikey': key, 'Authorization': 'Bearer ' + (token or self.key),
                    'Content-Type': 'application/json'}
+        if prefer is not None:
+            headers['Prefer'] = prefer
         body = None if data is None else json.dumps(data).encode()
         request = urllib.request.Request(self.url + path, body, headers,
                                          method=method or ('GET' if body is None else 'POST'))

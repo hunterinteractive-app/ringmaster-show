@@ -1742,6 +1742,15 @@ class _ControlSheetsGeneratorSheetState
 
       doc.addPage(
         pw.MultiPage(
+          // A single large class table can legitimately span more than the
+          // package's default 20 pages. Keep a finite, content-based guard
+          // while allowing even one row per page for the largest class.
+          maxPages:
+              20 +
+              pages.fold<int>(0, (largest, page) {
+                final rows = (page['rows'] as List).length;
+                return rows > largest ? rows : largest;
+              }),
           pageFormat: PdfPageFormat.letter,
           margin: const pw.EdgeInsets.fromLTRB(42, 24, 18, 26),
           theme: theme,

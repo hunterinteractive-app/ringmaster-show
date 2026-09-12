@@ -40,6 +40,27 @@ reset. Stop older local stacks before starting this stack on the default ports.
 
 ## Preparation
 
+For a doubled rehearsal, pass `--scale 2 --staff-scale 2` to `prepare.py`.
+This prepares 51,422 expected entries and 5,056 expected exhibitors, with
+37,734/3,710 Open and 13,688/1,346 Youth. Every historical breed/class count
+is doubled. Registration peaks at 500 purchasers; check-in uses 60 clerks,
+20 admins and 30 superintendents; judging uses 220 tables split evenly
+between QR/manual, plus the same 50 supporting staff. The local Auth pool,
+four render workers and two-hour checkout deadline stay unchanged.
+`--staff-scale` defaults to `--scale`; omitting both retains historical sizes.
+
+The extreme profile uses `--scale 4 --staff-scale 4`: 102,844 entries and
+10,112 exhibitors, 1,000 purchasers, 440 judging tables, 120 check-in sessions,
+40 admins and 60 superintendents. Percentages, server resources and the
+7,200-second checkout deadline stay the same. PDF audits accept the six-digit
+synthetic animal identifiers while still requiring exact expected populations.
+
+Preparation creates configuration, judges and expected files only: the show
+still has zero exhibitors, entries and payments. It does not run `event.py`.
+Offline harness validation is `python3 tool/full_e2e/test_workload.py`.
+Preserve the prepared source, migration hashes and expected files before
+waiting to start; start the workload only when requested.
+
 From the application repository, with Docker and the Supabase CLI installed:
 
 ```sh
@@ -127,7 +148,7 @@ The PDF audit checks every generated file against its stored size/hash, compares
 all exhibitor-report tattoos and leg certificate populations with independent
 expected values, and writes a compressed report archive. The recovery stage
 restores public/Auth/Storage tables into a separate database and compares table
-contents, including the private report-revision schema; it restores each archived
+contents, including the private report-revision and judging helper schemas and function definitions; it restores each archived
 PDF to disk and verifies its hash. Platform-owned ACLs and object ownership are
 excluded from this data-recovery check. That database is never connected to live
 services. Full hosted failover and permission restoration are untested.
@@ -158,7 +179,13 @@ purchasers. The user specified the arrival distribution, not this concurrency.
 Two check-in days use 30 sessions plus 10 admins and 15 superintendents.
 Disjoint selections change 30% of tattoos, correct 5% of sexes and scratch 8%
 of entries. Ear/sex changes cost an assumed $5 each, scratches are free, and
-each exhibitor pays their combined changes once in cash. These fee amounts are
+each exhibitor pays their changes in cash. New profiles defer one already
+planned charged change for up to one returning exhibitor per check-in clerk
+from day one to day two. These exhibitors pay again after their earlier
+balance was paid. This preserves the original change percentages and total
+fees while exercising the later-fee fix; reconciliation includes the extra
+payment/cart and verifies earlier payment records remain unchanged.
+These fee amounts are
 test inputs, not a statement of the event's actual fee policy. Two judging days
 use 55 QR and 55 manual clerks, with both sections active on each day. A class
 stays with one clerk and finishes within one day.
@@ -276,3 +303,104 @@ Stop only processes started for this rehearsal. Stop this local Supabase project
 without `--no-backup` so its named volumes and failed-run evidence remain. Never
 run a production reset or delete unrelated projects/volumes. Commit only the
 harness, local contracts and written results, not credentials, dumps or PDFs.
+
+## Interrupted registration and 500-purchaser diagnosis
+
+`recover_incomplete_registration.py WORKSPACE ORIGINAL_EVENT NEW_OUTPUT
+--dart-client COMPILED_CLIENT` recovers the seven failures from the first doubled
+event using the original local Auth accounts and carts. Compile
+`registration_client.dart` with the app's Dart package first. It exercises the
+actual app write helper, a lost response after a committed insert, write replay
+and cross-owner denial. Credentials travel over stdin and are never logged.
+Use this dedicated recovery driver for that fixture; the older event recovery
+stage predates partial account/animal/cart recovery.
+
+`verify_500_purchase_burst.py WORKSPACE ORIGINAL_EVENT NEW_OUTPUT --rest-pool 20`
+adds 500 new diagnostic purchasers to the retained populated show, alongside
+20 admins and 30 superintendents. It uses the final-day Open/Youth cohort and
+approximately ten entries per purchaser. Save-response validation and bounded
+retry rules match the Dart helper; signup and login have no client semaphore.
+Pool gauges, connection counts, API events and query-statistic snapshots are
+recorded. Each invocation requires a new output directory.
+
+These diagnostics deliberately change the retained local fixture. Preserve the
+original failed evidence and start the next full event in a new workspace and
+Docker project. Do not continue that fixture as if it were a fresh event. The
+September 12 repair and retest report is in
+`docs/registration-recovery-and-500-purchaser-retest-2026-09-12.md`.
+
+`verify_coop_assignment.py WORKSPACE EVENT NEW_OUTPUT` compares the coop lookup
+optimization against the restored historical function across the populated
+event. It checks separate/combined numbering, blank and manual labels, retries,
+NULL/true overwrite flags and authorization, then rolls back both data and
+function changes. Candidate operations retain the eight-second timeout. Run it
+on the stopped preprint fixture before applying the optimization. Full fixture
+preparation reapplies migration `20260912125700` after historical restoration.
+
+## Dashboard queue-growth regression
+
+`verify_dashboard_queue_growth.py` reproduces the empty-to-11,693-task dashboard
+transition on the retained doubled fixture. It warms all 20 REST backends before
+copying the queue into private diagnostic tables, with 20 admins and 30
+superintendents reading concurrently. Only these copies disable autoanalyze;
+there is no service restart or manual statistics refresh during the transition.
+The original baseline must time out and the fixed version must complete every
+request with identical dashboard contents. Access checks, migration idempotency,
+function permissions and hashes of the original event rows are also verified.
+
+```sh
+python3 tool/full_e2e/verify_dashboard_queue_growth.py \
+  /tmp/ringmaster-show-full-e2e-double-r6-20260912 \
+  output/full_e2e/dashboard-fix-20260912/regression/.staff.json \
+  output/full_e2e/dashboard-fix-20260912/REPEAT \
+  --baseline-functions output/full_e2e/dashboard-fix-20260912/regression/before-functions.json
+```
+
+Use a new evidence directory and the latest saved staff credentials on each
+repeat. Omit `--baseline-functions` only when testing an unpatched local fixture.
+This probe applies the candidate migration to the selected guarded local
+database, removes its private diagnostic schemas/RPCs, and preserves the original
+entries, payments and queue. It does not render reports or turn the original
+failed full event into a pass.
+
+## Local gateway capacity after restarts
+
+Run `configure_capacity.py WORKSPACE --rest-pool 20` after every CLI stack
+recreation and before a load burst. `Rehearsal.start()` and standalone
+`repeat_navigation.py` do this automatically. This restores the bounded
+Auth/REST pools and sets the local gateway's single worker to 2,048 connections
+with a 4,096 open-file limit. The helper verifies the effective Nginx settings;
+it does not change database connection limits or gateway worker count.
+
+The pinned local Kong image exhausted its default 512 connection slots during
+the doubled 270-session navigation barrier. Those slots cover both clients and
+upstream connections. Gateway limits are separate from the database pool
+budget. Preserve the failed burst evidence and use a fresh output directory
+when retesting a changed capacity configuration.
+
+Event judging writes `expected-judges-by-section.json` from the planned class
+assignments before results are saved. The official ARBA audit requires this
+plan when auditing an event profile: working both days does not imply a judge
+served both Open and Youth. For an older preserved event, reconstruct the plan
+from its frozen source and expected entry inputs, then verify it against saved
+assignments; do not derive an expected roster from the PDF being audited.
+# Focused contact and judging retests
+
+Manual navigation follows the app's breed index and selected-breed cursor
+reads, with 250 rows per manual page. `repeat_navigation.py` also accepts
+`--largest-breed` after its workspace and output arguments to concentrate
+clerks on the largest Open and Youth breeds. Preserve each run in a fresh
+output directory with copies of the fixture manifest and expected entries.
+
+`verify_judging_scopes.py WORKSPACE OUTPUT` reconciles every breed and both
+full sections with saved entry identities, awards, species, and scratches.
+It compares staff readiness with the canonical validator and checks access
+denials. `verify_contact_report.py WORKSPACE OUTPUT WORKER ARTIFACT_ID`
+regenerates only the selected synthetic contact artifact and checks the
+stored file hash plus unchanged entry/exhibitor/award/coop fingerprints.
+Use `--allow-generated` only when deliberately testing another generation
+of an already-generated contact report. Contact content and visual audits
+must follow the generation/hash check.
+
+See `docs/contact-and-judging-fixes-2026-09-12.md` for the measured 51,422-entry
+results and local Storage-policy limitations.

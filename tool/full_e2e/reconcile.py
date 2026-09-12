@@ -14,7 +14,7 @@ def reconcile(lab,out):
     def check(name,want,got):
         checks[name]=dict(passed=want==got,expected=want,actual=got)
     rows=lab.rows(f"select id,animal_id,exhibitor_id,section_id,breed,variety,class_name,sex,tattoo,placement,payment_status,scratched_at,status from entries where show_id='{SHOW}'")
-    check('entry_count',25711,len(rows))
+    check('entry_count',len(expected),len(rows))
     by_id={r['id']:r for r in rows};mismatches=[]
     for e in expected:
         r=by_id.get(e['id'],{})
@@ -31,8 +31,8 @@ def reconcile(lab,out):
         if bad:mismatches.append(dict(entry_id=e['id'],fields=bad))
     (out/'entry-reconciliation-mismatches.json').write_text(json.dumps(mismatches,indent=2))
     check('entry_field_mismatches',0,len(mismatches))
-    check('exhibitors',2528,len({r['exhibitor_id'] for r in rows}))
-    check('section_counts',{uid('951',1):18867,uid('951',2):6844},dict(Counter(r['section_id'] for r in rows)))
+    check('exhibitors',manifest['totals']['exhibitors'],len({r['exhibitor_id'] for r in rows}))
+    check('section_counts',{s['id']:s['entries'] for s in manifest['sections']},dict(Counter(r['section_id'] for r in rows)))
     awards={}
     for b in manifest['breeds']:
         if b['bob']:awards[b['first']]=['BOB']
@@ -56,17 +56,18 @@ def reconcile(lab,out):
     payments=lab.rows(f"select provider,count(*) n,sum(total_cents) total,sum(refunded_cents) refunded from show_payments where show_id='{SHOW}' and payment_status='paid' group by 1")
     fee_total=sum(c['fee_cents'] for c in profile['changes']) if profile else 15000
     fee_payers=len({c['exhibitor'] for c in profile['changes'] if c['fee_cents']}) if profile else 30
+    followup_payments=len(profile.get('followup_change_entries',[])) if profile else 0
     change_count=len(profile['changes']) if profile else 30
-    check('payment_counts',{'stripe':2528,'cash':fee_payers},{r['provider']:r['n'] for r in payments})
-    check('payment_amounts_cents',{'stripe':12855500,'cash':fee_total},{r['provider']:r['total'] for r in payments})
+    check('payment_counts',{'stripe':manifest['totals']['exhibitors'],'cash':fee_payers+followup_payments},{r['provider']:r['n'] for r in payments})
+    check('payment_amounts_cents',{'stripe':len(expected)*500,'cash':fee_total},{r['provider']:r['total'] for r in payments})
     balances=lab.rows(f"select count(*) n,sum(calculated_total_cents) charged,sum(paid_online_cents) online,sum(paid_manual_cents) manual,sum(balance_due_cents) due from show_exhibitor_balances where show_id='{SHOW}'")[0]
-    check('balance_ledger',dict(n=2528+fee_payers,charged=12855500+fee_total,online=12855500,manual=fee_total,due=0),balances)
-    check('completed_checkins',2528,int(lab.sql(f"select count(*) from show_checkin_records where show_id='{SHOW}' and status='completed'")))
+    check('balance_ledger',dict(n=manifest['totals']['exhibitors']+fee_payers+followup_payments,charged=len(expected)*500+fee_total,online=len(expected)*500,manual=fee_total,due=0),balances)
+    check('completed_checkins',manifest['totals']['exhibitors'],int(lab.sql(f"select count(*) from show_checkin_records where show_id='{SHOW}' and status='completed'")))
     changes=lab.rows(f"select count(*) n,sum(fee_cents) fee from show_checkin_change_requests where show_id='{SHOW}' and status='approved'")[0]
     check('approved_changes',dict(n=change_count,fee=fee_total),changes)
     coops=lab.rows(f"select animal_id,scope,breed_name,coop_number from show_animal_coop_numbers where show_id='{SHOW}'")
-    check('coop_assignments',25711,len(coops))
-    check('coop_animal_coverage',25711,len({r['animal_id'] for r in coops}))
+    check('coop_assignments',len(expected),len(coops))
+    check('coop_animal_coverage',len(expected),len({r['animal_id'] for r in coops}))
     collisions=lab.rows(f"select scope,coop_number,count(*) n,array_agg(distinct breed_name) breeds from show_animal_coop_numbers where show_id='{SHOW}' group by 1,2 having count(*)>1")
     (out/'coop-label-collisions.json').write_text(json.dumps(collisions,indent=2))
     check('duplicate_coop_labels_within_section',0,sum(r['n']-1 for r in collisions))

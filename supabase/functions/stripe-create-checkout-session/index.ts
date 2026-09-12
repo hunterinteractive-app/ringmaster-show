@@ -1,4 +1,8 @@
-import { observedFetch, UpstreamUnavailable } from "../_shared/request_fetch.ts";
+import {
+  observedFetch,
+  throwDatabaseError,
+  UpstreamUnavailable,
+} from "../_shared/request_fetch.ts";
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { errorMessage, handleOptions, jsonResponse } from "../_shared/http.ts";
 import {
@@ -58,7 +62,7 @@ serve(async (request) => {
       .eq("show_id", quote.show_id)
       .eq("provider", "stripe")
       .maybeSingle();
-    if (accountError) throw new Error("Unable to load the Stripe account.");
+    if (accountError) throwDatabaseError(accountError);
 
     const connectedAccountId = account?.stripe_account_id?.toString().trim();
     if (
@@ -143,7 +147,11 @@ serve(async (request) => {
         error: "Unable to start online payment.",
         details: errorMessage(error),
       },
-      error instanceof UpstreamUnavailable ? 503 : errorMessage(error) === "Authentication required." ? 401 : 400,
+      error instanceof UpstreamUnavailable
+        ? 503
+        : errorMessage(error) === "Authentication required."
+        ? 401
+        : 400,
     );
   }
 });
