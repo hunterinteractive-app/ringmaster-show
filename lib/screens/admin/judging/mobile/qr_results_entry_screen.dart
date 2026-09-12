@@ -920,11 +920,10 @@ class _QrBreedDrilldownScreenState extends State<_QrBreedDrilldownScreen> {
     return Icons.radio_button_unchecked;
   }
 
-  Color _statusColor(BuildContext context, List<Map<String, dynamic>> entries) {
-    final colorScheme = Theme.of(context).colorScheme;
-    if (_isComplete(entries)) return Colors.green;
-    if (_isInProgress(entries)) return colorScheme.primary;
-    return colorScheme.onSurfaceVariant;
+  Color _statusColor(List<Map<String, dynamic>> entries) {
+    if (_isComplete(entries)) return AppColors.success;
+    if (_isInProgress(entries)) return AppColors.secondaryButton;
+    return AppColors.muted;
   }
 
   bool _isFurOrWoolClass(List<Map<String, dynamic>> entries) {
@@ -1113,11 +1112,11 @@ class _QrBreedDrilldownScreenState extends State<_QrBreedDrilldownScreen> {
           final label = labels[i];
           final rows = grouped[label] ?? const <Map<String, dynamic>>[];
           final completed = _completedCount(rows);
-          final statusColor = _statusColor(context, rows);
+          final statusColor = _statusColor(rows);
 
           return Card(
             elevation: 0,
-            color: statusColor.withValues(alpha: 0.06),
+            color: AppColors.surface,
             margin: const EdgeInsets.only(bottom: 12),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(20),
@@ -1301,7 +1300,7 @@ class _QrBreedDrilldownScreenState extends State<_QrBreedDrilldownScreen> {
         .toSet()
         .length;
     final completedCount = _completedCount(_entries);
-    final breedStatusColor = _statusColor(context, _entries);
+    final breedStatusColor = _statusColor(_entries);
 
     return Scaffold(
       backgroundColor: AppColors.bg,
@@ -1374,7 +1373,7 @@ class _QrBreedDrilldownScreenState extends State<_QrBreedDrilldownScreen> {
           const SizedBox(height: 12),
           Card(
             elevation: 0,
-            color: breedStatusColor.withValues(alpha: 0.06),
+            color: AppColors.surface,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(20),
             ),

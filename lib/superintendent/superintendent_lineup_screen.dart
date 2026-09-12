@@ -1633,11 +1633,9 @@ class _SuperintendentLineupScreenState
                             width: double.infinity,
                             padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
-                              color: Colors.blue.withValues(alpha: .10),
+                              color: AppColors.infoBg,
                               borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: Colors.blue.withValues(alpha: .35),
-                              ),
+                              border: Border.all(color: AppColors.infoBorder),
                             ),
                             child: const Text(
                               'View-only access — only the assigned superintendent can change this line-up.',
@@ -1933,7 +1931,7 @@ class _PublishJudgeOrderCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
-    final color = published ? Colors.green : Colors.orange;
+    final color = published ? AppColors.success : AppColors.warning;
 
     return AppTheme.surfaceTextScope(
       context,
@@ -2010,7 +2008,7 @@ class _MetricCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
-    final color = isWarning ? colorScheme.error : colorScheme.primary;
+    final color = isWarning ? AppColors.danger : AppColors.secondaryButton;
 
     return AppTheme.surfaceTextScope(
       context,
