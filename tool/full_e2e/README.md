@@ -8,7 +8,12 @@ Open/Youth convention counts. It never operates on a linked or hosted project.
 The `Local` guard requires a disposable `/tmp` workspace, the exact project ID
 `ringmaster-show-full-e2e` (optionally followed by a unique lowercase suffix),
 loopback API URLs, and byte-identical production
-migrations. Production migrations and application code are not altered by this
+migrations. A long-running event may instead use a frozen
+`rehearsal-migration-manifest.json` in its workspace: the guard verifies the
+complete workspace migration set and SHA-256 hashes against that manifest.
+Record its source revision and copy the manifest into the evidence directory;
+do not silently add newer migrations midway through an event.
+Production migrations and application code are not altered by this
 harness. Existing test evidence is retained; there is no automatic destructive
 reset. Stop older local stacks before starting this stack on the default ports.
 
@@ -20,7 +25,7 @@ reset. Stop older local stacks before starting this stack on the default ports.
   corrections each incur a $5 cash payment. All exhibitors complete check-in.
 - Judging: 110 clerks, 10 admins, 15 superintendents. QR/manual writes split 55/55.
   Separate all-QR and all-manual navigation bursts test complete cursor reads.
-- Open closeout starts while Youth judging continues. Four worker processes
+- Both Open and Youth must finish judging before either section is finalized. Four worker processes
   support 16 simultaneous renders. After judging, 135 sessions continue read
   activity until the report queue drains or its bounded deadline is reached.
 - Stripe and Resend HTTP **provider responses** are emulated locally. Only their
@@ -60,9 +65,12 @@ zero-payment** show. Those JSON files contain only schema definitions inspected
 read-only on September 10, 2026; no hosted data, credentials or identities.
 They are not migrations or a complete production schema export.
 
-The breed abbreviation/reference catalog remains incomplete. The September 10
-test found duplicate coop-label prefixes across breeds. Resolve catalog parity
-before using a fresh fixture to certify coop labels or browser behavior.
+`restore_catalog.py` installs the 44 inspected abbreviation records and five
+explicit local prefixes for convention breeds whose fallbacks collided. These
+five are synthetic fixture choices, not official national abbreviations. Coop
+label uniqueness is checked before check-in. The restored account Edge Function
+uses a loopback Club lookup provider that returns no match, exercising manual
+account setup without calling the hosted Club database.
 
 Compile the current real worker as described in `worker/closeout_renderer/README.md`
 and place its executable at `output/full_e2e/closeout-renderer`.
@@ -126,8 +134,141 @@ services. Full hosted failover and permission restoration are untested.
 
 `recovery.py WORKSPACE OUTPUT PID WORKER_ID` can interrupt one owned worker while
 rendering. It records its claimed tasks, kills only the verified executable/PID,
-advances that worker's leases, then invokes the real stale-recovery RPC. This
-accelerated lease test must be distinguished from waiting a real lease duration.
+advances only that worker's leases, then waits for a peer worker to recover and
+complete the tasks automatically. The test does not call the recovery RPC or
+manually requeue an interrupted task. It verifies the unchanged generation,
+increased attempt count, completion replay and rejection of a changed checksum.
+This accelerated lease test does not measure the normal ten-minute lease wait.
+
+## Event sequence and arrival rush
+
+`event.py WORKSPACE OUTPUT STAGE` runs each phase separately and preserves a
+phase-specific summary. Use a fresh prepared workspace and output directory.
+The ordered stages are `registration`, `preprint`, `checkin`, `judgeprint`,
+`judging`, and `closeout`. Then run reconciliation, delivery, file/content
+audits and backup restoration as above. A failed phase must remain failed even
+if later phases are exercised to gather more evidence.
+
+The September 10 event profile contains 25% of entries in days 1–14, 45% in
+days 15–29 and 30% on day 30 (40% of the last two weeks' 75%). Daily purchaser
+cohorts are indivisible, so entry percentages are rounded. It compresses the
+calendar; it is not a 30-day soak. The assumed final-day peak is 250 concurrent
+purchasers. The user specified the arrival distribution, not this concurrency.
+
+Two check-in days use 30 sessions plus 10 admins and 15 superintendents.
+Disjoint selections change 30% of tattoos, correct 5% of sexes and scratch 8%
+of entries. Ear/sex changes cost an assumed $5 each, scratches are free, and
+each exhibitor pays their combined changes once in cash. These fee amounts are
+test inputs, not a statement of the event's actual fee policy. Two judging days
+use 55 QR and 55 manual clerks, with both sections active on each day. A class
+stays with one clerk and finishes within one day.
+
+Only after both sections pass readiness does `closeout` finalize their combined
+scope, matching the V2 browser screen, and start
+the 7,200-second generation clock. One of four workers is intentionally killed;
+the other three must recover its expired leases without a manual retry.
+The timer includes finalization and automatic recovery, with 135 read sessions
+continuing. ARBA reports are a separate post-delivery action; the checkout
+generation measurement does not include physical printer time.
+
+`preprint` and `judgeprint` run opt-in native Flutter tests of the real generator
+widgets, authenticated reads and PDF builders. Only the file-save dialog is
+redirected to a local path. They are not browser or physical printer tests.
+`restore_print_reports.py` installs the inspected historical print projections,
+two typed report RPCs, four read policies and the judge-management permission
+helper that the old local baseline lacks. The separate local print view avoids
+changing other fixture contracts.
+The extra pure support-session model lets these widgets load without importing
+the web-only superadmin UI through `AppSession`.
+
+`audit_event_prints.py OUTPUT STAGE` checks animal coverage and coop/entry number
+labels in the generated files. Render representative pages as well: a PDF can
+contain the expected animals but omit essential fields visually. The optional
+`coop-recheck` is explicitly a later diagnostic, not a replacement for a failed
+pre-event print stage.
+
+`registration-recovery` continues only after a recorded failed final-day burst.
+It provisions missing accounts at bounded concurrency, recovers any unfinished
+cart as its same owner, and exercises 250 signed-in purchases. Its success does
+not change the result of the original account/sign-in burst.
+
+## Targeted regression checks
+
+The September 10 fixes were verified separately from the failed full rehearsal;
+see `docs/national-rehearsal-fixes-2026-09-10.md`. On a retained local fixture:
+
+```sh
+python3 tool/full_e2e/verify_financial_fees.py WORKSPACE OUTPUT
+python3 tool/full_e2e/verify_queue_contracts.py WORKSPACE OUTPUT
+python3 tool/full_e2e/verify_account_setup.py WORKSPACE OUTPUT ORIGINAL_RUN_OUTPUT
+python3 tool/full_e2e/verify_recovery.py WORKSPACE OUTPUT WORKER_EXECUTABLE
+```
+
+The fee and queue-contract probes roll back their database changes. Account
+setup creates synthetic accounts, and recovery regenerates exactly one artifact;
+retain their evidence. The Dart `bin/verify_national_reports.dart` utility in the
+worker package renders the affected report types to disk using the local worker
+environment. It requires a loopback URL and the synthetic test show. Then run:
+
+```sh
+python3 tool/full_e2e/audit_fixed_reports.py REPORT_OUTPUT ORIGINAL_RUN_OUTPUT
+```
+
+This verifies 112 affected PDFs against the independent fixture, including
+animal counts, judge names, breed placings and financial totals. A successful
+targeted audit does not replace a fresh registration-through-recovery run.
+
+The event-sequence fixes have additional probes. Each accepts a retained local
+workspace, a **new** evidence directory, and the original event directory:
+
+```sh
+python3 tool/full_e2e/verify_registration_rush.py WORKSPACE OUTPUT ORIGINAL_RUN_OUTPUT
+python3 tool/full_e2e/verify_event_prints.py WORKSPACE OUTPUT ORIGINAL_RUN_OUTPUT
+python3 tool/full_e2e/audit_event_prints.py OUTPUT repaired
+python3 tool/full_e2e/verify_delivery_recovery.py WORKSPACE OUTPUT ORIGINAL_RUN_OUTPUT
+python3 tool/full_e2e/verify_browser_contracts.py WORKSPACE OUTPUT ORIGINAL_RUN_OUTPUT
+```
+
+The registration probe creates a separate 250-purchaser show and exercises
+public signup, sign-in, account lookup, checkout and signed payment callbacks.
+It does not reuse preauthenticated purchasers. The delivery probe requires
+generated exhibitor artifacts and verifies 250 sends, including acceptance
+followed by a 16-second provider stall and an idempotent retry. Run it before
+the browser-contract probe, which finalizes the combined scope and can queue
+new report generations. That probe checks PIN isolation, staff delivery access,
+and nonzero combined report totals; it does not render the queued reports.
+The print audit rejects duplicate occurrences as well as missing animals.
+For comment cards it checks the main card and the detachable runner separately:
+each animal must appear once in each part. `audit_event_prints.py OUTPUT
+remark-recheck` audits only the Open/Youth comment-card packs after a layout
+change. Run the real generators first; the audit does not regenerate PDFs.
+
+On a retained fixture, different finalization scopes can each have current
+artifacts. To audit or deliver only one run, pass
+`--finalize-run-id=UUID` to `audit_files.py`, `verify_delivery_recovery.py`, or
+the worker's `verify_national_reports.dart`. Use the actual `finalize_run_id`
+returned by finalization. Do not combine old separate-section artifacts with
+the new combined scope when measuring completeness or delivery.
+After a combined-scope file audit, run
+`audit_official_reports.py OUTPUT --combined`; add `--checkout-only` when the
+two ARBA reports are still deferred and are being tested separately. This
+checks one combined judge/paid/unpaid report and 104 section/breed reports.
+
+`Rehearsal.start()` bounds this disposable stack's Auth pool to 20 connections
+(five idle) with `configure_capacity.py`. CLI 2.95.4 does not expose the GoTrue
+pool setting in `config.toml`; the helper preserves the inspected container
+configuration and replaces only local Auth, with rollback on startup failure.
+It never changes hosted settings. Reapply it after the CLI recreates Auth.
+Each run records its connection budget and waits for its own Edge process's
+readiness message before sending requests. Signed webhook retries retain the
+same event ID, body and signature and log every failed attempt.
+
+For targeted repairs on a frozen event, retain the original migration manifest
+and record separately every directly applied patch and its hash. This is a
+patched-fixture test. A fresh event must bootstrap the complete current migration
+set into a new project/volume; never label a repaired old event as a fresh pass.
+See `docs/event-rehearsal-fixes-2026-09-10.md` for the results and remaining
+deployment/rehearsal boundaries.
 
 ## Cleanup
 

@@ -15,7 +15,10 @@ class _Repository extends CloseoutRepository {
   bool fail = false;
   bool alwaysChanges = false;
   @override
-  Future<String> loadResultRevision(String showId) async => revision;
+  Future<String> loadResultRevision(
+    String showId, {
+    List<String>? sectionIds,
+  }) async => revision;
   @override
   Future<ReportResultSnapshot> readResultSnapshot(
     String showId, {

@@ -1,4 +1,5 @@
 import 'package:ringmaster_show/screens/admin/closeout/data/results_entry_reader.dart';
+import 'package:ringmaster_show/screens/admin/closeout/data/report_data_reader.dart';
 //lib/screens/admin/results/admin_results_entry_screen.dart
 // ignore_for_file: use_build_context_synchronously
 
@@ -1167,133 +1168,19 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
       'p_show_letter': null,
     };
 
-    final rows = await loadResultsEntryRows(supabase, params: params);
-
-    final entries = _dedupeResultsEntryRows(
-      (rows as List).map((e) => Map<String, dynamic>.from(e as Map)).toList(),
+    final rows = await loadReportCursorRows(
+      supabase,
+      'get_judging_entry_rows_page',
+      params: {...params, 'p_page_size': 250},
+      cursorParameter: 'p_after_entry_id',
+      idColumn: 'entry_id',
     );
-
-    final entryIds = entries
-        .map((e) => (e['entry_id'] ?? e['id'] ?? '').toString().trim())
-        .where((x) => x.isNotEmpty)
-        .toSet()
-        .toList();
-
-    final showModeRow = await supabase
-        .from('shows')
-        .select('coop_numbering_mode')
-        .eq('id', widget.showId)
-        .maybeSingle();
-
-    final coopNumberingMode =
-        (showModeRow?['coop_numbering_mode'] ?? 'separate')
-            .toString()
-            .trim()
-            .toLowerCase();
-
-    final animalIdByEntryId = <String, String>{};
-    final speciesByEntryId = <String, String>{};
-    for (var i = 0; i < entryIds.length; i += 100) {
-      final chunk = entryIds.skip(i).take(100).toList();
-      if (chunk.isEmpty) continue;
-
-      final sourceRows = await supabase
-          .from('entries')
-          .select('id,animal_id,species')
-          .inFilter('id', chunk);
-
-      for (final raw in sourceRows as List) {
-        final row = Map<String, dynamic>.from(raw as Map);
-        final entryId = (row['id'] ?? '').toString().trim();
-        final animalId = (row['animal_id'] ?? '').toString().trim();
-        final species = normalizeResultsSpeciesStrict(row['species']);
-        if (entryId.isNotEmpty && animalId.isNotEmpty) {
-          animalIdByEntryId[entryId] = animalId;
-        }
-        if (entryId.isNotEmpty && species.isNotEmpty) {
-          speciesByEntryId[entryId] = species;
-        }
-      }
-    }
-
-    final animalIds = animalIdByEntryId.values.toSet().toList();
-    final coopNumberByAnimalAndScope = <String, String>{};
-
-    for (var i = 0; i < animalIds.length; i += 100) {
-      final chunk = animalIds.skip(i).take(100).toList();
-      if (chunk.isEmpty) continue;
-
-      final coopRows = await supabase
-          .from('show_animal_coop_numbers')
-          .select('animal_id,scope,coop_number')
-          .eq('show_id', widget.showId)
-          .inFilter('animal_id', chunk);
-
-      for (final raw in coopRows as List) {
-        final row = Map<String, dynamic>.from(raw as Map);
-        final animalId = (row['animal_id'] ?? '').toString().trim();
-        final scope = (row['scope'] ?? '').toString().trim().toLowerCase();
-        final coopNumber = (row['coop_number'] ?? '').toString().trim();
-        if (animalId.isEmpty || scope.isEmpty) continue;
-        coopNumberByAnimalAndScope['$animalId|$scope'] = coopNumber;
-      }
-    }
-
-    for (final entry in entries) {
-      final entryId = (entry['entry_id'] ?? entry['id'] ?? '')
-          .toString()
-          .trim();
-      final animalId = animalIdByEntryId[entryId] ?? '';
-      entry['animal_id'] = animalId;
-      entry['species'] = speciesByEntryId[entryId] ?? '';
-
-      final sectionId = (entry['section_id'] ?? '').toString().trim();
-      final section = _sections.firstWhere(
-        (row) => (row['id'] ?? '').toString().trim() == sectionId,
-        orElse: () => <String, dynamic>{},
-      );
-      final sectionKind = (section['kind'] ?? '')
-          .toString()
-          .trim()
-          .toLowerCase();
-      final scope = coopNumberingMode == 'combined' ? 'all' : sectionKind;
-
-      entry['coop_number'] = animalId.isEmpty || scope.isEmpty
-          ? ''
-          : (coopNumberByAnimalAndScope['$animalId|$scope'] ?? '');
-    }
-
-    final awardsByEntryId = <String, List<String>>{};
-
-    if (entryIds.isNotEmpty) {
-      final allAwardRows = <Map<String, dynamic>>[];
-
-      for (var i = 0; i < entryIds.length; i += 100) {
-        final chunk = entryIds.skip(i).take(100).toList();
-
-        final rows = await supabase
-            .from('entry_awards')
-            .select('entry_id,award_code')
-            .eq('show_id', widget.showId)
-            .inFilter('entry_id', chunk);
-
-        allAwardRows.addAll(
-          (rows as List).map((e) => Map<String, dynamic>.from(e as Map)),
-        );
-      }
-
-      for (final row in allAwardRows) {
-        final entryId = (row['entry_id'] ?? '').toString().trim();
-        final award = _canonicalAwardCode((row['award_code'] ?? '').toString());
-        if (entryId.isEmpty || award.isEmpty) continue;
-        awardsByEntryId.putIfAbsent(entryId, () => <String>[]);
-        awardsByEntryId[entryId]!.add(award);
-      }
-    }
+    final entries = _dedupeResultsEntryRows(rows);
 
     for (final e in entries) {
-      final id = (e['entry_id'] ?? e['id'] ?? '').toString().trim();
-      e['_awards'] = awardsByEntryId[id] ?? <String>[];
+      e['_awards'] = (e['_awards'] as List? ?? const [])
+          .map((award) => _canonicalAwardCode(award.toString()))
+          .toList();
       e['is_national_show'] = _showIsNational;
 
       e['id'] ??= e['entry_id'];

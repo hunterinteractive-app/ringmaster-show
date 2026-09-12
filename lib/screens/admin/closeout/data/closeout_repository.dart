@@ -22,9 +22,12 @@ class CloseoutRepository {
   final bool reuseResultSnapshots;
   final _snapshots = <String, (String, Future<ReportResultSnapshot>)>{};
 
-  Future<String> loadResultRevision(String showId) async => (await supabase.rpc(
-    'get_report_result_revision',
-    params: {'p_show_id': showId},
+  Future<String> loadResultRevision(
+    String showId, {
+    List<String>? sectionIds,
+  }) async => (await supabase.rpc(
+    'get_report_result_revision_scoped',
+    params: {'p_show_id': showId, 'p_section_ids': sectionIds},
   )).toString();
 
   Future<ReportResultSnapshot> loadResultSnapshot(
@@ -38,7 +41,7 @@ class CloseoutRepository {
     ids.sort();
     final key = '$showId:${ids.join(',')}';
     for (var attempt = 0; attempt < 3; attempt++) {
-      final revision = await loadResultRevision(showId);
+      final revision = await loadResultRevision(showId, sectionIds: ids);
       final cached = _snapshots[key];
       final Future<ReportResultSnapshot> pending;
       if (cached != null && cached.$1 == revision) {
@@ -54,7 +57,9 @@ class CloseoutRepository {
       }
       try {
         final snapshot = await pending;
-        if (revision == await loadResultRevision(showId)) return snapshot;
+        if (revision == await loadResultRevision(showId, sectionIds: ids)) {
+          return snapshot;
+        }
       } catch (_) {
         if (identical(_snapshots[key]?.$2, pending)) _snapshots.remove(key);
         rethrow;

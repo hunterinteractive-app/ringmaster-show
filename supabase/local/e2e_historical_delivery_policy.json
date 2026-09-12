@@ -1,0 +1,10 @@
+[
+  {
+    "tablename": "show_email_deliveries",
+    "policyname": "Show managers can read email deliveries",
+    "roles": "{authenticated}",
+    "cmd": "SELECT",
+    "qual": "(user_can_email_reports(show_id) OR user_can_manage_show_settings(show_id))",
+    "with_check": null
+  }
+]

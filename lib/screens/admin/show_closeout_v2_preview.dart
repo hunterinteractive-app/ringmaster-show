@@ -1,3 +1,4 @@
+import 'closeout/data/loaders/delivery_status_loader.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'package:ringmaster_show/screens/admin/closeout/data/loaders/exhibitor_mailing_labels_loader.dart';
@@ -2985,50 +2986,21 @@ class _DeliveryStatusPanelState extends State<_DeliveryStatusPanel> {
     setState(() {});
   }
 
+  bool _loadInFlight = false;
+
   Future<void> _load() async {
+    if (_loadInFlight) return;
+    _loadInFlight = true;
     try {
-      final allRows = <Map<String, dynamic>>[];
-      const batchSize = 1000;
-      for (var from = 0; ; from += batchSize) {
-        final rows = await Supabase.instance.client
-            .from('show_email_deliveries')
-            .select(
-              'id,artifact_id,recipient_name,recipient_email,report_name,delivery_status,error_message,provider_message_id,subject,sent_at,created_at',
-            )
-            .eq('show_id', widget.showId)
-            .order('created_at', ascending: false)
-            .range(from, from + batchSize - 1);
-        final batch = (rows as List)
-            .map((row) => Map<String, dynamic>.from(row as Map))
-            .toList();
-        allRows.addAll(batch);
-        if (batch.length < batchSize) break;
-      }
-      final artifacts = await Supabase.instance.client
-          .from('show_report_artifacts')
-          .select('id,file_name,metadata')
-          .eq('show_id', widget.showId);
-      final artifactRows = (artifacts as List)
-          .map((raw) => Map<String, dynamic>.from(raw as Map))
-          .toList();
-      final exhibitorIds = artifactRows
-          .map(
-            (artifact) =>
-                ((artifact['metadata'] as Map?)?['exhibitor_id'] ?? '')
-                    .toString()
-                    .trim(),
-          )
-          .where((id) => id.isNotEmpty)
-          .toSet()
-          .toList();
+      final data = await loadDeliveryStatus(
+        Supabase.instance.client,
+        widget.showId,
+      );
+      final allRows = data.deliveries;
+      final artifactRows = data.artifacts;
       final currentExhibitors = <String, Map<String, String>>{};
-      if (exhibitorIds.isNotEmpty) {
-        final rows = await Supabase.instance.client
-            .from('exhibitors')
-            .select('id,email,display_name,first_name,last_name')
-            .inFilter('id', exhibitorIds);
-        for (final raw in rows as List) {
-          final row = Map<String, dynamic>.from(raw as Map);
+      {
+        for (final row in data.exhibitors) {
           final id = (row['id'] ?? '').toString().trim();
           if (id.isEmpty) continue;
           final displayName = (row['display_name'] ?? '').toString().trim();
@@ -3083,6 +3055,8 @@ class _DeliveryStatusPanelState extends State<_DeliveryStatusPanel> {
         _loading = false;
         _error = closeoutReportStatusErrorMessage(error);
       });
+    } finally {
+      _loadInFlight = false;
     }
   }
 

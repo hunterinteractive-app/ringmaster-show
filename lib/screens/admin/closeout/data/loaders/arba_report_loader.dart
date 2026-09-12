@@ -597,26 +597,20 @@ class ArbaReportLoader {
     String species, {
     String? sectionId,
   }) async {
-    try {
-      final rows = (sectionId != null && sectionId.trim().isNotEmpty)
-          ? await repo.supabase
-                .from('entries')
-                .select('id')
-                .eq('show_id', showId)
-                .eq('is_shown', true)
-                .eq('species', species)
-                .eq('section_id', sectionId.trim())
-          : await repo.supabase
-                .from('entries')
-                .select('id')
-                .eq('show_id', showId)
-                .eq('is_shown', true)
-                .eq('species', species);
-
-      return (rows as List).length;
-    } catch (_) {
-      return 0;
+    if (sectionId == null || sectionId.trim().isEmpty) {
+      throw StateError('An ARBA count requires a show section.');
     }
+    final count = await repo.supabase.rpc(
+      'count_shown_species',
+      params: {
+        'p_show_id': showId,
+        'p_section_id': sectionId.trim(),
+        'p_species': species,
+      },
+    );
+    // Failed reads block official reports; scratches never re-enter the total.
+    if (count is! num) throw StateError('Invalid shown-animal count.');
+    return count.toInt();
   }
 
   Future<String> _loadSecretaryAddress() async {

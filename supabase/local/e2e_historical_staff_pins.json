@@ -1,0 +1,12 @@
+[
+  {
+    "proname": "get_my_show_staff_approval_pin",
+    "arguments": "p_show_id uuid",
+    "definition": "CREATE OR REPLACE FUNCTION public.get_my_show_staff_approval_pin(p_show_id uuid)\n RETURNS TABLE(role text, pin_code text, is_active boolean, user_id uuid)\n LANGUAGE sql\n SECURITY DEFINER\nAS $function$\n  select\n    p.role,\n    p.pin_code,\n    p.is_active,\n    p.user_id\n  from public.show_staff_approval_pins p\n  where p.show_id = p_show_id\n    and p.user_id = auth.uid()\n    and p.is_active = true\n  limit 1;\n$function$\n"
+  },
+  {
+    "proname": "regenerate_my_show_staff_approval_pin",
+    "arguments": "p_show_id uuid",
+    "definition": "CREATE OR REPLACE FUNCTION public.regenerate_my_show_staff_approval_pin(p_show_id uuid)\n RETURNS void\n LANGUAGE plpgsql\n SECURITY DEFINER\nAS $function$\ndeclare\n  v_user_id uuid := auth.uid();\n  v_role text;\n  v_pin text;\nbegin\n  if v_user_id is null then\n    raise exception 'Not signed in';\n  end if;\n\n  select ra.role\n    into v_role\n  from public.role_assignments ra\n  where ra.show_id = p_show_id\n    and ra.user_id = v_user_id\n  order by case ra.role\n    when 'super_admin' then 1\n    when 'admin' then 2\n    when 'reporting_clerk' then 3\n    when 'superintendent' then 4\n    else 99\n  end\n  limit 1;\n\n  if v_role is null then\n    select 'admin'\n      into v_role\n    from public.shows s\n    where s.id = p_show_id\n      and s.owner_user_id = v_user_id\n    limit 1;\n  end if;\n\n  if v_role is null then\n    raise exception 'You do not have a staff role for this show';\n  end if;\n\n  loop\n    v_pin := lpad((floor(random() * 1000000))::int::text, 6, '0');\n\n    exit when not exists (\n      select 1\n      from public.show_staff_approval_pins p\n      where p.show_id = p_show_id\n        and p.pin_code = v_pin\n    );\n  end loop;\n\n  insert into public.show_staff_approval_pins (\n    show_id,\n    user_id,\n    role,\n    pin_code,\n    is_active\n  )\n  values (\n    p_show_id,\n    v_user_id,\n    v_role,\n    v_pin,\n    true\n  )\n  on conflict (show_id, user_id)\n  do update set\n    role = excluded.role,\n    pin_code = excluded.pin_code,\n    is_active = true;\nend;\n$function$\n"
+  }
+]

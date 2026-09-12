@@ -1,6 +1,7 @@
 // @ts-nocheck
+import { observedFetch, authErrorStatus } from "../_shared/request_fetch.ts";
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2.110.2";
 import { prepareReportEmailFiles } from "../_shared/report_email_files.ts";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -36,13 +37,16 @@ serve(async (req)=>{
       }, 401);
     }
     const userClient = createClient(supabaseUrl, supabaseAnonKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
       global: {
+        fetch: observedFetch("email_auth"),
         headers: {
           Authorization: authHeader
         }
       }
     });
     const adminClient = createClient(supabaseUrl, supabaseServiceRoleKey, {
+      global: { fetch: observedFetch("email_database") },
       auth: {
         autoRefreshToken: false,
         persistSession: false
@@ -52,8 +56,8 @@ serve(async (req)=>{
     if (userError || !user) {
       console.error("Authentication failed", userError);
       return json({
-        error: "Unauthorized"
-      }, 401);
+        error: authErrorStatus(userError) === 503 ? "Authentication service temporarily unavailable" : "Unauthorized"
+      }, authErrorStatus(userError));
     }
     const body = await req.json();
     const showId = body.show_id?.trim();
@@ -402,7 +406,7 @@ serve(async (req)=>{
       crypto.randomUUID()
     ].join("|");
     const idempotencyKey = await sha256Hex(idempotencySource);
-    const resendResp = await fetch("https://api.resend.com/emails", {
+    const resendResp = await observedFetch("report_email")("https://api.resend.com/emails", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${resendApiKey}`,

@@ -306,12 +306,10 @@ final class RegistryArtifactRenderer implements ArtifactRenderer {
   }
 
   Future<void> _requireSafeBalanceScope(RenderArtifact artifact) async {
-    final rows = await client.rpc(
-      'report_show_exhibitor_balances_scoped',
-      params: {
-        'p_show_id': artifact.showId,
-        'p_section_ids': artifact.sectionIds,
-      },
+    final rows = await repository.loadShowExhibitorBalancesReport(
+      artifact.showId,
+      sectionIds: artifact.sectionIds,
+      requireExactAllocation: false,
     );
     final ambiguous = (rows as List).where(
       (row) => row is Map && row['payment_allocation_status'] == 'ambiguous',

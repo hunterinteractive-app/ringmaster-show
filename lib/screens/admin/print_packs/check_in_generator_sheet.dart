@@ -13,6 +13,7 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
 import 'print_pack_pdf_helpers.dart';
+import '../closeout/data/report_data_reader.dart';
 
 final supabase = Supabase.instance.client;
 
@@ -61,27 +62,23 @@ class _CheckInGeneratorSheetState extends State<CheckInGeneratorSheet> {
   }
 
   Future<List<Map<String, dynamic>>> _fetchEntries() async {
-    const pageSize = 1000;
-    final list = <Map<String, dynamic>>[];
-
-    for (var from = 0; ; from += pageSize) {
-      final to = from + pageSize - 1;
-      final rows = await supabase
-          .rpc(
-            'report_checkin_entries',
-            params: {
-              'p_show_id': widget.showId,
-              'p_section_id': widget.combineSections ? null : widget.sectionId,
-              'p_include_scratched': widget.includeScratched,
-            },
-          )
-          .range(from, to);
-
-      final page = (rows as List).cast<Map<String, dynamic>>();
-      list.addAll(page);
-
-      if (page.length < pageSize) break;
-    }
+    final list = await readAllReportPages(
+      (from, to) async => List<Map<String, dynamic>>.from(
+        await supabase
+            .rpc(
+              'report_checkin_entries',
+              params: {
+                'p_show_id': widget.showId,
+                'p_section_id': widget.combineSections
+                    ? null
+                    : widget.sectionId,
+                'p_include_scratched': widget.includeScratched,
+              },
+            )
+            .order('entry_id')
+            .range(from, to),
+      ),
+    );
 
     final exhibitorIds = list
         .map((e) => (e['exhibitor_id'] ?? '').toString().trim())
@@ -91,16 +88,14 @@ class _CheckInGeneratorSheetState extends State<CheckInGeneratorSheet> {
 
     if (exhibitorIds.isNotEmpty) {
       final exhibitorById = <String, Map<String, dynamic>>{};
-      const exhibitorPageSize = 500;
-
-      for (var i = 0; i < exhibitorIds.length; i += exhibitorPageSize) {
-        final chunk = exhibitorIds.skip(i).take(exhibitorPageSize).toList();
-        final exhibitorRows = await supabase
-            .from('exhibitors')
-            .select(
+      {
+        final exhibitorRows = await loadReportRowsByIds(
+          supabase,
+          table: 'exhibitors',
+          columns:
               'id, exhibitor_number, first_name, last_name, display_name, showing_name',
-            )
-            .inFilter('id', chunk);
+          ids: exhibitorIds,
+        );
 
         for (final row
             in (exhibitorRows as List).cast<Map<String, dynamic>>()) {
@@ -156,16 +151,13 @@ class _CheckInGeneratorSheetState extends State<CheckInGeneratorSheet> {
 
     final animalIdByEntryId = <String, String>{};
     final furByEntryId = <String, bool>{};
-    const entryPageSize = 500;
-
-    for (var i = 0; i < entryIds.length; i += entryPageSize) {
-      final chunk = entryIds.skip(i).take(entryPageSize).toList();
-      if (chunk.isEmpty) continue;
-
-      final entryRows = await supabase
-          .from('entries')
-          .select('id, animal_id, is_fur, class_name')
-          .inFilter('id', chunk);
+    {
+      final entryRows = await loadReportRowsByIds(
+        supabase,
+        table: 'entries',
+        columns: 'id, animal_id, is_fur, class_name',
+        ids: entryIds,
+      );
 
       for (final raw in (entryRows as List).cast<Map<String, dynamic>>()) {
         final entryId = (raw['id'] ?? '').toString().trim();
@@ -216,17 +208,16 @@ class _CheckInGeneratorSheetState extends State<CheckInGeneratorSheet> {
         .toList();
 
     final coopNumberByAnimalAndScope = <String, String>{};
-    const coopPageSize = 500;
-
-    for (var i = 0; i < animalIds.length; i += coopPageSize) {
-      final chunk = animalIds.skip(i).take(coopPageSize).toList();
-      if (chunk.isEmpty) continue;
-
-      final coopRows = await supabase
-          .from('show_animal_coop_numbers')
-          .select('animal_id, scope, coop_number')
-          .eq('show_id', widget.showId)
-          .inFilter('animal_id', chunk);
+    {
+      final coopRows = await loadReportRowsByIds(
+        supabase,
+        table: 'show_animal_coop_numbers',
+        columns: 'animal_id, scope, coop_number',
+        ids: animalIds,
+        idColumn: 'animal_id',
+        filters: {'show_id': widget.showId},
+        orderColumns: ['animal_id', 'scope'],
+      );
 
       for (final raw in (coopRows as List).cast<Map<String, dynamic>>()) {
         final animalId = (raw['animal_id'] ?? '').toString().trim();

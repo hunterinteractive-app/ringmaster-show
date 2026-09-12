@@ -1,3 +1,4 @@
+import 'package:ringmaster_show/reporting_core/network/transient_retry.dart';
 import 'package:supabase/supabase.dart';
 
 typedef ReportRows = List<Map<String, dynamic>>;
@@ -12,7 +13,9 @@ Future<ReportRows> readAllReportPages(
   if (pageSize <= 0) throw ArgumentError.value(pageSize, 'pageSize');
   final rows = <Map<String, dynamic>>[];
   while (true) {
-    final page = await readPage(rows.length, rows.length + pageSize - 1);
+    final page = await retryTransient(
+      () => readPage(rows.length, rows.length + pageSize - 1),
+    );
     if (page.isEmpty) return rows;
     rows.addAll(page);
   }
@@ -86,9 +89,15 @@ Future<ReportRows> loadReportCursorRows(
   String? after;
   while (true) {
     final page = List<Map<String, dynamic>>.from(
-      await client.rpc(
-        function,
-        params: {...params, cursorParameter: after, 'p_page_size': 1000},
+      await retryTransient(
+        () => client.rpc(
+          function,
+          params: {
+            ...params,
+            cursorParameter: after,
+            'p_page_size': params['p_page_size'] ?? 1000,
+          },
+        ),
       ),
     );
     if (page.isEmpty) return rows;

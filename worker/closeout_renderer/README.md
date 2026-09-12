@@ -86,8 +86,22 @@ Worker result snapshots are shared across simultaneous exhibitor/leg reports
 for at most four scopes, with database revision checks before and after reads.
 Entry, section, exhibitor number, profile, and catalog INSERT/UPDATE/DELETE
 statements invalidate the relevant revision. Interactive repositories do not
-reuse snapshots. Deploy migrations `20260910101746`, `20260910102054`, and `20260910105106` before
-the corresponding app/worker version.
+reuse snapshots. Section caches now use `get_report_result_revision_scoped`:
+entry edits invalidate their own sections, while shared profile/catalog and
+show-structure changes still invalidate all affected scopes. Deploy migrations
+`20260910101746`, `20260910102054`, `20260910105106`, `20260910213537`, and
+`20260910213930` before the corresponding app/worker version. The latter two
+also provide the optimized judging read and check-in fee section attribution.
+
+Expired tasks below their attempt limit return to the queue automatically when
+a worker next claims work. Recovery retains the artifact generation and its
+immutable upload path. Exhausted tasks remain failed for review; workers must
+continue polling or be dispatched for automatic recovery to run.
+
+The national rehearsal completes both Open and Youth judging before either
+section is finalized or any worker is started. Section revision isolation
+remains a defensive correctness guarantee rather than a requirement to overlap
+judging with final report generation.
 
 Immutable uploads now atomically store a receipt in Storage object metadata.
 Before rendering, a retry validates the existing object's artifact, run, scope,

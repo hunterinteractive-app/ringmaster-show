@@ -16,7 +16,7 @@ def prepare(lab, output):
     existing_tables = {t for t, _ in existing}
     statements = ['begin;']
     needed = {'breed_rules_matrix', 'breed_rules_profiles', 'entry_carts', 'breed_abbreviations', 'show_animal_coop_numbers', 'show_exhibitor_balances', 'closeout_jobs'}
-    specific = {'shows': {'is_closed', 'finalized_at','is_demo','demo_resets_at'}, 'exhibitors': {'claimed_by_user_id',
+    specific = {'shows': {'is_closed', 'finalized_at','is_demo','demo_resets_at','timezone','entry_open_at'}, 'exhibitors': {'claimed_by_user_id',
                 'birth_date','group_members','group_shows_as_youth','claimed_at',
                 'imported_from','imported_source_id','imported_at'},
                 'animals': {'exhibitor_id'}}
@@ -120,6 +120,13 @@ def prepare(lab, output):
     restore_profiles(lab)
     from restore_closeout_access import restore as restore_closeout_access
     restore_closeout_access(lab)
+    from restore_catalog import restore as restore_catalog
+    restore_catalog(lab)
+    lab.sql((ROOT/'supabase/local/e2e_account_lookup.sql').read_text())
+    from restore_print_reports import restore as restore_print_reports
+    restore_print_reports(lab)
+    from restore_staff_pins import restore as restore_staff_pins
+    restore_staff_pins(lab)
     assert int(lab.sql(f"select count(*) from public.entries where show_id='{SHOW}'")) == 0
     return manifest, entries
 

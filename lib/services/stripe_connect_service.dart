@@ -1,3 +1,4 @@
+import 'package:ringmaster_show/reporting_core/network/transient_retry.dart';
 // lib/services/stripe_connect_service.dart
 
 import 'dart:convert';
@@ -58,9 +59,12 @@ class StripeConnectService {
       throw Exception('Not signed in.');
     }
 
-    final response = await _supabase.functions.invoke(
-      'stripe-create-checkout-session',
-      body: {'cart_id': cartId},
+    // Reuse the same cart and server payment-attempt key after a transient failure.
+    final response = await retryTransient(
+      () => _supabase.functions.invoke(
+        'stripe-create-checkout-session',
+        body: {'cart_id': cartId},
+      ),
     );
 
     final data = _normalizeMap(response.data);

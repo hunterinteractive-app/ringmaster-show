@@ -1,0 +1,7 @@
+[
+  {
+    "proname": "validate_show_staff_pin",
+    "arguments": "p_show_id uuid, p_pin text",
+    "definition": "CREATE OR REPLACE FUNCTION public.validate_show_staff_pin(p_show_id uuid, p_pin text)\n RETURNS TABLE(user_id uuid, role text)\n LANGUAGE sql\n SECURITY DEFINER\nAS $function$\n  select user_id, role\n  from public.show_staff_approval_pins\n  where show_id = p_show_id\n    and pin_code = p_pin\n    and is_active = true\n    and role in ('super_admin', 'admin', 'superintendent', 'reporting_clerk')\n  limit 1;\n$function$\n"
+  }
+]

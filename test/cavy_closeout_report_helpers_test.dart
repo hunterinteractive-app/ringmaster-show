@@ -14,23 +14,33 @@ void main() {
       expect(resolveLegJudgingDate(null, showStart), showStart);
     });
 
-    test('keeps cavy rows out of rabbit detail reports without species', () {
+    test('American rabbits and cavies require explicit species', () {
+      for (final species in ['rabbit', 'cavy']) {
+        expect(
+          breedResultsDetailRowMatchesSpecies({
+            'breed_name': 'American',
+            'species': species,
+          }, species),
+          isTrue,
+        );
+        expect(
+          breedResultsDetailRowMatchesSpecies({
+            'breed_name': 'American',
+            'species': species,
+          }, species == 'rabbit' ? 'cavy' : 'rabbit'),
+          isFalse,
+        );
+        expect(
+          () => breedResultsDetailRowMatchesSpecies({
+            'breed_name': 'American',
+          }, species),
+          throwsStateError,
+        );
+      }
       expect(
-        breedResultsDetailRowMatchesSpecies(const {
-          'breed_name': 'American',
-        }, 'rabbit'),
-        isFalse,
-      );
-      expect(
-        breedResultsDetailRowMatchesSpecies(const {
+        breedResultsDetailRowMatchesSpecies({
           'breed_name': 'Mini Lop',
         }, 'rabbit'),
-        isTrue,
-      );
-      expect(
-        breedResultsDetailRowMatchesSpecies(const {
-          'breed_name': 'American',
-        }, 'cavy'),
         isTrue,
       );
     });

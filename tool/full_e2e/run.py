@@ -52,16 +52,28 @@ class Rehearsal:
                 with (self.output/'events.jsonl').open('a') as f: f.write(json.dumps(event)+'\n')
 
     def start(self):
+        from configure_capacity import configure
+        (self.output/'capacity-config.json').write_text(json.dumps(configure(self.lab),indent=2))
         self.providers=Providers(self.output)
         self.providers.start()
         envfile=prepare_functions(self.lab,self.output)
-        log=(self.output/'edge-functions.log').open('a');self.logs.append(log)
+        log_path=self.output/'edge-functions.log'
+        log_offset=log_path.stat().st_size if log_path.exists() else 0
+        log=log_path.open('a');self.logs.append(log)
         # No live provider credentials inherited from the shell.
-        env={k:v for k,v in os.environ.items() if not any(s in k.upper() for s in ('STRIPE','RESEND','SUPABASE','SQUARE','PAYPAL','SMTP'))}
+        env={k:v for k,v in os.environ.items() if not any(s in k.upper() for s in ('STRIPE','RESEND','SUPABASE','SQUARE','PAYPAL','SMTP','CLUB'))}
         child=subprocess.Popen(['supabase','functions','serve','--workdir',str(self.lab.workspace),'--env-file',str(envfile)],stdout=log,stderr=subprocess.STDOUT,env=env)
         self.children.append(child)
         for _ in range(60):
             if child.poll() is not None: raise RuntimeError('Local Edge runtime exited; inspect edge-functions.log')
+            # An old runtime may still answer HTTP while the new CLI replaces
+            # its container. Wait for THIS process to announce readiness first.
+            with log_path.open() as current_log:
+                current_log.seek(log_offset)
+                started='Serving functions on' in current_log.read()
+            if not started:
+                self.stop.wait(1)
+                continue
             try:
                 # A bad method must get the real function's 405, proving it loaded.
                 self.lab.request('/functions/v1/stripe-webhook',method='GET',timeout=3)
@@ -78,14 +90,28 @@ class Rehearsal:
         signature=hmac.new(WEBHOOK_SECRET.encode(),stamp.encode()+b'.'+raw,hashlib.sha256).hexdigest()
         req=urllib.request.Request(self.lab.url+'/functions/v1/stripe-webhook',raw,
             {'Content-Type':'application/json','stripe-signature':f't={stamp},v1={signature}'})
-        try:
-            with urllib.request.urlopen(req,timeout=120) as r: return json.loads(r.read())
-        except urllib.error.HTTPError as e:
-            raise ApiError(e.code,e.read().decode()) from None
+        # Stripe retries delivery failures with the same event ID. Exercise
+        # that behavior at the synthetic provider boundary, retaining every
+        # failed HTTP attempt in the evidence. Never retry a rejected signature.
+        for attempt in range(1,4):
+            try:
+                with urllib.request.urlopen(req,timeout=30) as r: return json.loads(r.read())
+            except urllib.error.HTTPError as e:
+                body=e.read().decode()
+                if e.code<500 or attempt==3:raise ApiError(e.code,body) from None
+                self.log('webhook_delivery_retry',event_id=event_id,attempt=attempt,status=e.code)
+            except (urllib.error.URLError,TimeoutError):
+                if attempt==3:raise
+                self.log('webhook_delivery_retry',event_id=event_id,attempt=attempt,status='transport')
+            self.stop.wait(.5*attempt)
 
     def register(self,n):
-        p=self.measured('registration_signin',n,lambda:self.lab.person(f'exhibitor-{n}'))
+        p=getattr(self,'registration_people',{}).get(n)
+        if p is None:p=self.measured('registration_signin',n,lambda:self.lab.person(f'exhibitor-{n}'))
         token=p['token']; rows=self.by_exhibitor[n]
+        if getattr(self, 'verify_account_lookup', False):
+            lookup=self.measured('account_lookup',n,lambda:self.lab.edge('claim-or-import-exhibitor',{'action':'lookup'},token))
+            assert lookup['status']=='club_not_found',lookup
         exhibitor=dict(id=uid('952',n),owner_user_id=p['user_id'],display_name=f'Synthetic Exhibitor {n}',
             first_name='Synthetic',last_name=f'Exhibitor {n:04d}',exhibitor_number=str(n),
             email=p['email'],city='Localtown',state='IN',zip='46000',arba_number=f'LOCAL-{n}',

@@ -2,6 +2,11 @@
 
 **Result: FAILED. The application is not yet cleared for the national.**
 
+The subsequent fixes and targeted regression results are recorded in
+[National rehearsal fixes](national-rehearsal-fixes-2026-09-10.md). This document
+preserves the original failed run. Future rehearsals finish both Open and Youth
+judging before finalization or report generation, per the clarified workflow.
+
 The rehearsal exercised registration through payment, check-in, judging,
 closeout, report delivery and data recovery. It found failures in both performance
 and report correctness. Successful PDF generation and email delivery were not

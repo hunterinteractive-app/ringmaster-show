@@ -12,7 +12,7 @@ import urllib.parse
 import urllib.request
 import zipfile
 from pypdf import PdfReader
-from local import Local, SHOW
+from local import Local, SHOW, selected_finalize_run
 
 
 def main():
@@ -21,6 +21,7 @@ def main():
     entries_by_exhibitor=defaultdict(set);classes=defaultdict(list);breeds=defaultdict(list)
     by_n={e['n']:e for e in expected}
     for e in expected:
+        if e.get('scratched'):continue
         entries_by_exhibitor[e['exhibitor']].add(e['tattoo'])
         classes[tuple(e[k] for k in ('section_id','breed','variety','class_name','sex'))].append(e)
         breeds[(e['section_id'],e['breed'])].append(e)
@@ -38,8 +39,27 @@ def main():
     for section in (1,2):
         for b in [b for b in manifest['breeds'] if b['section']==section and b['bob']][:2]:
             e=by_n[b['first']];leg_ears[e['exhibitor']].add(e['tattoo'])
-    artifacts=lab.rows(f"select * from show_report_artifacts where show_id='{SHOW}' and is_current and artifact_status='generated'")
+    if (out/'expected-awards.json').exists():
+        # Recompute the award legs after check-in changes and scratches.
+        leg_ears=defaultdict(set)
+        for rows in classes.values():
+            if qualifies(rows):
+                for e in rows:
+                    if e['placement']==1:leg_ears[e['exhibitor']].add(e['tattoo'])
+        for n,codes in json.loads((out/'expected-awards.json').read_text()).items():
+            e=by_n[int(n)]
+            if {'BIS','RIS'}&set(codes) or ('BOB' in codes and qualifies(breeds[(e['section_id'],e['breed'])])):
+                leg_ears[e['exhibitor']].add(e['tattoo'])
+    run_id=selected_finalize_run(sys.argv[3:])
+    run_filter=f" and finalize_run_id='{run_id}'" if run_id else ''
+    artifacts=lab.rows(f"select * from show_report_artifacts where show_id='{SHOW}' and is_current and artifact_status='generated'{run_filter}")
     (out/'generated-artifacts.json').write_text(json.dumps(artifacts,indent=2))
+    coverage={}
+    for kind in ('exhibitor_report','checkin_sheet','legs'):
+        ids=[int(a['metadata']['exhibitor_id'][-12:]) for a in artifacts if a['report_name']==kind]
+        wanted=set(leg_ears) if kind=='legs' else set(entries_by_exhibitor)
+        coverage[kind]=dict(expected_exhibitors=len(wanted),actual_files=len(ids),
+            missing_exhibitors=sorted(wanted-set(ids)),duplicate_files=len(ids)-len(set(ids)))
     lock=threading.Lock();results=[];errors=[]
     archive_path=out/'report-files.zip'
     append='--append' in sys.argv[3:]
@@ -86,8 +106,10 @@ def main():
                 if (len(results)+len(errors))%500==0:print(json.dumps(dict(audited=len(results),errors=len(errors))),flush=True)
     issue_rows=[r for r in results if r['issues']]
     (out/'pdf-audit-details.json').write_text(json.dumps(dict(results=results,errors=errors),indent=2))
-    summary=dict(status='passed' if not errors and not issue_rows else 'failed',
-        generated_artifacts=len(artifacts),verified_files=len(results),bytes=sum(r['bytes'] for r in results),
+    coverage_ok=all(not v['missing_exhibitors'] and not v['duplicate_files'] for v in coverage.values())
+    summary=dict(status='passed' if not errors and not issue_rows and coverage_ok else 'failed',
+        finalize_run_id=run_id,generated_artifacts=len(artifacts),verified_files=len(results),bytes=sum(r['bytes'] for r in results),
+        exhibitor_artifact_coverage=coverage,
         storage_errors=errors,pdf_content_mismatches=len(issue_rows),
         expected_leg_certificates=sum(len(v) for v in leg_ears.values()),
         actual_leg_certificates=sum(r['pages'] for r in results if r['report_name']=='legs' and not r['empty_legs']),

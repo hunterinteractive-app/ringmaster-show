@@ -1,3 +1,4 @@
+import { observedFetch, UpstreamUnavailable } from "./request_fetch.ts";
 import {
   createClient,
   SupabaseClient,
@@ -14,7 +15,10 @@ export function serviceClient(): SupabaseClient {
   return createClient(
     requiredEnv("SUPABASE_URL"),
     requiredEnv("SUPABASE_SERVICE_ROLE_KEY"),
-    { auth: { persistSession: false, autoRefreshToken: false } },
+    {
+      auth: { persistSession: false, autoRefreshToken: false },
+      global: { fetch: observedFetch("database") },
+    },
   );
 }
 
@@ -47,11 +51,15 @@ export async function authenticatedUser(
     requiredEnv("SUPABASE_URL"),
     requiredEnv("SUPABASE_ANON_KEY"),
     {
-      global: { headers: { Authorization: authorization } },
+      global: {
+        headers: { Authorization: authorization },
+        fetch: observedFetch("authenticated_api"),
+      },
       auth: { persistSession: false, autoRefreshToken: false },
     },
   );
   const { data, error } = await client.auth.getUser();
+  if (error && (error.status ?? 0) >= 500) throw new UpstreamUnavailable();
   if (error || !data.user) throw new Error("Authentication required.");
   return { user: data.user, client };
 }

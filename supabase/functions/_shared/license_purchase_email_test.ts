@@ -65,7 +65,7 @@ Deno.test("Resend request uses the repository email provider contract", async ()
     to: "secretary@example.com",
     type: "welcome",
     fetcher: async (_input, init) => {
-      requestBody = JSON.parse(String(init?.body ?? "{}"));
+      requestBody = JSON.parse(String(init && "body" in init ? init.body : "{}"));
       return new Response(JSON.stringify({ id: "email-1" }), {
         status: 200,
         headers: { "Content-Type": "application/json" },

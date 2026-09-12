@@ -1,7 +1,7 @@
 // lib/services/app_session.dart
 
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../screens/super_admin/superadmin_home_screen.dart';
+import 'support_impersonation_session.dart';
 
 class AppSession {
   static final _supabase = Supabase.instance.client;

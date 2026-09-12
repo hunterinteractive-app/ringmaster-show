@@ -17,8 +17,8 @@ class JudgeReportLoader {
       throw StateError('Judge report requires scoped section IDs.');
     }
     final show = await _loadShowInfo(showId);
-    final judgesById = await _loadJudges(showId);
     final rowsByJudgeId = await _loadJudgedRows(showId, sectionIds);
+    final judgesById = await _loadJudges(showId, rowsByJudgeId.keys);
 
     final judges = <JudgeReportJudge>[];
 
@@ -74,13 +74,21 @@ class JudgeReportLoader {
     );
   }
 
-  Future<Map<String, _JudgeInfo>> _loadJudges(String showId) async {
+  Future<Map<String, _JudgeInfo>> _loadJudges(
+    String showId,
+    Iterable<String> usedJudgeIds,
+  ) async {
+    final aliases = <String, Set<String>>{};
     final result = <String, _JudgeInfo>{};
 
-    final assignmentRows = await _supabase
-        .from('judge_assignments')
-        .select()
-        .eq('show_id', showId);
+    final assignmentRows = await readAllReportPages(
+      (from, to) => _supabase
+          .from('judge_assignments')
+          .select()
+          .eq('show_id', showId)
+          .order('id')
+          .range(from, to),
+    );
 
     for (final raw in assignmentRows as List<dynamic>) {
       final row = Map<String, dynamic>.from(raw as Map);
@@ -103,16 +111,25 @@ class JudgeReportLoader {
         phone: _stringOrNull(row['phone']),
       );
 
-      if (judgeId != null) result[judgeId] = judgeInfo;
+      if (judgeId != null) {
+        result[judgeId] = judgeInfo;
+        aliases.putIfAbsent(judgeId, () => <String>{}).addAll([
+          judgeId,
+          if (assignmentId != null) assignmentId,
+        ]);
+      }
       if (assignmentId != null) result[assignmentId] = judgeInfo;
     }
 
-    if (result.isNotEmpty) return result;
-
-    final rows = await _supabase
-        .from('show_judges')
-        .select()
-        .eq('show_id', showId);
+    final rows = await readAllReportPages(
+      (from, to) => _supabase
+          .from('show_judges')
+          .select()
+          .eq('show_id', showId)
+          .order('judge_id')
+          .order('section_id')
+          .range(from, to),
+    );
 
     for (final raw in rows as List<dynamic>) {
       final row = Map<String, dynamic>.from(raw as Map);
@@ -144,11 +161,45 @@ class JudgeReportLoader {
         _string(row['user_id']),
       }) {
         if (candidateId.isNotEmpty) {
-          result[candidateId] = judgeInfo;
+          result.putIfAbsent(candidateId, () => judgeInfo);
+          final master = _string(row['judge_id']);
+          if (master.isNotEmpty) {
+            aliases.putIfAbsent(master, () => <String>{}).add(candidateId);
+          }
         }
       }
     }
 
+    final masters = await loadReportRowsByIds(
+      _supabase,
+      table: 'judges',
+      columns: '*',
+      ids: {...usedJudgeIds, ...aliases.keys},
+    );
+    for (final row in masters) {
+      final id = _string(row['id']);
+      final name = _firstNonEmpty([
+        row['display_name'],
+        row['name'],
+        [
+          _string(row['first_name']),
+          _string(row['last_name']),
+        ].where((s) => s.isNotEmpty).join(' '),
+      ]);
+      if (name.isEmpty) continue;
+      final info = _JudgeInfo(
+        id: id,
+        displayName: name,
+        arbaNumber:
+            _stringOrNull(row['arba_judge_number']) ??
+            _stringOrNull(row['arba_number']),
+        email: _stringOrNull(row['email']),
+        phone: _stringOrNull(row['phone']),
+      );
+      for (final alias in {id, ...?aliases[id]}) {
+        result[alias] = info;
+      }
+    }
     return result;
   }
 

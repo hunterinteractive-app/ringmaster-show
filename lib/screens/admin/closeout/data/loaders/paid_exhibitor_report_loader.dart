@@ -74,7 +74,7 @@ class PaidExhibitorReportLoader {
       ),
     );
 
-    final totalExhibitors = rows.length;
+    final totalExhibitors = rows.map((row) => row.exhibitorId).toSet().length;
     final totalEntries = rows.fold<int>(0, (sum, row) => sum + row.entryCount);
     final totalFurEntries = rows.fold<int>(0, (sum, row) => sum + row.furCount);
     final grandSubtotal = rows.fold<double>(
@@ -188,7 +188,11 @@ class PaidExhibitorReportLoader {
             showFee: _centsToDollars(map['show_fee_cents']),
           );
         })
-        .where((row) => row.label.isNotEmpty && row.count > 0)
+        .where(
+          (row) =>
+              row.label.isNotEmpty &&
+              (row.count > 0 || row.furCount > 0 || row.showFee != 0),
+        )
         .toList();
 
     parsedRows.sort((a, b) {

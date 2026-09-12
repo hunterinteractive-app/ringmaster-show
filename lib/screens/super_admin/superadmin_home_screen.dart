@@ -1,6 +1,8 @@
 // lib/screens/superadmin/super_admin_home_screen.dart
 
 import 'package:flutter/material.dart';
+import '../../services/support_impersonation_session.dart';
+export '../../services/support_impersonation_session.dart';
 import 'package:ringmaster_show/theme/app_theme.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
@@ -11,71 +13,6 @@ import '../show_list_screen.dart';
 import 'breed_catalog_screen.dart';
 
 final supabase = Supabase.instance.client;
-
-class SupportImpersonationSession {
-  static final ValueNotifier<SupportImpersonatedUser?> current =
-      ValueNotifier<SupportImpersonatedUser?>(null);
-
-  static bool get isActive => current.value != null;
-
-  static String? get targetUserId => current.value?.userId;
-
-  static void start(SupportImpersonatedUser user) {
-    current.value = user;
-  }
-
-  static void stop() {
-    current.value = null;
-  }
-}
-
-class SupportImpersonatedUser {
-  const SupportImpersonatedUser({
-    required this.userId,
-    required this.email,
-    required this.displayName,
-    required this.exhibitorName,
-  });
-
-  final String userId;
-  final String email;
-  final String displayName;
-  final String exhibitorName;
-
-  String get label {
-    final cleanedExhibitor = exhibitorName.trim();
-    if (cleanedExhibitor.isNotEmpty) return cleanedExhibitor;
-
-    final cleanedDisplay = displayName.trim();
-    final emailLocal = email.trim().isEmpty
-        ? ''
-        : email.trim().split('@').first.trim().toLowerCase();
-
-    if (cleanedDisplay.isNotEmpty &&
-        cleanedDisplay.toLowerCase() != emailLocal) {
-      return cleanedDisplay;
-    }
-
-    if (email.trim().isNotEmpty) {
-      final local = email.trim().split('@').first;
-      final parts = local
-          .replaceAll('.', ' ')
-          .replaceAll('_', ' ')
-          .replaceAll('-', ' ')
-          .split(' ')
-          .where((p) => p.trim().isNotEmpty)
-          .toList();
-
-      if (parts.isNotEmpty) {
-        return parts.map((p) => p[0].toUpperCase() + p.substring(1)).join(' ');
-      }
-
-      return email.trim();
-    }
-
-    return userId;
-  }
-}
 
 class SuperadminHomeScreen extends StatefulWidget {
   const SuperadminHomeScreen({super.key});

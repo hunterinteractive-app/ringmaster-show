@@ -1,6 +1,6 @@
 create extension if not exists pgtap with schema extensions;
 begin;
-select plan(13);
+select plan(14);
 create temporary table original_revision as
 select public.get_report_result_revision('20000000-0000-0000-0000-000000000004') revision,
        public.get_report_result_revision('20000000-0000-0000-0000-000000000001') other_revision;
@@ -19,6 +19,7 @@ update original_revision set revision=public.get_report_result_revision('2000000
 update public.show_sections set sort_order=sort_order where id='21000000-0000-0000-0000-000000000004';
 select isnt(public.get_report_result_revision('20000000-0000-0000-0000-000000000004'),
   (select revision from original_revision), 'section edits invalidate scope and judging-date data');
+select set_config('request.jwt.claims','{"role":"service_role"}',true);
 create temporary table expected as select * from public.report_results_entry_rows('20000000-0000-0000-0000-000000000004');
 create temporary table page1 as select * from public.report_results_entry_rows_page('20000000-0000-0000-0000-000000000004',p_page_size=>2);
 create temporary table page2 as select * from public.report_results_entry_rows_page('20000000-0000-0000-0000-000000000004',p_after_entry_id=>(select max(entry_id::text)::uuid from page1),p_page_size=>1000);
@@ -37,6 +38,9 @@ select ok(not has_function_privilege('anon','public.get_show_checkin_roster_page
   'cursor roster preserves the existing anonymous-access restriction');
 set local role authenticated;
 select set_config('request.jwt.claim.sub','ffffffff-ffff-ffff-ffff-ffffffffffff',true);
+select set_config('request.jwt.claims','{"role":"authenticated","sub":"ffffffff-ffff-ffff-ffff-ffffffffffff"}',true);
+select is((select count(*)::int from public.report_results_entry_rows_page('20000000-0000-0000-0000-000000000004')),0,
+  'optimized report pages preserve the show access boundary');
 select throws_ok($q$select public.get_closeout_dashboard_scoped('20000000-0000-0000-0000-000000000004','scope',array['21000000-0000-0000-0000-000000000004'::uuid])$q$,
   '42501','Not authorized to manage closeout for this show','dashboard denies another show manager');
 select throws_ok($q$select public.get_closeout_dashboard_scoped_for_species('20000000-0000-0000-0000-000000000004','scope',array['21000000-0000-0000-0000-000000000004'::uuid],200,0,null,'rabbit')$q$,

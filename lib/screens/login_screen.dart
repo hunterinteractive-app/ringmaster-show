@@ -1,3 +1,4 @@
+import 'package:ringmaster_show/reporting_core/network/transient_retry.dart';
 // lib/screens/login_screen.dart
 // ignore_for_file: control_flow_in_finally
 
@@ -294,6 +295,7 @@ class _LoginScreenState extends State<LoginScreen>
   }
 
   Future<void> _sendCode({bool isResend = false}) async {
+    if (_busy) return;
     FocusScope.of(context).unfocus();
 
     if (!isResend && !_formKey.currentState!.validate()) return;
@@ -315,7 +317,9 @@ class _LoginScreenState extends State<LoginScreen>
     });
 
     try {
-      await supabase.auth.signInWithOtp(email: email, shouldCreateUser: true);
+      await retryTransient(
+        () => supabase.auth.signInWithOtp(email: email, shouldCreateUser: true),
+      );
 
       if (!mounted) return;
 
@@ -345,6 +349,7 @@ class _LoginScreenState extends State<LoginScreen>
   }
 
   Future<void> _verifyCode() async {
+    if (_busy) return;
     FocusScope.of(context).unfocus();
 
     final email = (_pendingEmail ?? '').trim().toLowerCase();
@@ -402,6 +407,7 @@ class _LoginScreenState extends State<LoginScreen>
   }
 
   void _changeEmail() {
+    if (_busy) return;
     FocusScope.of(context).unfocus();
     _resendTimer?.cancel();
     _otp.clear();

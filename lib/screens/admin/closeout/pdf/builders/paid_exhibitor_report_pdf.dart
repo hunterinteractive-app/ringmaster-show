@@ -320,7 +320,7 @@ class PaidExhibitorReportPdfBuilder {
               (s) => pw.Padding(
                 padding: const pw.EdgeInsets.only(bottom: 1),
                 child: pw.Text(
-                  '${s.label}: ${s.count}',
+                  '${s.label}: ${s.count == 0 && s.furCount == 0 && s.showFee != 0 ? 'fees' : s.count}',
                   style: const pw.TextStyle(fontSize: 6.5),
                 ),
               ),
@@ -344,7 +344,7 @@ class PaidExhibitorReportPdfBuilder {
               (s) => pw.Padding(
                 padding: const pw.EdgeInsets.only(bottom: 1),
                 child: pw.Text(
-                  '${s.label}: ${s.count}',
+                  '${s.label}: ${s.count == 0 && s.furCount == 0 && s.showFee != 0 ? 'fees' : s.count}',
                   style: const pw.TextStyle(fontSize: 6.5),
                 ),
               ),

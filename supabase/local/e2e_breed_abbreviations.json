@@ -1,0 +1,222 @@
+[
+  {
+    "breed_name": "Abyssinian",
+    "abbreviation": "YV",
+    "species": "cavy"
+  },
+  {
+    "breed_name": "Abyssinian Satin",
+    "abbreviation": "YX",
+    "species": "cavy"
+  },
+  {
+    "breed_name": "American",
+    "abbreviation": "AM",
+    "species": "rabbit"
+  },
+  {
+    "breed_name": "American",
+    "abbreviation": "AV",
+    "species": "cavy"
+  },
+  {
+    "breed_name": "American Sable",
+    "abbreviation": "AS",
+    "species": "rabbit"
+  },
+  {
+    "breed_name": "American Satin",
+    "abbreviation": "AX",
+    "species": "cavy"
+  },
+  {
+    "breed_name": "Belgian Hare",
+    "abbreviation": "BH",
+    "species": "rabbit"
+  },
+  {
+    "breed_name": "Beveren",
+    "abbreviation": "BV",
+    "species": "rabbit"
+  },
+  {
+    "breed_name": "Britannia Petite",
+    "abbreviation": "BP",
+    "species": "rabbit"
+  },
+  {
+    "breed_name": "Californian",
+    "abbreviation": "CA",
+    "species": "rabbit"
+  },
+  {
+    "breed_name": "Cinnamon",
+    "abbreviation": "CN",
+    "species": "rabbit"
+  },
+  {
+    "breed_name": "Coronet",
+    "abbreviation": "CT",
+    "species": "cavy"
+  },
+  {
+    "breed_name": "Dutch",
+    "abbreviation": "DT",
+    "species": "rabbit"
+  },
+  {
+    "breed_name": "Dwarf Hotot",
+    "abbreviation": "DH",
+    "species": "rabbit"
+  },
+  {
+    "breed_name": "Dwarf Papillon",
+    "abbreviation": "DP",
+    "species": "rabbit"
+  },
+  {
+    "breed_name": "English Spot",
+    "abbreviation": "ES",
+    "species": "rabbit"
+  },
+  {
+    "breed_name": "French Lop",
+    "abbreviation": "FL",
+    "species": "rabbit"
+  },
+  {
+    "breed_name": "Harlequin",
+    "abbreviation": "HR",
+    "species": "rabbit"
+  },
+  {
+    "breed_name": "Havana",
+    "abbreviation": "HV",
+    "species": "rabbit"
+  },
+  {
+    "breed_name": "Himalayan",
+    "abbreviation": "HM",
+    "species": "rabbit"
+  },
+  {
+    "breed_name": "Holland Lop",
+    "abbreviation": "HL",
+    "species": "rabbit"
+  },
+  {
+    "breed_name": "Jersey Wooly",
+    "abbreviation": "JW",
+    "species": "rabbit"
+  },
+  {
+    "breed_name": "Lilac",
+    "abbreviation": "LC",
+    "species": "rabbit"
+  },
+  {
+    "breed_name": "Lionhead",
+    "abbreviation": "LH",
+    "species": "rabbit"
+  },
+  {
+    "breed_name": "Mini Lop",
+    "abbreviation": "ML",
+    "species": "rabbit"
+  },
+  {
+    "breed_name": "Mini Rex",
+    "abbreviation": "MR",
+    "species": "rabbit"
+  },
+  {
+    "breed_name": "Mini Satin",
+    "abbreviation": "MS",
+    "species": "rabbit"
+  },
+  {
+    "breed_name": "Netherland Dwarf",
+    "abbreviation": "ND",
+    "species": "rabbit"
+  },
+  {
+    "breed_name": "New Zealand",
+    "abbreviation": "NZ",
+    "species": "rabbit"
+  },
+  {
+    "breed_name": "Peruvian",
+    "abbreviation": "PV",
+    "species": "cavy"
+  },
+  {
+    "breed_name": "Peruvian Satin",
+    "abbreviation": "PX",
+    "species": "cavy"
+  },
+  {
+    "breed_name": "Polish",
+    "abbreviation": "PO",
+    "species": "rabbit"
+  },
+  {
+    "breed_name": "Rhinelander",
+    "abbreviation": "RH",
+    "species": "rabbit"
+  },
+  {
+    "breed_name": "Satin",
+    "abbreviation": "ST",
+    "species": "rabbit"
+  },
+  {
+    "breed_name": "Silkie",
+    "abbreviation": "SV",
+    "species": "cavy"
+  },
+  {
+    "breed_name": "Silkie Satin",
+    "abbreviation": "SX",
+    "species": "cavy"
+  },
+  {
+    "breed_name": "Silver",
+    "abbreviation": "SL",
+    "species": "rabbit"
+  },
+  {
+    "breed_name": "Silver Fox",
+    "abbreviation": "SF",
+    "species": "rabbit"
+  },
+  {
+    "breed_name": "Silver Marten",
+    "abbreviation": "SM",
+    "species": "rabbit"
+  },
+  {
+    "breed_name": "Tan",
+    "abbreviation": "TN",
+    "species": "rabbit"
+  },
+  {
+    "breed_name": "Teddy",
+    "abbreviation": "TV",
+    "species": "cavy"
+  },
+  {
+    "breed_name": "Teddy Satin",
+    "abbreviation": "TX",
+    "species": "cavy"
+  },
+  {
+    "breed_name": "Texel",
+    "abbreviation": "TL",
+    "species": "cavy"
+  },
+  {
+    "breed_name": "White Crested",
+    "abbreviation": "WC",
+    "species": "cavy"
+  }
+]

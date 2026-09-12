@@ -1,0 +1,7 @@
+[
+  {
+    "proname": "user_can_manage_judges",
+    "arguments": "p_show_id uuid, p_user_id uuid",
+    "definition": "CREATE OR REPLACE FUNCTION public.user_can_manage_judges(p_show_id uuid, p_user_id uuid DEFAULT NULL::uuid)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\n  select public.user_can_manage_show(\n    p_show_id,\n    coalesce(p_user_id, auth.uid())\n  );\n$function$\n"
+  }
+]

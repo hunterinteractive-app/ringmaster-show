@@ -1,0 +1,38 @@
+[
+  {
+    "schemaname": "public",
+    "tablename": "exhibitors",
+    "policyname": "authenticated can read exhibitors",
+    "roles": "{authenticated}",
+    "cmd": "SELECT",
+    "qual": "true",
+    "with_check": null
+  },
+  {
+    "schemaname": "public",
+    "tablename": "show_animal_coop_numbers",
+    "policyname": "show staff can view coop numbers",
+    "roles": "{authenticated}",
+    "cmd": "SELECT",
+    "qual": "(user_can_manage_entries(show_id) OR has_global_role_at_least('super_admin'::text))",
+    "with_check": null
+  },
+  {
+    "schemaname": "public",
+    "tablename": "role_assignments",
+    "policyname": "Users can read own show role assignments",
+    "roles": "{authenticated}",
+    "cmd": "SELECT",
+    "qual": "(user_id = auth.uid())",
+    "with_check": null
+  },
+  {
+    "schemaname": "public",
+    "tablename": "show_admins",
+    "policyname": "show_admins_select_own",
+    "roles": "{authenticated}",
+    "cmd": "SELECT",
+    "qual": "(user_id = auth.uid())",
+    "with_check": null
+  }
+]

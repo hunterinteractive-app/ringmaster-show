@@ -58,7 +58,7 @@ class JudgeReportPdfBuilder {
           return <pw.Widget>[
             _buildSummary(data),
             pw.SizedBox(height: 12),
-            _buildJudgeOverviewTable(data),
+            ..._buildJudgeOverviewTable(data),
             pw.NewPage(),
             for (final judge in data.judges) ..._buildJudgeSection(judge),
           ];
@@ -202,36 +202,36 @@ class JudgeReportPdfBuilder {
     return pw.Container(width: 0.5, height: 28, color: PdfColors.grey400);
   }
 
-  pw.Widget _buildJudgeOverviewTable(JudgeReportData data) {
-    return pw.Column(
-      crossAxisAlignment: pw.CrossAxisAlignment.start,
-      children: <pw.Widget>[
-        pw.Text(
-          'Judge Overview',
-          style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold),
-        ),
-        pw.SizedBox(height: 6),
-        pw.Table(
-          border: pw.TableBorder.all(color: PdfColors.grey700, width: 0.4),
-          columnWidths: const <int, pw.TableColumnWidth>{
-            0: pw.FlexColumnWidth(),
-            1: pw.FixedColumnWidth(60),
-            2: pw.FixedColumnWidth(60),
-            3: pw.FixedColumnWidth(70),
-          },
-          children: <pw.TableRow>[
-            _judgeOverviewHeaderRow(),
-            ...data.judges.map(_judgeOverviewDataRow),
-          ],
-        ),
-      ],
-    );
+  List<pw.Widget> _buildJudgeOverviewTable(JudgeReportData data) {
+    // Keep the spanning table at the MultiPage root. A Column retries the
+    // entire oversized table on every page and cannot advance its row cursor.
+    return <pw.Widget>[
+      pw.Text(
+        'Judge Overview',
+        style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold),
+      ),
+      pw.SizedBox(height: 6),
+      pw.Table(
+        border: pw.TableBorder.all(color: PdfColors.grey700, width: 0.4),
+        columnWidths: const <int, pw.TableColumnWidth>{
+          0: pw.FlexColumnWidth(),
+          1: pw.FixedColumnWidth(60),
+          2: pw.FixedColumnWidth(60),
+          3: pw.FixedColumnWidth(70),
+        },
+        children: <pw.TableRow>[
+          _judgeOverviewHeaderRow(),
+          ...data.judges.map(_judgeOverviewDataRow),
+        ],
+      ),
+    ];
   }
 
   pw.TableRow _judgeOverviewHeaderRow() {
     final style = pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold);
 
     return pw.TableRow(
+      repeat: true,
       decoration: const pw.BoxDecoration(color: PdfColors.grey300),
       children: <pw.Widget>[
         _cell('Judge', style: style, isHeader: true),

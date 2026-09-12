@@ -575,3 +575,15 @@ insert into auth.users(id,aud,role,email,encrypted_password,banned_until,raw_app
 
 alter table public.show_sanctions add column updated_at timestamptz default now();
 alter table public.show_sanctions add column request_status text;
+
+-- Historical results permission contract, also recorded in
+-- e2e_historical_contracts.json. Database-only tests need it before prepare.py.
+create function public.user_can_enter_results(p_show_id uuid, p_user_id uuid default null)
+returns boolean language sql stable security definer set search_path='' as $$
+ select public.user_can_manage_show_settings(p_show_id,coalesce(p_user_id,auth.uid()))
+   or exists (select 1 from public.role_assignments ra
+     where ra.show_id=p_show_id and ra.user_id=coalesce(p_user_id,auth.uid())
+       and ra.role::text='reporting_clerk')
+$$;
+revoke all on function public.user_can_enter_results(uuid,uuid) from public,anon;
+grant execute on function public.user_can_enter_results(uuid,uuid) to authenticated,service_role;

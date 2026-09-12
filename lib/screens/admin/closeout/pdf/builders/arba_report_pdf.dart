@@ -123,87 +123,150 @@ class ArbaReportPdfBuilder {
         theme: theme,
         margin: const pw.EdgeInsets.fromLTRB(26, 22, 26, 22),
         build: (context) {
-          return pw.Column(
-            crossAxisAlignment: pw.CrossAxisAlignment.stretch,
-            children: [
-              _topPrintLine(
-                printedDate: printedDate,
-                sanctionNumber: sanctionNumber,
+          // Lay out the entire form before fitting it to page one. A height-
+          // constrained Column can silently omit the final questions.
+          return pw.FittedBox(
+            fit: pw.BoxFit.scaleDown,
+            alignment: pw.Alignment.topCenter,
+            child: pw.SizedBox(
+              width: PdfPageFormat.letter.width - 52,
+              child: pw.Column(
+                mainAxisSize: pw.MainAxisSize.min,
+                crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+                children: [
+                  _topPrintLine(
+                    printedDate: printedDate,
+                    sanctionNumber: sanctionNumber,
+                  ),
+                  pw.SizedBox(height: 6),
+                  _titleBlock(),
+                  pw.SizedBox(height: 8),
+                  _instructionBlock(),
+                  pw.SizedBox(height: 8),
+                  _simpleLabeledLine(
+                    'Number of Rabbits Exhibited:',
+                    rabbitsShown,
+                    trailingText: caviesShown == '0'
+                        ? ''
+                        : 'Number of Cavies Exhibited: $caviesShown',
+                  ),
+                  pw.SizedBox(height: 8),
+                  _showInfoGrid(
+                    sponsoringShow: sponsoringShow,
+                    showDate: showDate,
+                    location: location,
+                    secretaryName: secretaryName,
+                    secretaryAddress: secretaryAddress,
+                    superintendent: superintendent,
+                    ribbonsMailed: ribbonsMailed,
+                    sweepstakesFiled: sweepstakesFiled,
+                  ),
+                  pw.SizedBox(height: 6),
+                  _contactBlock(
+                    secretaryEmail: secretaryEmail,
+                    secretaryPhone: secretaryPhone,
+                  ),
+                  pw.SizedBox(height: 8),
+                  _judgesSection(
+                    judges.take(12).toList(),
+                    continued: judges.length > 12,
+                  ),
+                  pw.SizedBox(height: 8),
+                  _twoQuestionBlock(
+                    question1:
+                        'ANY TROUBLE RECEIVING SWEEPSTAKES SANCTIONS FROM NATIONAL SPECIALTY CLUBS?',
+                    answer1: troubleReceivingSanctions,
+                    question2: 'IF YES, WHICH ONE/S?',
+                    answer2: troubleReceivingSanctionClubs,
+                  ),
+                  pw.SizedBox(height: 8),
+                  _sectionHeader('BEST IN SHOW RABBIT'),
+                  _bisWinnerTable(
+                    owner: bisRabbitOwner,
+                    cityState: bisRabbitCityState,
+                    breed: bisRabbitBreed,
+                    earNumber: bisRabbitEarNumber,
+                  ),
+                  pw.SizedBox(height: 6),
+                  _sectionHeader('BEST IN SHOW CAVY'),
+                  _bisWinnerTable(
+                    owner: bisCavyOwner,
+                    cityState: bisCavyCityState,
+                    breed: bisCavyBreed,
+                    earNumber: bisCavyEarNumber,
+                  ),
+                  pw.SizedBox(height: 8),
+                  _signatureBlock(
+                    filedDate: filedDate,
+                    signedBy: signedBy,
+                    secretaryPhone: secretaryPhone,
+                    secretaryEmail: secretaryEmail,
+                  ),
+                  pw.SizedBox(height: 8),
+                  _twoQuestionBlock(
+                    question1:
+                        'Was there an official protest filed at this show?',
+                    answer1: protestFiled,
+                    question2:
+                        'If so, has a report been filed with the ARBA office at this time?',
+                    answer2: protestReportFiled,
+                  ),
+                ],
               ),
-              pw.SizedBox(height: 6),
-              _titleBlock(),
-              pw.SizedBox(height: 8),
-              _instructionBlock(),
-              pw.SizedBox(height: 8),
-              _simpleLabeledLine(
-                'Number of Rabbits Exhibited:',
-                rabbitsShown,
-                trailingText: caviesShown == '0'
-                    ? ''
-                    : 'Number of Cavies Exhibited: $caviesShown',
-              ),
-              pw.SizedBox(height: 8),
-              _showInfoGrid(
-                sponsoringShow: sponsoringShow,
-                showDate: showDate,
-                location: location,
-                secretaryName: secretaryName,
-                secretaryAddress: secretaryAddress,
-                superintendent: superintendent,
-                ribbonsMailed: ribbonsMailed,
-                sweepstakesFiled: sweepstakesFiled,
-              ),
-              pw.SizedBox(height: 6),
-              _contactBlock(
-                secretaryEmail: secretaryEmail,
-                secretaryPhone: secretaryPhone,
-              ),
-              pw.SizedBox(height: 8),
-              _judgesSection(judges),
-              pw.SizedBox(height: 8),
-              _twoQuestionBlock(
-                question1:
-                    'ANY TROUBLE RECEIVING SWEEPSTAKES SANCTIONS FROM NATIONAL SPECIALTY CLUBS?',
-                answer1: troubleReceivingSanctions,
-                question2: 'IF YES, WHICH ONE/S?',
-                answer2: troubleReceivingSanctionClubs,
-              ),
-              pw.SizedBox(height: 8),
-              _sectionHeader('BEST IN SHOW RABBIT'),
-              _bisWinnerTable(
-                owner: bisRabbitOwner,
-                cityState: bisRabbitCityState,
-                breed: bisRabbitBreed,
-                earNumber: bisRabbitEarNumber,
-              ),
-              pw.SizedBox(height: 6),
-              _sectionHeader('BEST IN SHOW CAVY'),
-              _bisWinnerTable(
-                owner: bisCavyOwner,
-                cityState: bisCavyCityState,
-                breed: bisCavyBreed,
-                earNumber: bisCavyEarNumber,
-              ),
-              pw.SizedBox(height: 8),
-              _signatureBlock(
-                filedDate: filedDate,
-                signedBy: signedBy,
-                secretaryPhone: secretaryPhone,
-                secretaryEmail: secretaryEmail,
-              ),
-              pw.SizedBox(height: 8),
-              _twoQuestionBlock(
-                question1: 'Was there an official protest filed at this show?',
-                answer1: protestFiled,
-                question2:
-                    'If so, has a report been filed with the ARBA office at this time?',
-                answer2: protestReportFiled,
-              ),
-            ],
+            ),
           );
         },
       ),
     );
+
+    if (judges.length > 12) {
+      pdf.addPage(
+        pw.MultiPage(
+          pageFormat: PdfPageFormat.letter,
+          theme: theme,
+          margin: const pw.EdgeInsets.all(26),
+          header: (_) => pw.Padding(
+            padding: const pw.EdgeInsets.only(bottom: 12),
+            child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Text(
+                  'ARBA REPORT - ADDITIONAL JUDGES',
+                  style: pw.TextStyle(
+                    fontSize: 12,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
+                ),
+                pw.SizedBox(height: 4),
+                pw.Text(
+                  '${data.showName} - ${data.sectionLabel}\nSanction $sanctionNumber',
+                  style: const pw.TextStyle(fontSize: 9),
+                ),
+              ],
+            ),
+          ),
+          footer: (context) => pw.Padding(
+            padding: const pw.EdgeInsets.only(top: 8),
+            child: pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              children: [
+                pw.Text(
+                  'Judges 13-${judges.length}',
+                  style: const pw.TextStyle(fontSize: 8),
+                ),
+                pw.Text(
+                  'Page ${context.pageNumber} of ${context.pagesCount}',
+                  style: const pw.TextStyle(fontSize: 8),
+                ),
+              ],
+            ),
+          ),
+          build: (_) => [
+            _judgesSection(judges.skip(12).toList(), firstNumber: 13),
+          ],
+        ),
+      );
+    }
 
     final bytes = await pdf.save();
 
@@ -521,38 +584,33 @@ class ArbaReportPdfBuilder {
     );
   }
 
-  pw.Widget _judgesSection(List<String> judges) {
-    final left = <String>[];
-    final right = <String>[];
-
-    for (var i = 0; i < judges.length; i++) {
-      final numbered = '${i + 1}. ${judges[i]}';
-      if (i.isEven) {
-        left.add(numbered);
-      } else {
-        right.add(numbered);
-      }
-    }
-
-    while (left.length < 6) {
-      left.add('${left.length * 2 + 1}. ');
-    }
-    while (right.length < 6) {
-      right.add('${right.length * 2 + 2}. ');
-    }
-
+  pw.Widget _judgesSection(
+    List<String> judges, {
+    int firstNumber = 1,
+    bool continued = false,
+  }) {
+    final rowCount = firstNumber == 1 ? 6 : (judges.length + 1) ~/ 2;
+    String cell(int index) =>
+        index < judges.length ? '${firstNumber + index}. ${judges[index]}' : '';
     return pw.Table(
       border: pw.TableBorder.all(color: PdfColors.black, width: 0.6),
       children: [
         pw.TableRow(
+          repeat: true,
           decoration: const pw.BoxDecoration(color: PdfColors.grey300),
           children: [
             _headerCell('JUDGES & LICENSE NUMBER'),
-            _headerCell('JUDGES & LICENSE NUMBER'),
+            _headerCell(
+              continued
+                  ? 'ADDITIONAL JUDGES: SEE PAGE 2'
+                  : 'JUDGES & LICENSE NUMBER',
+            ),
           ],
         ),
-        for (var i = 0; i < 6; i++)
-          pw.TableRow(children: [_valueCell(left[i]), _valueCell(right[i])]),
+        for (var i = 0; i < rowCount; i++)
+          pw.TableRow(
+            children: [_valueCell(cell(i * 2)), _valueCell(cell(i * 2 + 1))],
+          ),
       ],
     );
   }

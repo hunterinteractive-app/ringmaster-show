@@ -23,7 +23,7 @@ class Workflows:
                 self.awards[b['first']].append(code)
 
     def rpc(self,name,params,p,kind=None):
-        return self.t.measured(kind or name,p['index'],lambda:self.lab.rpc(name,params,p['token']))
+        return self.t.measured(kind or name,p['index'],lambda:self.lab.rpc(name,params,self.lab.session_token(p)))
 
     def staff(self):
         def create(i):
@@ -104,17 +104,24 @@ class Workflows:
 
     def navigation(self,p,mode):
         b=self.t.manifest['breeds'][p['index']%len(self.t.manifest['breeds'])]
-        params=dict(p_show_id=SHOW,p_page_size=1000)
-        if mode=='qr': params.update(p_breed=b['breed'],p_section_id=uid('951',b['section']))
+        section=uid('951',b['section'])
+        params=dict(p_show_id=SHOW,p_section_id=section,p_page_size=1000 if mode=='qr' else 250)
+        if mode=='qr': params['p_breed']=b['breed']
+        function='report_results_entry_rows_page' if mode=='qr' else 'get_judging_entry_rows_page'
         ids=set();after=None
         while True:
-            page=self.rpc('report_results_entry_rows_page',dict(params,p_after_entry_id=after),p,mode+'_navigation_page')
+            page=self.rpc(function,dict(params,p_after_entry_id=after),p,mode+'_navigation_page')
             if not page: break
             for row in page:
                 assert row['entry_id'] not in ids
+                assert row['section_id']==section
+                if mode=='manual':
+                    assert row['species']=='rabbit' and row['animal_id']
+                    assert isinstance(row['_awards'],list)
                 ids.add(row['entry_id'])
             after=page[-1]['entry_id']
-        assert len(ids)==(b['count'] if mode=='qr' else 25711),(mode,len(ids),b)
+        expected=b['count'] if mode=='qr' else sum(e['section_id']==section for e in self.t.entries)
+        assert len(ids)==expected,(mode,len(ids),expected)
 
     def save(self,p,e,mode):
         params=dict(p_show_id=SHOW,p_entry_id=e['id'],p_placement=str(e['placement']),p_result_status='Shown',
@@ -142,6 +149,21 @@ class Workflows:
         self.t.summary['checks']['finalize_'+str(section)]=result
         self.t.log('scope_finalized',section=section,result=result)
 
+    def finalize_combined(self):
+        sections=[uid('951',1),uid('951',2)]
+        scope=SHOW+':'+','.join(sorted(sections))
+        result=self.t.measured('edge_finalize_combined',110,lambda:self.lab.edge('run-closeout',
+            dict(show_id=SHOW,section_ids=sections,scope_key=scope,scope_label='Open A + Youth A',species_filter='rabbit'),self.people[110]['token']))
+        self.t.summary['checks']['finalize_combined']=result
+        dashboard=self.rpc('get_closeout_dashboard_scoped_for_species',dict(p_show_id=SHOW,
+            p_scope_key=scope,p_section_ids=sections,p_artifact_limit=100,p_artifact_offset=0,p_species_filter='rabbit'),self.people[110])
+        self.t.summary['checks']['combined_dashboard']=dashboard
+        assert dashboard['latest_finalize']['scope_key']==scope,dashboard['latest_finalize']
+        assert dashboard['latest_finalize']['id']==result['finalize_run_id'],result
+        assert dashboard['artifact_counts']['total']>0,dashboard['artifact_counts']
+        assert dashboard['artifact_counts']['by_report']['exhibitor_report']==len(self.t.by_exhibitor),dashboard['artifact_counts']
+        self.t.log('combined_scope_finalized',result=result)
+
     def start_workers(self):
         other=int(self.lab.sql(f"select count(*) from public.show_task_queue where show_id<>'{SHOW}' and task_status::text in ('queued','running')"))
         assert other==0,'Other local shows have pending tasks'
@@ -158,7 +180,7 @@ class Workflows:
         return {r['status']:r['n'] for r in self.lab.rows(f"select task_status::text status,count(*) n from public.show_task_queue where show_id='{SHOW}' group by task_status")}
 
     def closeout(self,max_minutes=45,fail_on_tasks=True):
-        gate=threading.Barrier(136);stop=threading.Event();began=time.monotonic()
+        gate=threading.Barrier(136);stop=threading.Event();began=time.monotonic();deadline=time.time()+max_minutes*60
         def observer(p):
             gate.wait()
             while not stop.is_set():
@@ -171,7 +193,7 @@ class Workflows:
             jobs=[pool.submit(observer,p) for p in self.people[:110]]+[pool.submit(self.support,p,gate,stop) for p in self.people[110:]]
             gate.wait()
             try:
-                while time.monotonic()-began<max_minutes*60:
+                while time.time()<deadline:
                     status=self.queue();self.t.log('closeout_progress',status=status)
                     (self.t.output/'summary.partial.json').write_text(json.dumps(self.t.summary,indent=2))
                     if fail_on_tasks and status.get('failed',0)>=20: raise RuntimeError('Closeout stopped after 20 failed tasks; evidence preserved')
@@ -190,6 +212,9 @@ class Workflows:
             self.t.summary['resumed_after']='checkin; prior navigation failures remain in staff-navigation-summary.json'
         else:
             self.rpc('assign_show_coop_numbers',dict(p_show_id=SHOW,p_scope_mode='separate',p_overwrite_existing=False),self.people[110],'assign_coops')
+            collisions=self.lab.rows(f"select scope,coop_number from show_animal_coop_numbers where show_id='{SHOW}' group by scope,coop_number having count(*)>1")
+            assert not collisions, 'Coop labels must be unique before check-in'
+            self.t.summary['checks']['unique_coop_labels']=True
             self.checkin()
             for mode in ('qr','manual'):
                 try: self.parallel_phase('all_'+mode+'_navigation',self.people[:110],lambda p:self.navigation(p,mode))
@@ -199,15 +224,20 @@ class Workflows:
             assert all(actual.get(e['id'])==str(e['placement']) for e in self.t.entries if e['section_id']==uid('951',1))
             self.t.summary['checks']['resumed_open_results_verified']=len(actual)
         else: self.judge_section(1)
+        self.judge_section(2)
+        # Final reports begin only after all Open and Youth judging is complete.
+        assert all(self.lab.readiness(s,self.people[110]['token'])['ready'] for s in (1,2))
+        self.t.log('all_judging_completed_before_closeout')
         started=False;failures=[]
         for section in (1,2):
-            if section==2: self.judge_section(2)
             try:
                 self.finalize(section)
-                if not started: self.start_workers();started=True
+                started=True
             except Exception as e:
                 failures.append(dict(section=section,error=str(e)))
                 self.t.log('finalization_failed',section=section,error=str(e))
         self.t.summary['finalization_failures']=failures
-        if started: self.closeout()
+        if started:
+            self.start_workers()
+            self.closeout()
         if failures: raise RuntimeError('Finalization failed in one or more sections')

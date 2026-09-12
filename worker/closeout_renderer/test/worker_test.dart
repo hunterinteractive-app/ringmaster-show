@@ -846,7 +846,8 @@ void main() {
       final source = File(
         '../../lib/reporting_core/rendering/artifact_renderer.dart',
       ).readAsStringSync();
-      expect(source, contains('report_show_exhibitor_balances_scoped'));
+      expect(source, contains('loadShowExhibitorBalancesReport'));
+      expect(source, contains('requireExactAllocation: false'));
       expect(source, contains('unsupported_scoped_balance_report'));
       expect(
         source,

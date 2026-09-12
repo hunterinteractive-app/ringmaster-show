@@ -124,6 +124,7 @@ class _ShowListScreenState extends State<ShowListScreen> {
   bool _canAccessAdmin = false;
   bool _canAccessSuperintendent = false;
   bool _loadingAdminAccess = true;
+  String? _adminAccessError;
   bool _resolvingExhibitorAccount = false;
   // Temporary feature flag. Change to true when superintendent-role access
   // is ready to be released. Super admins always retain access.
@@ -492,6 +493,7 @@ class _ShowListScreenState extends State<ShowListScreen> {
         _canAccessAdmin = false;
         _canAccessSuperintendent = false;
         _loadingAdminAccess = false;
+        _adminAccessError = null;
       });
       return;
     }
@@ -499,6 +501,7 @@ class _ShowListScreenState extends State<ShowListScreen> {
     if (mounted) {
       setState(() {
         _loadingAdminAccess = true;
+        _adminAccessError = null;
         _canAccessAdmin = false;
         _canAccessSuperintendent = false;
       });
@@ -520,11 +523,9 @@ class _ShowListScreenState extends State<ShowListScreen> {
             .inFilter('role', const [
               'super_admin',
               'admin',
-              'show_admin',
               'superintendent',
               'reporting_clerk',
-            ])
-            .limit(1);
+            ]);
 
         final showAdminRows = await supabase
             .from('show_admins')
@@ -543,7 +544,9 @@ class _ShowListScreenState extends State<ShowListScreen> {
           },
         );
       }
-    } catch (_) {
+    } catch (error) {
+      debugPrint('Show access lookup failed: $error');
+      _adminAccessError = 'Staff access could not be loaded. Please retry.';
       canAdmin = false;
     }
 
@@ -648,7 +651,6 @@ class _ShowListScreenState extends State<ShowListScreen> {
       const allowedRoles = {
         'super_admin',
         'admin',
-        'show_admin',
         'superintendent',
         'reporting_clerk',
       };
@@ -660,8 +662,8 @@ class _ShowListScreenState extends State<ShowListScreen> {
             .map((r) => (r['show_id'] ?? '').toString())
             .where((id) => id.isNotEmpty),
       );
-    } catch (_) {
-      // Older demo/admin records may not exist in role_assignments.
+    } catch (error) {
+      throw StateError('Unable to load show role assignments. Please retry.');
     }
 
     try {
@@ -676,8 +678,10 @@ class _ShowListScreenState extends State<ShowListScreen> {
             .map((r) => (r['show_id'] ?? '').toString())
             .where((id) => id.isNotEmpty),
       );
-    } catch (_) {
-      // Keep any role_assignments results if show_admins lookup fails.
+    } catch (error) {
+      throw StateError(
+        'Unable to load show administrator assignments. Please retry.',
+      );
     }
 
     if (widget.demoMode && widget.demoSecretaryMode) {
@@ -1612,6 +1616,19 @@ class _ShowListScreenState extends State<ShowListScreen> {
             onLogout: () => _logout(context),
             demoMode: widget.demoMode,
           ),
+          bottomNavigationBar: _adminAccessError == null
+              ? null
+              : SafeArea(
+                  child: MaterialBanner(
+                    content: Text(_adminAccessError!),
+                    actions: [
+                      TextButton(
+                        onPressed: _loadAdminAccess,
+                        child: const Text('Retry staff access'),
+                      ),
+                    ],
+                  ),
+                ),
           body: Container(
             decoration: const BoxDecoration(gradient: AppGradients.page),
             child: Theme(

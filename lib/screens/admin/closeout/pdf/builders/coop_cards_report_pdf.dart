@@ -157,7 +157,8 @@ class CoopCardsReportPdfBuilder {
 
   pw.Widget _buildTopBand(CoopCardsReportData data, CoopCardRow card) {
     return pw.Container(
-      height: 92,
+      // 19 + 3 + 17 + 5 + 42 points plus 10 points of padding.
+      height: 98,
       padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
       decoration: pw.BoxDecoration(
         color: _paleBlue,
@@ -319,7 +320,7 @@ class CoopCardsReportPdfBuilder {
 
   pw.Widget _buildAnimalDetails(CoopCardRow card) {
     return pw.Container(
-      padding: const pw.EdgeInsets.symmetric(horizontal: 7, vertical: 6),
+      padding: const pw.EdgeInsets.symmetric(horizontal: 7, vertical: 4),
       decoration: pw.BoxDecoration(
         border: pw.Border.all(color: _line, width: 0.8),
         borderRadius: const pw.BorderRadius.all(pw.Radius.circular(4)),
@@ -451,7 +452,7 @@ class CoopCardsReportPdfBuilder {
     required String rightValue,
   }) {
     return pw.SizedBox(
-      height: 17,
+      height: 12,
       child: pw.Row(
         crossAxisAlignment: pw.CrossAxisAlignment.center,
         children: [
@@ -464,7 +465,7 @@ class CoopCardsReportPdfBuilder {
   }
 
   pw.Widget _singleDetailLine({required String label, required String value}) {
-    return pw.SizedBox(height: 17, child: _labelValue(label, value));
+    return pw.SizedBox(height: 12, child: _labelValue(label, value));
   }
 
   pw.Widget _labelValue(String label, String value) {
@@ -482,7 +483,7 @@ class CoopCardsReportPdfBuilder {
         ),
         pw.Expanded(
           child: pw.SizedBox(
-            height: 14,
+            height: 12,
             child: pw.FittedBox(
               fit: pw.BoxFit.scaleDown,
               alignment: pw.Alignment.centerLeft,
@@ -499,8 +500,8 @@ class CoopCardsReportPdfBuilder {
 
   pw.Widget _buildExhibitorSection(CoopCardRow card) {
     return pw.Container(
-      height: 48,
-      padding: const pw.EdgeInsets.symmetric(horizontal: 7, vertical: 6),
+      height: 42,
+      padding: const pw.EdgeInsets.symmetric(horizontal: 7, vertical: 3),
       decoration: pw.BoxDecoration(
         color: _paleBlue,
         border: pw.Border.all(color: _navy, width: 0.8),

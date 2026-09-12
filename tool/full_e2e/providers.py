@@ -15,6 +15,9 @@ class Providers:
     def __init__(self, output):
         self.output, self.sessions, self.emails = output, {}, []
         self.lock = threading.Lock()
+        self.email_keys = {}
+        self.delay_next_resend_seconds = 0
+        self.delay_next_stripe_seconds = 0
         parent = self
         class Handler(BaseHTTPRequestHandler):
             def log_message(self, *_): pass
@@ -23,7 +26,15 @@ class Providers:
                 if size > 35_000_000:
                     self.send_error(413); return
                 raw = self.rfile.read(size)
-                if self.path == '/stripe/v1/checkout/sessions':
+                response_delay = 0
+                if self.path == '/club/rest/v1/rpc/find_exhibitors_for_show_import':
+                    if self.headers.get('Authorization') != 'Bearer local_club_synthetic_only':
+                        self.send_error(401); return
+                    payload=json.loads(raw)
+                    if not str(payload.get('p_email','')).endswith('@example.invalid'):
+                        self.send_error(400); return
+                    response=[]  # Separate Club provider boundary: synthetic accounts use manual setup.
+                elif self.path == '/stripe/v1/checkout/sessions':
                     if self.headers.get('Authorization') != 'Bearer sk_test_local_synthetic_only':
                         self.send_error(401); return
                     form = {k:v[0] for k,v in parse_qs(raw.decode()).items()}
@@ -39,6 +50,8 @@ class Providers:
                                 amount_total=amount,currency='usd',payment_status='paid',
                                 payment_intent='pi_local_'+uuid.uuid4().hex)
                         response = parent.sessions[key]
+                        response_delay = parent.delay_next_stripe_seconds
+                        parent.delay_next_stripe_seconds = 0
                 elif self.path == '/resend/emails':
                     if self.headers.get('Authorization') != 'Bearer re_local_synthetic_only':
                         self.send_error(401); return
@@ -55,17 +68,34 @@ class Providers:
                     for a in payload.get('attachments',[]):
                         content = base64.b64decode(a['content'],validate=True)
                         record['attachments'].append(dict(filename=a['filename'],size=len(content),sha256=hashlib.sha256(content).hexdigest()))
+                    key = self.headers.get('Idempotency-Key')
+                    payload_hash = hashlib.sha256(raw).hexdigest()
                     with parent.lock:
-                        parent.emails.append(record)
-                        with (parent.output/'captured-deliveries.jsonl').open('a') as f:
-                            f.write(json.dumps(record)+'\n')
+                        existing = parent.email_keys.get(key) if key else None
+                        if existing:
+                            if existing['hash'] != payload_hash:
+                                self.send_error(409, 'Idempotency payload mismatch'); return
+                            record = existing['record']
+                        else:
+                            parent.emails.append(record)
+                            if key: parent.email_keys[key] = dict(hash=payload_hash,record=record)
+                            with (parent.output/'captured-deliveries.jsonl').open('a') as f:
+                                f.write(json.dumps(record)+'\n')
+                        response_delay = parent.delay_next_resend_seconds
+                        parent.delay_next_resend_seconds = 0
                     response = {'id':record['id']}
                 else:
                     self.send_error(404); return
+                if response_delay: time.sleep(response_delay)
                 body=json.dumps(response).encode()
                 self.send_response(200); self.send_header('Content-Type','application/json')
-                self.send_header('Content-Length',str(len(body))); self.end_headers(); self.wfile.write(body)
-        self.server = ThreadingHTTPServer(('127.0.0.1',8769),Handler)
+                self.send_header('Content-Length',str(len(body))); self.end_headers()
+                try: self.wfile.write(body)
+                except (BrokenPipeError, ConnectionResetError): pass
+        class LocalServer(ThreadingHTTPServer):
+            request_queue_size=256
+            daemon_threads=True
+        self.server = LocalServer(('127.0.0.1',8769),Handler)
         self.thread = threading.Thread(target=self.server.serve_forever,daemon=True)
 
     def start(self): self.thread.start()
@@ -82,6 +112,9 @@ class Providers:
 
 def prepare_functions(lab, output):
     from local import ROOT
+    import shutil
+    for name in ('claim-or-import-exhibitor','_shared',):
+        shutil.copytree(ROOT/'supabase/functions'/name, lab.workspace/'supabase/functions'/name, dirs_exist_ok=True)
     patches = {
         'stripe-create-checkout-session':('https://api.stripe.com/v1/checkout/sessions','http://host.docker.internal:8769/stripe/v1/checkout/sessions'),
         'send-report-email':('https://api.resend.com/emails','http://host.docker.internal:8769/resend/emails'),
@@ -101,6 +134,8 @@ def prepare_functions(lab, output):
         'RESEND_API_KEY=re_local_synthetic_only',
         'RESEND_FROM_EMAIL=Local Rehearsal <sender@example.invalid>',
         'APP_BASE_URL=http://127.0.0.1:8769',
+        'CLUB_SUPABASE_URL=http://host.docker.internal:8769/club',
+        'CLUB_SUPABASE_SERVICE_ROLE_KEY=local_club_synthetic_only',
     ])+'\n')
     env_file.chmod(0o600)
     config=lab.workspace/'supabase/config.toml'

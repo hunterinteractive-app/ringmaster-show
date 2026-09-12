@@ -25,6 +25,11 @@ bool breedResultsDetailRowMatchesSpecies(
   if (rowSpecies.isNotEmpty) return rowSpecies == species;
 
   final breedName = (row['breed_name'] ?? row['breed'] ?? '').toString();
+  if (breedName.trim().toLowerCase() == 'american') {
+    throw StateError(
+      'American breed results require an explicit entry species.',
+    );
+  }
   if (species == 'cavy') return isKnownCavyBreed(breedName);
   if (species == 'rabbit') return !isKnownCavyBreed(breedName);
 
@@ -315,10 +320,15 @@ class BreedResultsDetailReportLoader {
             },
           );
 
-    var awardRows = (awardsResponse as List)
-        .map((e) => Map<String, dynamic>.from(e as Map))
-        .where((row) => breedResultsDetailRowMatchesSpecies(row, species))
-        .toList();
+    var awardRows =
+        (await _withEntryJudgingState(
+              showId,
+              (awardsResponse as List)
+                  .map((e) => Map<String, dynamic>.from(e as Map))
+                  .toList(),
+            ))
+            .where((row) => breedResultsDetailRowMatchesSpecies(row, species))
+            .toList();
 
     // The JSON export relies on this same data as the PDF.  Older deployed
     // databases can have a stale breed-awards RPC even though entry_awards
@@ -429,7 +439,7 @@ class BreedResultsDetailReportLoader {
         (from, to) => repo.supabase
             .from('entries')
             .select(
-              'id, scratched_at, status, is_shown, is_disqualified, disqualified_reason, is_fur, fur_variety, fur_placement',
+              'id, species, scratched_at, status, is_shown, is_disqualified, disqualified_reason, is_fur, fur_variety, fur_placement',
             )
             .eq('show_id', showId)
             .inFilter('id', chunk)
@@ -450,10 +460,13 @@ class BreedResultsDetailReportLoader {
         _safe(row['id']),
       ]);
       final entry = entriesById[entryId];
-      if (entry == null) return row;
+      if (entry == null) {
+        throw StateError('A report entry could not be loaded: $entryId');
+      }
 
       return {
         ...row,
+        'species': entry['species'],
         'entry_scratched_at': entry['scratched_at'],
         'entry_status': entry['status'],
         'entry_is_shown': entry['is_shown'],
@@ -1457,6 +1470,7 @@ class BreedResultsDetailReportLoader {
             entries!entry_awards_entry_id_fkey!inner(
               id,
               animal_id,
+              species,
               section_id,
               tattoo,
               breed,
@@ -1494,6 +1508,7 @@ class BreedResultsDetailReportLoader {
           ...award,
           'entry_id': _safe(award['entry_id']),
           'animal_id': _safe(entry['animal_id']),
+          'species': _safe(entry['species']),
           'tattoo': _safe(entry['tattoo']),
           'animal_label': _safe(entry['tattoo']),
           'breed_name': _safe(entry['breed']),

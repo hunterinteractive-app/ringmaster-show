@@ -13,6 +13,7 @@ import 'package:pdf/widgets.dart' as pw;
 
 import '../closeout/utils/breed_results_detail_order.dart';
 import 'print_pack_pdf_helpers.dart';
+import '../closeout/data/report_data_reader.dart';
 
 final supabase = Supabase.instance.client;
 
@@ -464,13 +465,20 @@ class _ControlSheetsGeneratorSheetState
       });
 
     for (final sectionId in sortedIdsToFetch) {
-      final rows = await supabase.rpc(
-        'report_control_sheet_entries',
-        params: {
-          'p_show_id': widget.showId,
-          'p_section_id': sectionId,
-          'p_include_scratched': widget.includeScratched,
-        },
+      final rows = await readAllReportPages(
+        (from, to) async => List<Map<String, dynamic>>.from(
+          await supabase
+              .rpc(
+                'report_control_sheet_entries',
+                params: {
+                  'p_show_id': widget.showId,
+                  'p_section_id': sectionId,
+                  'p_include_scratched': widget.includeScratched,
+                },
+              )
+              .order('entry_id')
+              .range(from, to),
+        ),
       );
       raw.addAll((rows as List).cast<Map<String, dynamic>>());
     }
@@ -487,19 +495,12 @@ class _ControlSheetsGeneratorSheetState
       if (entryId.isNotEmpty) rpcEntryIds.add(entryId);
     }
 
-    final entryFlagRows = <Map<String, dynamic>>[];
-    final entryIdsList = rpcEntryIds.toList();
-    for (var i = 0; i < entryIdsList.length; i += 100) {
-      final chunk = entryIdsList.skip(i).take(100).toList();
-      if (chunk.isEmpty) continue;
-
-      final rows = await supabase
-          .from('entries')
-          .select('id,is_fur,animal_id,judged_by_show_judge_id')
-          .inFilter('id', chunk);
-
-      entryFlagRows.addAll(List<Map<String, dynamic>>.from(rows));
-    }
+    final entryFlagRows = await loadReportRowsByIds(
+      supabase,
+      table: 'entries',
+      columns: 'id,is_fur,animal_id,judged_by_show_judge_id',
+      ids: rpcEntryIds,
+    );
 
     final flagsByEntryId = <String, Map<String, dynamic>>{};
     for (final row in entryFlagRows) {
@@ -520,9 +521,10 @@ class _ControlSheetsGeneratorSheetState
     }
 
     for (final sectionId in sortedIdsToFetch) {
-      final missingFurRows = await supabase
-          .from('entries')
-          .select('''
+      final missingFurRows = await readAllReportPages((from, to) {
+        var query = supabase
+            .from('entries')
+            .select('''
             id,
             show_id,
             section_id,
@@ -551,14 +553,21 @@ class _ControlSheetsGeneratorSheetState
               sort_order
             )
           ''')
-          .eq('show_id', widget.showId)
-          .eq('section_id', sectionId)
-          .eq('is_fur', true)
-          .order('breed')
-          .order('variety')
-          .order('class_name')
-          .order('sex')
-          .order('tattoo');
+            .eq('show_id', widget.showId)
+            .eq('section_id', sectionId)
+            .eq('is_fur', true);
+        if (!widget.includeScratched) {
+          query = query.isFilter('scratched_at', null);
+        }
+        return query
+            .order('breed')
+            .order('variety')
+            .order('class_name')
+            .order('sex')
+            .order('tattoo')
+            .order('id')
+            .range(from, to);
+      });
 
       for (final row in List<Map<String, dynamic>>.from(missingFurRows)) {
         final entryId = (row['id'] ?? '').toString();
@@ -676,19 +685,15 @@ class _ControlSheetsGeneratorSheetState
         .toSet()
         .toList();
 
-    final coopRows = <Map<String, dynamic>>[];
-    for (var i = 0; i < animalIds.length; i += 200) {
-      final chunk = animalIds.skip(i).take(200).toList();
-      if (chunk.isEmpty) continue;
-
-      final rows = await supabase
-          .from('show_animal_coop_numbers')
-          .select('animal_id, scope, coop_number')
-          .eq('show_id', widget.showId)
-          .inFilter('animal_id', chunk);
-
-      coopRows.addAll(List<Map<String, dynamic>>.from(rows));
-    }
+    final coopRows = await loadReportRowsByIds(
+      supabase,
+      table: 'show_animal_coop_numbers',
+      columns: 'animal_id,scope,coop_number',
+      ids: animalIds,
+      idColumn: 'animal_id',
+      filters: {'show_id': widget.showId},
+      orderColumns: ['animal_id', 'scope'],
+    );
 
     final coopByAnimalAndScope = <String, String>{};
     for (final coopRow in coopRows) {
@@ -726,10 +731,12 @@ class _ControlSheetsGeneratorSheetState
 
     if (judgeIds.isNotEmpty) {
       try {
-        final judgeRows = await supabase
-            .from('judges')
-            .select('id,display_name,name,first_name,last_name')
-            .inFilter('id', judgeIds);
+        final judgeRows = await loadReportRowsByIds(
+          supabase,
+          table: 'judges',
+          columns: 'id,display_name,name,first_name,last_name',
+          ids: judgeIds,
+        );
 
         for (final rawJudge in judgeRows as List) {
           final judge = Map<String, dynamic>.from(rawJudge as Map);
@@ -749,7 +756,8 @@ class _ControlSheetsGeneratorSheetState
             judgeNamesById[id] = resolvedName;
           }
         }
-      } catch (_) {
+      } catch (error) {
+        if (!isReportSchemaCompatibilityError(error)) rethrow;
         // Older deployments may expose the assignment but not the judge
         // directory to this role. Leave the printed judge field blank there.
       }

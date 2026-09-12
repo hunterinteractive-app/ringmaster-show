@@ -1,3 +1,4 @@
+import { observedFetch, UpstreamUnavailable } from "../_shared/request_fetch.ts";
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { errorMessage, handleOptions, jsonResponse } from "../_shared/http.ts";
 import {
@@ -75,7 +76,7 @@ serve(async (request) => {
       appBaseUrl,
       userId: user.id,
     });
-    const stripeResponse = await fetch(
+    const stripeResponse = await observedFetch("stripe_checkout")(
       "https://api.stripe.com/v1/checkout/sessions",
       {
         method: "POST",
@@ -90,6 +91,10 @@ serve(async (request) => {
     );
     const stripeJson = await stripeResponse.json() as Record<string, unknown>;
 
+    if (stripeResponse.status >= 500) {
+      // An ambiguous provider response must retain the same attempt/key.
+      throw new UpstreamUnavailable();
+    }
     if (!stripeResponse.ok) {
       const stripeError = stripeJson.error as
         | Record<string, unknown>
@@ -138,7 +143,7 @@ serve(async (request) => {
         error: "Unable to start online payment.",
         details: errorMessage(error),
       },
-      errorMessage(error) === "Authentication required." ? 401 : 400,
+      error instanceof UpstreamUnavailable ? 503 : errorMessage(error) === "Authentication required." ? 401 : 400,
     );
   }
 });

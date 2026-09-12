@@ -58,3 +58,30 @@ fixture definitions as a production migration or staging parity dump.
 
 See `tool/full_e2e/README.md` for the isolated full workflow test, its additional
 historical contracts and its remaining catalog/browser parity limitations.
+
+`e2e_breed_abbreviations.json` contains 44 reference catalog records inspected
+read-only on September 10, 2026. The full rehearsal's `restore_catalog.py` also
+uses five explicitly synthetic fallback prefixes to avoid convention coop-label
+collisions; these are not official breed abbreviations. The fixture contains no
+hosted exhibitor or payment records. `e2e_account_lookup.sql` restores the
+service-only unclaimed-exhibitor lookup used by the account Edge Function.
+`legacy_foundation.sql` includes the historical reporting-clerk permission helper
+so the database tests can run without first invoking the full-show preparation.
+
+The event-sequence rehearsal also restores inspected print-view projections,
+typed print RPCs, four SELECT policies and the judge-management permission helper
+from `e2e_historical_print_*.json` and
+`e2e_historical_browser_permissions.json`. `prepare.py` includes the historical
+show timezone and entry-opening columns used by the management screen. These
+are local fixture contracts only. The `e2e_historical_staff_pins.json` and
+`e2e_historical_validate_staff_pin.json` definitions restore caller-specific PIN
+generation, reading and validation through `restore_staff_pins.py`.
+`e2e_historical_delivery_policy.json` restores the inspected authenticated
+delivery-history read policy. Those additional contracts were inspected on
+September 10–11, 2026, without reading hosted records or changing production.
+
+The local balance report returns cart-level rows; production's inspected
+contract returns exhibitor-level rows. The local print restoration therefore
+aggregates balances by exhibitor before joining check-in entries. This prevents
+cash-change carts from duplicating check-in rows and comment cards. The full
+production balance calculation is still not claimed as part of this fixture.
