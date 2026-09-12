@@ -1,4 +1,4 @@
-import { budgetedFetch, authErrorStatus, UpstreamUnavailable } from "../_shared/request_fetch.ts";
+import { budgetedFetch, authErrorStatus, isUpstreamUnavailable, UpstreamUnavailable } from "../_shared/request_fetch.ts";
 // supabase/functions/claim-or-import-exhibitor/index.ts
 
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
@@ -728,7 +728,7 @@ serve(async (req) => {
       display_name: finalDisplayName,
     });
   } catch (error) {
-    if (upstreamDeadline.aborted || error instanceof UpstreamUnavailable) {
+    if (upstreamDeadline.aborted || isUpstreamUnavailable(error)) {
       return json({
         status: "temporarily_unavailable",
         message: new UpstreamUnavailable().message,

@@ -119,7 +119,8 @@ def _configure_service(lab,service,settings):
 def configure(lab,pool_size=20,rest_pool=None):
     if not 1<=pool_size<=25:raise ValueError('Local Auth budget must be 1–25 connections')
     plan=lab.workspace/'rehearsal-capacity.json'
-    if rest_pool is None:rest_pool=json.loads(plan.read_text()).get('rest_pool',10) if plan.exists() else 10
+    saved_plan=json.loads(plan.read_text()) if plan.exists() else {}
+    if rest_pool is None:rest_pool=saved_plan.get('rest_pool',20)
     if not 5<=rest_pool<=30:raise ValueError('Local REST budget must be 5–30 connections')
     maximum=int(lab.sql('show max_connections'))
     # Reserve 25 connections for platform services/administration, plus 20 spare.
@@ -142,6 +143,9 @@ def configure(lab,pool_size=20,rest_pool=None):
     dump=subprocess.check_output(['docker','exec','supabase_rest_'+lab.project,'postgrest','--dump-config'],text=True)
     settings={line.split(' = ',1)[0]:line.split(' = ',1)[1] for line in dump.splitlines() if ' = ' in line and line.split(' = ',1)[0] in ('db-pool','db-pool-acquisition-timeout','admin-server-port')}
     assert settings['db-pool']==str(rest_pool),settings
+    # Rehearsal.start() calls this again. Preserve an explicit CLI selection
+    # so starting the workload cannot silently undo its capacity preflight.
+    plan.write_text(json.dumps({**saved_plan,'rest_pool':rest_pool},indent=2))
     return dict(auth_pool=pool_size,rest_pool=rest_pool,database_max_connections=maximum,
                 reserved_connections=25,spare_connections=maximum-pool_size-rest_pool-25,
                 database=database,auth=auth,rest=rest,gateway=gateway,

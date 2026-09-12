@@ -1,4 +1,4 @@
-import { observedFetch, UpstreamUnavailable } from "./request_fetch.ts";
+import { authErrorStatus, observedFetch, UpstreamUnavailable } from "./request_fetch.ts";
 import {
   createClient,
   SupabaseClient,
@@ -59,7 +59,7 @@ export async function authenticatedUser(
     },
   );
   const { data, error } = await client.auth.getUser();
-  if (error && (error.status ?? 0) >= 500) throw new UpstreamUnavailable();
+  if (error && authErrorStatus(error) === 503) throw new UpstreamUnavailable();
   if (error || !data.user) throw new Error("Authentication required.");
   return { user: data.user, client };
 }

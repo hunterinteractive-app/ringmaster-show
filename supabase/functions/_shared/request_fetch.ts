@@ -3,7 +3,17 @@
 export class UpstreamUnavailable extends Error {
   constructor() {
     super("The service is temporarily busy. Please try again.");
+    this.name = "UpstreamUnavailable";
   }
+}
+
+/** PostgREST serializes fetch exceptions and deliberately clears their code. */
+export function isUpstreamUnavailable(error: unknown): boolean {
+  if (error instanceof UpstreamUnavailable) return true;
+  if (!error || typeof error !== "object") return false;
+  const serialized = error as { code?: string; message?: string };
+  return !serialized.code &&
+    serialized.message === new UpstreamUnavailable().toString();
 }
 
 /** Preserve retryable database failures across Supabase's error objects. */
@@ -11,7 +21,7 @@ export function throwDatabaseError(
   error: { code?: string; message: string },
 ): never {
   if (
-    new Set([
+    isUpstreamUnavailable(error) || new Set([
       "PGRST003",
       "53300",
       "57P01",
@@ -98,6 +108,11 @@ export function observedFetch(
 
 /** A backend outage is not an invalid login. Callers must preserve that
  * distinction instead of converting all Auth errors to HTTP 401. */
-export function authErrorStatus(error: { status?: number } | null): number {
-  return error?.status && error.status >= 500 ? 503 : 401;
+export function authErrorStatus(
+  error: { status?: number; name?: string } | null,
+): number {
+  return error?.name === "AuthRetryableFetchError" ||
+      (error?.status !== undefined && error.status >= 500)
+    ? 503
+    : 401;
 }
