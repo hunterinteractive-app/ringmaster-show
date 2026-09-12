@@ -105,6 +105,27 @@ const groupedSpecialtyBreedScopes = <GroupedSpecialtyBreedScope>[
       'American Fuzzy Lop',
     ],
   ),
+  GroupedSpecialtyBreedScope(
+    value: 'grouped_rare',
+    label: 'Rare Breed',
+    catalogBreedNames: [
+      'American',
+      'Argente Brun',
+      'American Chinchilla',
+      'Giant Chinchilla',
+      'Standard Chinchilla',
+      'Belgian Hare',
+      'Beveren',
+      'Blanc de Hotot',
+      'Checkered Giant',
+      "Creme d'Argente",
+      'Silver',
+      'Silver Marten',
+      'Lilac',
+      'Palomino',
+      'Rhinelander',
+    ],
+  ),
 ];
 
 GroupedSpecialtyBreedScope? groupedSpecialtyBreedScopeForValue(String value) {

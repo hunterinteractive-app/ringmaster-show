@@ -2,8 +2,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ringmaster_show/utils/grouped_specialty_breed_scopes.dart';
 
 void main() {
-  test('contains all seven ARBA grouped specialty presets', () {
-    expect(groupedSpecialtyBreedScopes, hasLength(7));
+  test('contains the seven ARBA presets and Rare Breed group', () {
+    expect(groupedSpecialtyBreedScopes, hasLength(8));
     expect(
       groupedSpecialtyBreedScopes.map((preset) => preset.value),
       containsAll(<String>[
@@ -14,6 +14,7 @@ void main() {
         'grouped_full_arch',
         'grouped_semi_arch',
         'grouped_lop',
+        'grouped_rare',
       ]),
     );
   });
@@ -42,5 +43,8 @@ void main() {
     expect(counts['grouped_full_arch'], 6);
     expect(counts['grouped_semi_arch'], 5);
     expect(counts['grouped_lop'], 5);
+    expect(counts['grouped_rare'], 15);
+    expect(groupedSpecialtyBreedScopeForValue('grouped_rare')?.label,
+        'Rare Breed');
   });
 }
