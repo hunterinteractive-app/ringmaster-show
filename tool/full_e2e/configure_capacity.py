@@ -47,6 +47,20 @@ class DockerConnection(http.client.HTTPConnection):
         self.sock=socket.socket(socket.AF_UNIX,socket.SOCK_STREAM)
         self.sock.settimeout(self.timeout);self.sock.connect(self.path)
 
+def gateway_entrypoint(entrypoint,settings):
+    """Patch only a recognized CLI template; preserve routes and credentials."""
+    original='events {\n    multi_accept on;\n}'
+    previous='worker_rlimit_nofile 4096;\n\nevents {\n    worker_connections 2048;\n    multi_accept on;\n}'
+    connections=int(settings['KONG_NGINX_EVENTS_WORKER_CONNECTIONS'])
+    files=int(settings['KONG_NGINX_MAIN_WORKER_RLIMIT_NOFILE'])
+    configured=f'worker_rlimit_nofile {files};\n\nevents {{\n    worker_connections {connections};\n    multi_accept on;\n}}'
+    anchors={original,previous,configured}
+    matches=[anchor for anchor in anchors for text in entrypoint for _ in range(text.count(anchor))]
+    if len(matches)!=1:
+        raise RuntimeError('Unrecognized local gateway template; refusing to alter it')
+    anchor=matches[0]
+    return [text.replace(anchor,configured,1) for text in entrypoint],anchor!=configured
+
 def _configure_service(lab,service,settings):
     name='supabase_'+service+'_'+lab.project
     info=json.loads(subprocess.check_output(['docker','inspect',name],text=True))[0]
@@ -59,14 +73,7 @@ def _configure_service(lab,service,settings):
         # CLI 2.95.4 supplies its own minimal template, bypassing Kong's
         # nginx_main/nginx_events environment injections. Change only its
         # exact events block; preserve embedded routes, keys and certificates.
-        original='events {\n    multi_accept on;\n}'
-        configured='worker_rlimit_nofile 4096;\n\nevents {\n    worker_connections 2048;\n    multi_accept on;\n}'
-        matches=sum(s.count(original) for s in entrypoint)
-        if matches==1:
-            entrypoint=[s.replace(original,configured,1) for s in entrypoint]
-            template_changed=True
-        elif matches or sum(s.count(configured) for s in entrypoint)!=1:
-            raise RuntimeError('Unrecognized local gateway template; refusing to alter it')
+        entrypoint,template_changed=gateway_entrypoint(entrypoint,settings)
     if not template_changed and all(env.get(k)==v for k,v in settings.items()):
         return dict(service=service,changed=False,settings=settings)
     context=json.loads(subprocess.check_output(['docker','context','inspect'],text=True))[0]
