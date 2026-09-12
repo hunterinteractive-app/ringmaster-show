@@ -1,3 +1,11 @@
+import { Buffer } from "node:buffer";
+
+/** Encode the exact byte view without allocating a JavaScript string per byte. */
+export function reportAttachmentBase64(bytes: Uint8Array): string {
+  return Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+    .toString("base64");
+}
+
 export interface EmailArtifact {
   id: string;
   report_name: string;

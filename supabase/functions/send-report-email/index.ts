@@ -2,7 +2,7 @@
 import { observedFetch, authErrorStatus } from "../_shared/request_fetch.ts";
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.110.2";
-import { prepareReportEmailFiles } from "../_shared/report_email_files.ts";
+import { prepareReportEmailFiles, reportAttachmentBase64 } from "../_shared/report_email_files.ts";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -279,7 +279,7 @@ serve(async (req)=>{
     }
     artifacts = files.map((file) => file.artifact);
     const attachments = files.map(({artifact, bytes}) => {
-      const base64Content = toBase64(bytes);
+      const base64Content = reportAttachmentBase64(bytes);
       const fileName = artifact.file_name?.trim() || `${artifact.report_name}.pdf`;
       return {
         filename: fileName,
@@ -535,15 +535,6 @@ function json(data, status = 200) {
       "Content-Type": "application/json"
     }
   });
-}
-function toBase64(bytes) {
-  let binary = "";
-  const chunkSize = 0x8000;
-  for(let offset = 0; offset < bytes.length; offset += chunkSize){
-    const chunk = bytes.subarray(offset, offset + chunkSize);
-    binary += String.fromCharCode(...chunk);
-  }
-  return btoa(binary);
 }
 async function sha256Hex(value) {
   const bytes = new TextEncoder().encode(value);

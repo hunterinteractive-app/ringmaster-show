@@ -1,5 +1,6 @@
 """Check official PDF populations, including successful-but-truncated reports."""
 from collections import Counter,defaultdict
+from datetime import datetime
 import io
 import json
 from pathlib import Path
@@ -19,6 +20,10 @@ if profile and '--checkout-only' not in sys.argv[2:] and not judge_plan.exists()
 judges_by_section={k:set(v) for k,v in json.loads(judge_plan.read_text()).items()} if judge_plan.exists() else {}
 combined='--combined' in sys.argv[2:]
 checkout_only='--checkout-only' in sys.argv[2:]
+delivery_path=out/'delivery-summary.json'
+delivery=json.loads(delivery_path.read_text()) if delivery_path.exists() else {}
+delivery_states=delivery.get('checks',{}).get('delivery_state',[])
+delivery_state=delivery_states[0] if len(delivery_states)==1 else {}
 show_winners=defaultdict(set)
 for section in (1,2):
     for b in [b for b in manifest['breeds'] if b['section']==section and b['bob']][:2]:
@@ -54,6 +59,18 @@ with zipfile.ZipFile(out/'report-files.zip') as archive:
                 missing=sorted(wanted_judges-judges),unexpected=sorted(judges-wanted_judges))
             if actual!=len(population):issues.append('Incorrect rabbit total')
             if judges!=wanted_judges:issues.append('Incomplete judge list')
+            if profile:
+                dates=[]
+                for field in ('exhibitor_emails_sent_at','club_reports_sent_at'):
+                    value=delivery_state.get(field)
+                    if value:
+                        date=datetime.fromisoformat(value.replace('Z','+00:00'))
+                        dates.append(f'{date.month}/{date.day}/{date.year}')
+                block=re.search(r'DATE\s+RIBBONS.*?JUDGES',text,re.S)
+                printed_dates=re.findall(r'\b\d{1,2}/\d{1,2}/\d{4}\b',block[0]) if block else []
+                checks['delivery_dates']=dict(expected=dates,actual=printed_dates)
+                if len(dates)!=2 or printed_dates!=dates:
+                    issues.append('Missing or incorrect completed-delivery dates')
         elif a['report_name']=='breed_results_detail_report':
             population=[e for e in population if e['breed']==a['metadata']['breed_name']]
             # This report promises top-five class placings plus show awards,

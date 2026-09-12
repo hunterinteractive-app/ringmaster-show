@@ -60,6 +60,8 @@ def main():
         (out/'club-delivery-results.json').write_text(json.dumps(dict(requests=requests,result=club_result),indent=2))
         test.summary['checks']['exhibitor_delivery']=dict(targets=len(test.by_exhibitor),attempted=len(sent)+len(errors),responses=len(sent),errors=errors)
         test.summary['checks']['club_delivery']=club_result
+        if errors or len(sent)!=len(test.by_exhibitor) or club_result.get('failed_count'):
+            raise RuntimeError('Report delivery is incomplete; preserve failures and stop before ARBA generation')
         # The real UI records these only after sending. Do not pre-seed them.
         if not errors and len(sent)==len(test.by_exhibitor) and not club_result.get('failed_count'):
             stamp=datetime.now(timezone.utc).isoformat()
@@ -68,7 +70,9 @@ def main():
                     dict(exhibitor_emails_sent_at=stamp,club_reports_sent_at=stamp),admin['token'],method='PATCH')
                 test.summary['checks']['delivery_state']=lab.rows(f"select exhibitor_emails_sent_at,club_reports_sent_at from show_closeout_state where show_id='{SHOW}'")
                 assert test.summary['checks']['delivery_state'] and all(test.summary['checks']['delivery_state'][0].values()),'Delivery dates did not persist'
-            except Exception as e:test.summary['checks']['delivery_state_error']=str(e)
+            except Exception as e:
+                test.summary['checks']['delivery_state_error']=str(e)
+                raise
         # Explicit ARBA generation is its own real application action.
         arba=lab.rows(f"select a.id,a.finalize_run_id,f.scope_key from show_report_artifacts a join show_finalize_runs f on f.id=a.finalize_run_id where a.show_id='{SHOW}' and a.report_name='arba_report' and a.is_current")
         for a in arba:
