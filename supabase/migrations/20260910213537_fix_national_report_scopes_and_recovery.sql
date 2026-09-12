@@ -367,7 +367,10 @@ grant execute on function public.get_report_result_revision_scoped(uuid, uuid[])
 create index if not exists entries_show_id_page_idx on public.entries(show_id, id);
 create index if not exists entries_show_section_id_page_idx on public.entries(show_id, section_id, id);
 create index if not exists breeds_results_name_species_idx
-  on public.breeds(lower(btrim(name)), lower(species::text), name, id) where is_active = true;
+  -- Production species is an enum: enum-to-text casts are not immutable.
+  -- Keep the native species value and use the normalized-name index prefix
+  -- to bound the small catalog lookup before applying the species filter.
+  on public.breeds(lower(btrim(name)), species, name, id) where is_active = true;
 create index if not exists varieties_results_name_idx
   on public.varieties(breed_id, lower(btrim(name)), sort_order, name, id);
 
