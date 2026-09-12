@@ -1,5 +1,6 @@
 import {
   authErrorStatus,
+  budgetedFetch,
   observedFetch,
   UpstreamUnavailable,
 } from "./request_fetch.ts";
@@ -78,4 +79,35 @@ Deno.test("Auth outages remain retryable 503s; invalid credentials remain 401s",
   assert(authErrorStatus({ status: 500 }) === 503);
   assert(authErrorStatus({ status: 503 }) === 503);
   assert(authErrorStatus({ status: 401 }) === 401);
+});
+
+Deno.test("one deadline bounds every account lookup stage without retrying a timed out write", async () => {
+  const controller = new AbortController();
+  let calls = 0;
+  const fake = ((_input: RequestInfo | URL, init?: RequestInit) => {
+    calls++;
+    return new Promise<Response>((_resolve, reject) => {
+      init!.signal!.addEventListener(
+        "abort",
+        () => reject(init!.signal!.reason),
+        { once: true },
+      );
+      controller.abort();
+    });
+  }) as typeof fetch;
+  for (const method of ["POST", "GET"]) {
+    try {
+      await budgetedFetch("account_test", controller.signal, fake)(
+        "https://upstream.invalid",
+        { method },
+      );
+      throw new Error("Expected unavailable");
+    } catch (error) {
+      assert(error instanceof UpstreamUnavailable);
+    }
+  }
+  assert(
+    calls === 1,
+    "Later stages must not restart an expired request budget",
+  );
 });

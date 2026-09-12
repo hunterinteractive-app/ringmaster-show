@@ -4,12 +4,19 @@ No precreated accounts, no sign-in semaphore; the server Auth pool is bounded.
 The show is separate from the retained event and uses only local providers.
 """
 from concurrent.futures import ThreadPoolExecutor,as_completed
+import argparse
 import json,os,secrets,sys,threading,time,uuid
 from pathlib import Path
 from local import Local,ROOT,SHOW,sql_quote as q
 from run import Rehearsal
 
-lab=Local(sys.argv[1]);out=Path(sys.argv[2]);source=Path(sys.argv[3]);out.mkdir(parents=True,exist_ok=True)
+parser=argparse.ArgumentParser(description=__doc__)
+parser.add_argument('workspace');parser.add_argument('output',type=Path);parser.add_argument('source',type=Path)
+parser.add_argument('--rounds',type=int,default=1)
+parser.add_argument('--verify-stall',action='store_true')
+args=parser.parse_args()
+if not 1<=args.rounds<=8:parser.error('Use 1–8 rounds of 250 sessions')
+lab=Local(args.workspace);out=args.output;source=args.source;out.mkdir(parents=True,exist_ok=False)
 for name in ('manifest.json','expected-final-entries.json'):(out/name).write_bytes((source/name).read_bytes())
 test=Rehearsal(lab,out);show=str(uuid.uuid4());section=str(uuid.uuid4());nonce=secrets.token_hex(6)
 lab.sql(f"""begin;
@@ -43,9 +50,9 @@ def buy(i):
     test.measured('create_animal',i,lambda:lab.request('/rest/v1/animals',dict(id=animal,owner_user_id=user,name='',**details),token))
     test.measured('create_cart',i,lambda:lab.request('/rest/v1/entry_carts',dict(id=cart,show_id=show,user_id=user,status='active'),token))
     test.measured('cart_item',i,lambda:lab.request('/rest/v1/entry_cart_items',dict(id=str(uuid.uuid4()),cart_id=cart,exhibitor_id=exhibitor,animal_id=animal,section_id=section,animal_name='',**details),token))
-    quote=test.measured('checkout_session',i,lambda:lab.edge('stripe-create-checkout-session',{'cart_id':cart},token))
+    quote=test.measured('checkout_session',i,lambda:test.checkout_with_client_retry(cart,token,i))
     assert quote['amount_total_cents']==500,quote
-    replay=test.measured('checkout_replay',i,lambda:lab.edge('stripe-create-checkout-session',{'cart_id':cart},token))
+    replay=test.measured('checkout_replay',i,lambda:test.checkout_with_client_retry(cart,token,i))
     assert replay['checkout_session_id']==quote['checkout_session_id']
     obj=test.providers.checkout(quote['checkout_session_id']);event='evt_local_'+uuid.uuid4().hex
     test.measured('payment',i,lambda:test.webhook(obj,event))
@@ -57,9 +64,11 @@ thread=threading.Thread(target=monitor,daemon=True);failures=[]
 try:
     test.start();thread.start();test.log('rush_started',sessions=250)
     with ThreadPoolExecutor(max_workers=250) as pool:
-        for future in as_completed([pool.submit(buy,i) for i in range(250)]):
-            try:future.result()
-            except Exception as e:failures.append(str(e));test.log('rush_error',error=str(e))
+        for round_index in range(args.rounds):
+            for future in as_completed([pool.submit(buy,i) for i in range(round_index*250,(round_index+1)*250)]):
+                try:future.result()
+                except Exception as e:failures.append(str(e));test.log('rush_error',error=str(e))
+            test.log('rush_round_completed',round=round_index+1,failures=len(failures))
     checks=lab.rows(f"select count(*) entries,count(distinct exhibitor_id) exhibitors,count(*) filter(where payment_status='paid') paid from entries where show_id='{show}'")[0]
     checks['auth_users']=int(lab.sql(f"select count(*) from auth.users where email like 'rush-{nonce}-%@example.invalid'"))
     checks['carts']=int(lab.sql(f"select count(*) from entry_carts where show_id='{show}'"))
@@ -68,8 +77,24 @@ try:
         max_connections=max((r['connections'] for r in counts),default=0),
         max_auth_connections=max((r['auth_connections'] for r in counts),default=0))
     assert not failures,failures[:3]
-    assert checks==dict(entries=250,exhibitors=250,paid=250,auth_users=250,carts=250,provider_sessions=250),checks
+    total=250*args.rounds
+    assert checks==dict(entries=total,exhibitors=total,paid=total,auth_users=total,carts=total,provider_sessions=total),checks
     assert test.summary['checks']['max_auth_connections']<=20
+    if args.verify_stall:
+        from local import ApiError
+        person=lab.person('bounded-account-stall')
+        test.providers.delay_next_club_seconds=16
+        started=time.monotonic()
+        try:
+            lab.edge('claim-or-import-exhibitor',{'action':'lookup'},person['token'])
+            raise AssertionError('Stalled lookup unexpectedly succeeded')
+        except ApiError as error:
+            elapsed=time.monotonic()-started
+            assert error.code==503 and 11<=elapsed<15,(error.code,elapsed)
+        recovered=lab.edge('claim-or-import-exhibitor',{'action':'lookup'},person['token'])
+        assert recovered['status']=='club_not_found'
+        test.summary['checks']['bounded_account_stall']=dict(status=503,elapsed_s=round(elapsed,3),retry_recovered=True)
+    test.summary['checks']['rounds']=args.rounds
     test.summary['status']='passed'
 except Exception as error:
     test.summary.update(status='failed',error=str(error))

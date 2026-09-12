@@ -16,6 +16,28 @@ import time
 from urllib.parse import quote
 from local import Local
 
+def configure_database(lab):
+    """Mitigate supautils #214 on the pinned local image, preserving ACL/RLS.
+
+    Only its optional error hints are disabled. Never run this against hosted
+    databases or relax permissions to avoid a denied-function crash.
+    """
+    image=subprocess.check_output(['docker','inspect',lab.container,
+        '--format','{{.Config.Image}}'],text=True).strip()
+    old=lab.sql("select current_setting('supautils.hint_roles',true)").strip()
+    affected=image.endswith(':17.6.1.106')
+    if affected and old:
+        subprocess.run(['docker','exec','-i',lab.container,'sh','-c',
+            'PGPASSWORD="$POSTGRES_PASSWORD" exec psql -X -U supabase_admin -d postgres -v ON_ERROR_STOP=1'],
+            input="alter system set supautils.hint_roles='';\nselect pg_reload_conf();\n",
+            text=True,capture_output=True,check=True)
+        for _ in range(20):
+            if not lab.sql("select current_setting('supautils.hint_roles',true)").strip():break
+            time.sleep(.1)
+        else:raise RuntimeError('Local error-hint mitigation did not take effect')
+    return dict(image=image,optional_error_hints_disabled=affected,
+                changed=bool(affected and old),permissions_unchanged=True)
+
 class DockerConnection(http.client.HTTPConnection):
     def __init__(self,path):
         super().__init__('localhost',timeout=30);self.path=path
@@ -25,12 +47,13 @@ class DockerConnection(http.client.HTTPConnection):
 
 def configure(lab,pool_size=20):
     if not 1<=pool_size<=25:raise ValueError('Local Auth budget must be 1–25 connections')
+    database=configure_database(lab)
     name='supabase_auth_'+lab.project
     info=json.loads(subprocess.check_output(['docker','inspect',name],text=True))[0]
     assert info['Config']['Labels'].get('com.supabase.cli.project')==lab.project
     env={item.split('=',1)[0]:item.split('=',1)[1] for item in info['Config']['Env']}
     old=env.get('GOTRUE_DB_MAX_POOL_SIZE','unbounded (CLI default)')
-    if old==str(pool_size):return dict(auth_pool=pool_size,changed=False)
+    if old==str(pool_size):return dict(auth_pool=pool_size,changed=False,database=database)
     context=json.loads(subprocess.check_output(['docker','context','inspect'],text=True))[0]
     endpoint=context['Endpoints']['docker']['Host']
     if not endpoint.startswith('unix://'):raise ValueError('Only a local Docker socket is allowed')
@@ -63,7 +86,7 @@ def configure(lab,pool_size=20):
             time.sleep(1)
         else:raise RuntimeError('Bounded Auth did not become healthy')
         api('DELETE',f'/containers/{backup}') # stopped, stateless container; never remove volumes
-        return dict(auth_pool=pool_size,auth_idle_pool=5,previous_auth_pool=old,changed=True)
+        return dict(auth_pool=pool_size,auth_idle_pool=5,previous_auth_pool=old,changed=True,database=database)
     except Exception:
         if created:api('DELETE',f'/containers/{name}?force=true')
         if renamed:api('POST',f'/containers/{backup}/rename?name={quote(name)}')

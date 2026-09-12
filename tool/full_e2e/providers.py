@@ -18,10 +18,18 @@ class Providers:
         self.email_keys = {}
         self.delay_next_resend_seconds = 0
         self.delay_next_stripe_seconds = 0
+        self.delay_next_club_seconds = 0
         parent = self
         class Handler(BaseHTTPRequestHandler):
+            # Real providers reuse connections. HTTP/1.0 forced thousands of
+            # Docker-to-host reconnects during a sustained entry rush.
+            protocol_version = 'HTTP/1.1'
+            def setup(self):
+                super().setup()
+                self.connection.settimeout(30)
             def log_message(self, *_): pass
             def do_POST(self):
+                started=time.monotonic()
                 size = int(self.headers.get('Content-Length','0'))
                 if size > 35_000_000:
                     self.send_error(413); return
@@ -34,6 +42,9 @@ class Providers:
                     if not str(payload.get('p_email','')).endswith('@example.invalid'):
                         self.send_error(400); return
                     response=[]  # Separate Club provider boundary: synthetic accounts use manual setup.
+                    with parent.lock:
+                        response_delay=parent.delay_next_club_seconds
+                        parent.delay_next_club_seconds=0
                 elif self.path == '/stripe/v1/checkout/sessions':
                     if self.headers.get('Authorization') != 'Bearer sk_test_local_synthetic_only':
                         self.send_error(401); return
@@ -92,6 +103,9 @@ class Providers:
                 self.send_header('Content-Length',str(len(body))); self.end_headers()
                 try: self.wfile.write(body)
                 except (BrokenPipeError, ConnectionResetError): pass
+                with parent.lock:
+                    with (parent.output/'provider-timings.jsonl').open('a') as log:
+                        log.write(json.dumps(dict(path=self.path,elapsed_ms=round((time.monotonic()-started)*1000,2),injected_delay_seconds=response_delay))+'\n')
         class LocalServer(ThreadingHTTPServer):
             request_queue_size=256
             daemon_threads=True

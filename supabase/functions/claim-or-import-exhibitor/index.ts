@@ -1,4 +1,4 @@
-import { observedFetch, authErrorStatus } from "../_shared/request_fetch.ts";
+import { budgetedFetch, authErrorStatus, UpstreamUnavailable } from "../_shared/request_fetch.ts";
 // supabase/functions/claim-or-import-exhibitor/index.ts
 
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
@@ -205,6 +205,9 @@ serve(async (req) => {
     );
   }
 
+  // Share one deadline across Auth, Show and Club so upstream stalls cannot
+  // keep registration waiting for a minute or more.
+  const upstreamDeadline = AbortSignal.timeout(12_000);
   try {
     /*
      * Authenticate against the RingMaster Show project.
@@ -215,7 +218,7 @@ serve(async (req) => {
       showAnonKey,
       {
         global: {
-          fetch: observedFetch("account_auth"),
+          fetch: budgetedFetch("account_auth", upstreamDeadline),
           headers: {
             Authorization: authorization,
           },
@@ -232,6 +235,7 @@ serve(async (req) => {
       error: userError,
     } = await showUserClient.auth.getUser();
 
+    if (upstreamDeadline.aborted) throw new UpstreamUnavailable();
     if (userError || !user) {
       return json(
         {
@@ -261,6 +265,7 @@ serve(async (req) => {
       showUrl,
       showServiceRoleKey,
       {
+        global: { fetch: budgetedFetch("account_show", upstreamDeadline) },
         auth: {
           persistSession: false,
           autoRefreshToken: false,
@@ -272,6 +277,7 @@ serve(async (req) => {
       clubUrl,
       clubServiceRoleKey,
       {
+        global: { fetch: budgetedFetch("account_club", upstreamDeadline) },
         auth: {
           persistSession: false,
           autoRefreshToken: false,
@@ -722,6 +728,12 @@ serve(async (req) => {
       display_name: finalDisplayName,
     });
   } catch (error) {
+    if (upstreamDeadline.aborted || error instanceof UpstreamUnavailable) {
+      return json({
+        status: "temporarily_unavailable",
+        message: new UpstreamUnavailable().message,
+      }, 503);
+    }
     console.error(
       "claim-or-import-exhibitor failed",
       error,

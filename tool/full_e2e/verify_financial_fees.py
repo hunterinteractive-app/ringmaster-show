@@ -12,8 +12,8 @@ set request.jwt.claims='{json.dumps(dict(role='authenticated',sub=admin))}';
 insert into public.show_checkin_change_requests(id,show_id,exhibitor_id,entry_id,request_type,requested_changes,status)
 select '99800000-0000-4000-8000-000000000001',show_id,exhibitor_id,id,'entry_edit','{{"ear_number":"TEST-FEE"}}','approved'
 from public.entries where show_id='{SHOW}' and section_id='{uid('951',2)}' order by id limit 1;
-select public.add_checkin_fee_charge('{SHOW}',(select exhibitor_id from show_checkin_change_requests where id='99800000-0000-4000-8000-000000000001'),'99800000-0000-4000-8000-000000000001','entry_edit_approval',{amount});
-select public.add_checkin_fee_charge('{SHOW}',(select exhibitor_id from show_checkin_change_requests where id='99800000-0000-4000-8000-000000000001'),'99800000-0000-4000-8000-000000000001','entry_edit_approval',{amount});
+select report_generation_private.add_checkin_fee_charge('{SHOW}',(select exhibitor_id from show_checkin_change_requests where id='99800000-0000-4000-8000-000000000001'),'99800000-0000-4000-8000-000000000001','entry_edit_approval',{amount});
+select report_generation_private.add_checkin_fee_charge('{SHOW}',(select exhibitor_id from show_checkin_change_requests where id='99800000-0000-4000-8000-000000000001'),'99800000-0000-4000-8000-000000000001','entry_edit_approval',{amount});
 select public.record_checkin_manual_payment('{SHOW}',(select exhibitor_id from show_checkin_change_requests where id='99800000-0000-4000-8000-000000000001'),{amount},'cash','LOCAL-FEE-REGRESSION','no_receipt');
 do $$
 declare b jsonb; n int;

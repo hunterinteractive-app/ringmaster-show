@@ -6,6 +6,29 @@ export class UpstreamUnavailable extends Error {
   }
 }
 
+/** Share one deadline across all upstream stages of an account lookup. */
+export function budgetedFetch(
+  label: string,
+  deadline: AbortSignal,
+  fetcher: typeof fetch = fetch,
+): typeof fetch {
+  const observed = observedFetch(label, fetcher);
+  return async (input, init) => {
+    const request = new Request(input, init);
+    try {
+      deadline.throwIfAborted();
+      return await observed(
+        new Request(request, {
+          signal: AbortSignal.any([request.signal, deadline]),
+        }),
+      );
+    } catch (error) {
+      if (deadline.aborted) throw new UpstreamUnavailable();
+      throw error;
+    }
+  };
+}
+
 export function observedFetch(
   label: string,
   fetcher: typeof fetch = fetch,

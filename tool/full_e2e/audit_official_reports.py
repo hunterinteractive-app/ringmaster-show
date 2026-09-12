@@ -38,10 +38,12 @@ with zipfile.ZipFile(out/'report-files.zip') as archive:
         population=[e for e in registered if not e.get('scratched')]
         issues=[];checks={}
         if a['report_name']=='arba_report':
-            found=re.search(r'Number of Rabbits Exhibited:\s*([\d,]+)',text)
+            # PDF extraction can join adjacent words after the form is scaled.
+            # Match those layout spaces optionally, while keeping values exact.
+            found=re.search(r'Number\s*of\s*Rabbits\s*Exhibited:\s*([\d,]+)',text)
             actual=int(found[1].replace(',','')) if found else None
             checks['rabbits_shown']=dict(expected=len(population),actual=actual)
-            judges={int(n) for n in re.findall(r'Synthetic Judge\s+(\d+)',text)}
+            judges={int(n) for n in re.findall(r'Synthetic\s*Judge\s*(\d+)',text)}
             checks['judges_printed']=dict(expected=110,actual=len(judges))
             if actual!=len(population):issues.append('Incorrect rabbit total')
             if judges!=set(range(1,111)):issues.append('Incomplete judge list')

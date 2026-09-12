@@ -6,6 +6,8 @@ import hashlib
 import hmac
 import json
 import os
+import random
+import secrets
 from pathlib import Path
 import signal
 import subprocess
@@ -107,7 +109,15 @@ class Rehearsal:
 
     def register(self,n):
         p=getattr(self,'registration_people',{}).get(n)
-        if p is None:p=self.measured('registration_signin',n,lambda:self.lab.person(f'exhibitor-{n}'))
+        if p is None:
+            email=f'exhibitor-{n}-{secrets.token_hex(6)}@example.invalid'
+            password=secrets.token_urlsafe(32)
+            auth=self.measured('public_signup',n,lambda:self.lab.request('/auth/v1/signup',
+                {'email':email,'password':password},self.lab.anon,timeout=90))
+            login=self.measured('password_signin',n,lambda:self.lab.request('/auth/v1/token?grant_type=password',
+                {'email':email,'password':password},self.lab.anon,timeout=90))
+            assert auth['user']['id']==login['user']['id']
+            p=dict(user_id=login['user']['id'],token=login['access_token'],email=email)
         token=p['token']; rows=self.by_exhibitor[n]
         if getattr(self, 'verify_account_lookup', False):
             lookup=self.measured('account_lookup',n,lambda:self.lab.edge('claim-or-import-exhibitor',{'action':'lookup'},token))
@@ -125,11 +135,11 @@ class Rehearsal:
         items=[dict(id=uid('959',e['n']),cart_id=cart,exhibitor_id=exhibitor['id'],animal_id=uid('953',e['n']),
             **{k:e[k] for k in ('section_id','species','tattoo','animal_name','breed','variety','class_name','sex')}) for e in rows]
         self.measured('add_cart_items',n,lambda:self.lab.request('/rest/v1/entry_cart_items',items,token))
-        quote=self.measured('checkout_session',n,lambda:self.lab.edge('stripe-create-checkout-session',{'cart_id':cart},token))
+        quote=self.measured('checkout_session',n,lambda:self.checkout_with_client_retry(cart,token,n))
         assert quote['show_balance_total_cents']==len(rows)*500, quote
         assert quote['amount_total_cents']==len(rows)*500, quote # fees absorbed for this fixture
         if n<=16:
-            replay=self.measured('checkout_retry',n,lambda:self.lab.edge('stripe-create-checkout-session',{'cart_id':cart},token))
+            replay=self.measured('checkout_retry',n,lambda:self.checkout_with_client_retry(cart,token,n))
             assert replay['checkout_session_id']==quote['checkout_session_id']
         obj=self.providers.checkout(quote['checkout_session_id']); event='evt_local_'+str(uuid.uuid4())
         self.measured('paid_webhook',n,lambda:self.webhook(obj,event))
@@ -137,6 +147,23 @@ class Rehearsal:
             result=self.measured('payment_webhook_retry',n,lambda:self.webhook(obj,event))
             assert result.get('duplicate') is True, result
         return n
+
+    def checkout_with_client_retry(self,cart,token,session):
+        # Match StripeConnectService.startCheckout + retryTransient exactly:
+        # three attempts, only the four transient function statuses, same cart.
+        # Keep every failed attempt visible even when the user action recovers.
+        for attempt in range(1,4):
+            try:
+                return self.lab.edge('stripe-create-checkout-session',{'cart_id':cart},token)
+            except ApiError as error:
+                retry=error.code in (500,502,503,504) and attempt<3
+                record=dict(session=session,cart_id=cart,attempt=attempt,status=error.code,retry=retry)
+                with self.lock:
+                    with (self.output/'checkout-http-failures.jsonl').open('a') as f:
+                        f.write(json.dumps(record)+'\n')
+                self.log('checkout_http_failure',**record)
+                if not retry:raise
+                self.stop.wait(((250 << (attempt-1))+random.randrange(250))/1000)
 
     def registration(self, limit):
         existing={int(r['exhibitor_id'].split('-')[-1]):int(r['n']) for r in self.lab.rows(f"select exhibitor_id,count(*) n from public.entries where show_id='{SHOW}' group by exhibitor_id")}
