@@ -62,3 +62,22 @@ checkout-generation deadline. It has not been run yet.
 Raw release evidence: `output/full_e2e/national-release-20260912/`.
 Failed full run: `output/full_e2e/fresh-51k-r7-20260912/`.
 Focused retest: `output/full_e2e/r7-registration-repair-20260912/`.
+
+## Sustained arrivals after the focused burst
+
+Follow-up source `687671b1180096a3f1c592b92ad31d00bbc4591f` deployed all
+16 affected Edge functions; app CI run 34714618676 passed. Eighteen focused
+SDK/payment tests passed. No database or report-worker change was required.
+
+The new R8 full event retained the correct 20-connection REST pool. Days 1–29
+passed, but the final day's 1,518 purchasers at concurrency 500 produced
+50 failures: 46 closed connections and four exhausted HTTP 503 requests.
+The erroneous checkout HTTP 400 classification did not recur. Kong logged
+that its 2,048 worker connections were insufficient. The failed phase is
+preserved at `output/full_e2e/fresh-51k-r8-20260912/`.
+
+The next full-event comparisons use one local gateway worker with 4,096
+connection slots and an 8,192 open-file limit. Both the 51k and 102k runs
+will use this same budget. Database connections and report-worker capacity
+remain unchanged. This is an explicit local infrastructure adjustment;
+the earlier 2,048-slot result must not be described as passing sustained load.

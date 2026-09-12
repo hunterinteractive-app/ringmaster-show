@@ -129,17 +129,17 @@ def configure(lab,pool_size=20,rest_pool=None):
     auth=_configure_service(lab,'auth',{'GOTRUE_DB_MAX_POOL_SIZE':str(pool_size),'GOTRUE_DB_MAX_IDLE_POOL_SIZE':'5'})
     rest=_configure_service(lab,'rest',{'PGRST_DB_POOL':str(rest_pool),'PGRST_ADMIN_SERVER_PORT':'3001'})
     # The pinned local Kong image defaults to 512 worker connections, counting
-    # client and upstream sockets together. A 270-session navigation barrier
-    # exhausted that limit even with spare database connections. Keep one
-    # gateway worker and the same database budgets; permit the intended burst.
+    # client and upstream sockets together. Sustained 500-purchaser arrivals
+    # exhausted 2,048 slots even though a single 500-purchaser burst passed.
+    # Keep this same gateway budget for the 51k and 102k full-event comparisons.
     gateway=_configure_service(lab,'kong',{
-        'KONG_NGINX_EVENTS_WORKER_CONNECTIONS':'2048',
-        'KONG_NGINX_MAIN_WORKER_RLIMIT_NOFILE':'4096'})
+        'KONG_NGINX_EVENTS_WORKER_CONNECTIONS':'4096',
+        'KONG_NGINX_MAIN_WORKER_RLIMIT_NOFILE':'8192'})
     nginx=subprocess.check_output(['docker','exec','supabase_kong_'+lab.project,
         'cat','/usr/local/kong/nginx.conf'],text=True)
     gateway_limits={name:int(re.search(r'\b'+name+r'\s+(\d+)\s*;',nginx).group(1))
                     for name in ('worker_connections','worker_rlimit_nofile')}
-    assert gateway_limits==dict(worker_connections=2048,worker_rlimit_nofile=4096),gateway_limits
+    assert gateway_limits==dict(worker_connections=4096,worker_rlimit_nofile=8192),gateway_limits
     dump=subprocess.check_output(['docker','exec','supabase_rest_'+lab.project,'postgrest','--dump-config'],text=True)
     settings={line.split(' = ',1)[0]:line.split(' = ',1)[1] for line in dump.splitlines() if ' = ' in line and line.split(' = ',1)[0] in ('db-pool','db-pool-acquisition-timeout','admin-server-port')}
     assert settings['db-pool']==str(rest_pool),settings

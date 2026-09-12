@@ -368,8 +368,8 @@ failed full event into a pass.
 Run `configure_capacity.py WORKSPACE --rest-pool 20` after every CLI stack
 recreation and before a load burst. `Rehearsal.start()` and standalone
 `repeat_navigation.py` do this automatically. This restores the bounded
-Auth/REST pools and sets the local gateway's single worker to 2,048 connections
-with a 4,096 open-file limit. The helper verifies the effective Nginx settings;
+Auth/REST pools and sets the local gateway's single worker to 4,096 connections
+with an 8,192 open-file limit. The helper verifies the effective Nginx settings;
 it does not change database connection limits or gateway worker count.
 
 The pinned local Kong image exhausted its default 512 connection slots during
@@ -377,6 +377,12 @@ the doubled 270-session navigation barrier. Those slots cover both clients and
 upstream connections. Gateway limits are separate from the database pool
 budget. Preserve the failed burst evidence and use a fresh output directory
 when retesting a changed capacity configuration.
+
+The fresh R8 sustained final-day run later exhausted 2,048 slots with 500
+purchasers despite a successful single-burst test. The 4,096-slot gateway
+budget is held constant for the next 51k and 102k comparisons. Auth/REST pools
+remain 20 each and report-worker resources remain unchanged. Explicit REST
+pool selections are saved to `rehearsal-capacity.json` and survive startup.
 
 Event judging writes `expected-judges-by-section.json` from the planned class
 assignments before results are saved. The official ARBA audit requires this
