@@ -348,14 +348,6 @@ class _QrResultsEntryScreenState extends State<QrResultsEntryScreen> {
       }).toList();
     }
 
-    final classSexLabel = (widget.classSexLabel ?? '').trim();
-    if (classSexLabel.isNotEmpty) {
-      entries = entries.where((e) {
-        return _classSexLabelFromEntry(e).toLowerCase() ==
-            classSexLabel.toLowerCase();
-      }).toList();
-    }
-
     final entryIds = entries
         .map((e) => (e['entry_id'] ?? '').toString().trim())
         .where((x) => x.isNotEmpty)
@@ -363,19 +355,23 @@ class _QrResultsEntryScreenState extends State<QrResultsEntryScreen> {
         .toList();
 
     final animalIdByEntryId = <String, String>{};
+    final speciesByEntryId = <String, String>{};
     for (var i = 0; i < entryIds.length; i += 100) {
       final chunk = entryIds.skip(i).take(100).toList();
       if (chunk.isEmpty) continue;
 
       final sourceRows = await supabase
           .from('entries')
-          .select('id, animal_id')
+          .select('id, animal_id, species')
           .inFilter('id', chunk);
 
       for (final raw in sourceRows as List) {
         final row = Map<String, dynamic>.from(raw as Map);
         final entryId = (row['id'] ?? '').toString().trim();
         final animalId = (row['animal_id'] ?? '').toString().trim();
+        if (entryId.isNotEmpty) {
+          speciesByEntryId[entryId] = (row['species'] ?? '').toString().trim();
+        }
         if (entryId.isNotEmpty && animalId.isNotEmpty) {
           animalIdByEntryId[entryId] = animalId;
         }
@@ -411,9 +407,19 @@ class _QrResultsEntryScreenState extends State<QrResultsEntryScreen> {
       final entryId = (entry['entry_id'] ?? '').toString().trim();
       final animalId = animalIdByEntryId[entryId] ?? '';
       entry['animal_id'] = animalId;
+      // The report projection omits species; use the authoritative entry row.
+      entry['species'] = speciesByEntryId[entryId] ?? entry['species'];
       entry['coop_number'] = animalId.isEmpty
           ? ''
           : (coopNumberByAnimalAndScope['$animalId|$coopScope'] ?? '');
+    }
+
+    final classSexLabel = (widget.classSexLabel ?? '').trim();
+    if (classSexLabel.isNotEmpty) {
+      entries = entries.where((e) {
+        return _classSexLabelFromEntry(e).toLowerCase() ==
+            classSexLabel.toLowerCase();
+      }).toList();
     }
 
     final awardsByEntryId = <String, List<String>>{};
