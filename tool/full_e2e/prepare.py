@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 import sys
 from local import Local, ROOT, SHOW, uid, sql_quote as q
-sys.path.insert(0, str(ROOT / 'tool/national_scale'))
+sys.path.append(str(ROOT / 'tool/national_scale'))
 from convention_2024 import build
 from workload import scale_manifest, staff_counts
 

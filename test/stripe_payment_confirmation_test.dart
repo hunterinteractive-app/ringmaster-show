@@ -3,6 +3,25 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ringmaster_show/widgets/stripe_payment_confirmation_dialog.dart';
 
 void main() {
+  testWidgets('a fee-only payment does not announce new entries', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: StripePaymentConfirmationDialog(
+          loadStatus: () async => {'completed': true, 'expected_entries': 0},
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Your payment is confirmed.'), findsOneWidget);
+    expect(
+      find.text(
+        'Your payment is confirmed and your entries have been submitted.',
+      ),
+      findsNothing,
+    );
+  });
   testWidgets('queued and pending receipts never announce completed entries', (
     tester,
   ) async {

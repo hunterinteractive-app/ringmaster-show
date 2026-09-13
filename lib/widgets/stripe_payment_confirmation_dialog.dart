@@ -37,6 +37,7 @@ class _StripePaymentConfirmationDialogState
     extends State<StripePaymentConfirmationDialog> {
   bool _checking = true;
   bool _completed = false;
+  bool _feeOnly = false;
   @override
   void initState() {
     super.initState();
@@ -52,6 +53,7 @@ class _StripePaymentConfirmationDialogState
         if (status['completed'] == true) {
           setState(() {
             _completed = true;
+            _feeOnly = status['expected_entries'] == 0;
             _checking = false;
           });
           return;
@@ -86,7 +88,9 @@ class _StripePaymentConfirmationDialogState
           ),
         Text(
           _completed
-              ? 'Your payment is confirmed and your entries have been submitted.'
+              ? _feeOnly
+                    ? 'Your payment is confirmed.'
+                    : 'Your payment is confirmed and your entries have been submitted.'
               : 'We are checking your payment and entries. Please confirm their status before starting another checkout.',
         ),
       ],

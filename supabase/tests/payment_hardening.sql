@@ -520,6 +520,50 @@ $$;
 --     'pi_concurrent', :amount_cents, 'usd');
 -- Both return successfully; exactly one reports already_finalized=false.
 
+-- Confirmation must distinguish real entries from fee-only carrier items.
+do $$
+declare
+  v_ctx payment_test_context%rowtype;
+  v_status jsonb;
+  v_removed public.entries%rowtype;
+  v_exhibitor uuid;
+  v_charge uuid;
+  v_request uuid;
+  v_cart uuid;
+  v_quote jsonb;
+  v_session uuid;
+  v_expected integer;
+begin
+  select * into v_ctx from payment_test_context;
+  v_status := public.get_stripe_registration_status(p_cart_id=>v_ctx.cart_id);
+  perform pg_temp.assert_true((v_status->>'completed')::boolean
+    and (v_status->>'saved_paid_entries')::integer=2,
+    'regular and fur entries must both confirm');
+  delete from public.entries where source_cart_id=v_ctx.cart_id and is_fur
+    returning * into v_removed;
+  perform pg_temp.assert_true(not (public.get_stripe_registration_status(p_cart_id=>v_ctx.cart_id)->>'completed')::boolean,
+    'a missing fur entry must prevent confirmation');
+  insert into public.entries select (v_removed).*;
+
+  select exhibitor_id into v_exhibitor from public.entry_cart_items where cart_id=v_ctx.cart_id limit 1;
+  insert into public.show_checkin_change_requests(show_id,exhibitor_id,entry_id,request_type,requested_changes,status,fee_cents)
+    values(v_ctx.show_id,v_exhibitor,v_removed.id,'entry_edit','{"ear_number":"PAY-1X"}','approved',500)
+    returning id into v_request;
+  v_charge := report_generation_private.add_checkin_fee_charge(v_ctx.show_id,v_exhibitor,v_request,'ear_number',500,'{}');
+  select cart_id into v_cart from public.show_checkin_fee_charges where id=v_charge;
+  v_quote := public.create_payment_quote_attempt(v_cart,v_ctx.owner_id,'stripe',0.02,0.029,30);
+  v_session := (v_quote->>'payment_session_id')::uuid;
+  select expected_amount_cents into v_expected from public.show_payment_sessions where id=v_session;
+  perform public.finalize_entry_cart_paid(v_cart,v_session,'stripe','pi_fee_confirmation',v_expected,'usd');
+  v_status := public.get_stripe_registration_status(p_cart_id=>v_cart);
+  perform pg_temp.assert_true((v_status->>'completed')::boolean
+    and (v_status->>'expected_entries')::integer=0
+    and (v_status->>'saved_paid_entries')::integer=0
+    and (v_status->>'paid_records')::integer=1,
+    'a paid check-in fee must confirm without creating an animal entry');
+end;
+$$;
+
 select pass('payment hardening regression contracts');
 
 rollback;
