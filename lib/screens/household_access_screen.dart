@@ -210,12 +210,14 @@ class _HouseholdAccessScreenState extends State<HouseholdAccessScreen> {
               padding: EdgeInsets.only(bottom: 12),
               child: Text('Support mode — household access is view-only.'),
             ),
-          const Text(
-            'Choose a household',
+          Text(
+            _households.length > 1 ? 'Choose a household' : 'Your household',
             style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
           ),
+          const SizedBox(height: 6),
           const Text(
-            'Your Show Secretary and admin permissions always belong to your own login.',
+            'Show Secretary and admin permissions stay with your own login.',
+            style: TextStyle(height: 1.4),
           ),
           const SizedBox(height: 12),
           if (_busy) const LinearProgressIndicator(),
@@ -223,21 +225,45 @@ class _HouseholdAccessScreenState extends State<HouseholdAccessScreen> {
             Text(_error!, style: const TextStyle(color: Colors.red)),
           for (final h in _households)
             Card(
+              margin: const EdgeInsets.only(bottom: 8),
               child: ListTile(
-                title: Text(h['label'].toString()),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
+                textColor: const Color(0xFF281B45),
+                iconColor: const Color(0xFF3B2078),
+                title: Text(
+                  h['label'].toString(),
+                  style: const TextStyle(
+                    color: Color(0xFF281B45),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
                 subtitle: Text(
                   h['is_owner'] == true
                       ? 'Your exhibitors, animals, and entries'
                       : 'Shared exhibitors, animals, and entries',
+                  style: const TextStyle(
+                    color: Color(0xFF4D465B),
+                    height: 1.35,
+                  ),
                 ),
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     if (AppSession.householdOwnerUserId == h['owner_user_id'])
-                      const Icon(Icons.check),
+                      const Icon(
+                        Icons.check_circle,
+                        color: Color(0xFF3B2078),
+                        semanticLabel: 'Current household',
+                      ),
                     IconButton(
                       tooltip: 'Manage household access',
-                      icon: const Icon(Icons.more_vert),
+                      icon: const Icon(
+                        Icons.more_vert,
+                        color: Color(0xFF3B2078),
+                      ),
                       onPressed: _busy ? null : () => _manageHousehold(h),
                     ),
                   ],
