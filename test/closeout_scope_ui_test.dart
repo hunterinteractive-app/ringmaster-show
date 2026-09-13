@@ -720,9 +720,12 @@ void main() {
       expect(find.text('Exhibitor: Alex Example'), findsOneWidget);
       expect(find.text('Breed: Dutch'), findsOneWidget);
       expect(find.text('Error category: renderer_timeout'), findsOneWidget);
-      expect(find.text('The report could not be rendered'), findsOneWidget);
+      expect(find.text('Report timed out'), findsOneWidget);
       expect(find.text('Missing ARBA Sanction Number'), findsOneWidget);
-      expect(find.text('The report renderer timed out.'), findsOneWidget);
+      expect(
+        find.text('Generation took too long. Retry this report.'),
+        findsOneWidget,
+      );
       expect(
         find.text('Latest task category: worker_lease_expired'),
         findsOneWidget,

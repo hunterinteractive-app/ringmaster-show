@@ -127,7 +127,6 @@ class JudgeReportLoader {
           .select()
           .eq('show_id', showId)
           .order('judge_id')
-          .order('section_id')
           .range(from, to),
     );
 

@@ -2068,6 +2068,7 @@ class _GenerateReportsPanelState extends State<_GenerateReportsPanel> {
     final json = Map<String, dynamic>.from(progress as Map);
     final finalizeRunId = '${json['finalize_run_id'] ?? ''}'.trim();
     if (finalizeRunId.isEmpty) return null;
+    await _attachReportFailures(json);
     return _ReportGenerationState.fromProgress(json);
   }
 
@@ -2105,7 +2106,73 @@ class _GenerateReportsPanelState extends State<_GenerateReportsPanel> {
         'p_finalize_run_id': current.finalizeRunId,
       },
     );
-    return current.withProgress(Map<String, dynamic>.from(progress as Map));
+    final json = Map<String, dynamic>.from(progress as Map);
+    await _attachReportFailures(json);
+    return current.withProgress(json);
+  }
+
+  Future<void> _attachReportFailures(Map<String, dynamic> progress) async {
+    final tasks = progress['task_counts'] as Map? ?? const {};
+    final artifacts = progress['artifact_counts'] as Map? ?? const {};
+    if ((num.tryParse('${tasks['failed'] ?? 0}') ?? 0) == 0 &&
+        (num.tryParse('${artifacts['failed'] ?? 0}') ?? 0) == 0) {
+      return;
+    }
+    try {
+      final sectionIds =
+          (progress['section_ids'] as List? ?? const [])
+              .map((value) => value.toString())
+              .toList()
+            ..sort();
+      final dashboard = await Supabase.instance.client.rpc(
+        'get_closeout_dashboard_scoped_for_species',
+        params: {
+          'p_show_id': widget.showId,
+          'p_scope_key': '${widget.showId}:${sectionIds.join(',')}',
+          'p_section_ids': sectionIds,
+          'p_artifact_limit': 100,
+          'p_artifact_offset': 0,
+          'p_species_filter': null,
+        },
+      );
+      final rows = (dashboard['review_reports'] as List? ?? const [])
+          .whereType<Map>()
+          .where(
+            (row) =>
+                row['finalize_run_id'] == progress['finalize_run_id'] &&
+                (row['artifact_status'] == 'failed' ||
+                    row['task_status'] == 'failed'),
+          );
+      progress['failure_messages'] = rows
+          .map((row) {
+            final metadata = Map<String, dynamic>.from(
+              row['metadata'] as Map? ?? {},
+            );
+            final name = '${row['report_name'] ?? 'Report'}'
+                .split('_')
+                .map(
+                  (word) => word.isEmpty
+                      ? word
+                      : '${word[0].toUpperCase()}${word.substring(1)}',
+                )
+                .join(' ');
+            final failure = closeoutFailureDisplay(
+              taskLastError: '${row['task_last_error'] ?? ''}',
+              taskErrorMessage: '${row['task_error_message'] ?? ''}',
+              errorCategory: '${metadata['error_category'] ?? ''}',
+              metadataLastError: '${metadata['last_error'] ?? ''}',
+              metadataErrorMessage: '${metadata['error_message'] ?? ''}',
+              sectionLabel: '${metadata['scope_label'] ?? ''}',
+            );
+            return '$name — ${failure.message.split('\n').first}';
+          })
+          .toSet()
+          .toList();
+    } catch (_) {
+      progress['failure_messages'] = [
+        'Failed report details could not be loaded. Refresh to try again.',
+      ];
+    }
   }
 
   Future<void> _refreshProgress() async {
@@ -2288,10 +2355,10 @@ class _GenerationProgressPanel extends StatelessWidget {
     final failureCount = state.failed > state.reportFailed
         ? state.failed
         : state.reportFailed;
-    final complete = state.reportTotal > 0
-        ? state.generated + failureCount
-        : state.completed + failureCount;
-    final progress = total == 0 ? 0.0 : (complete / total).clamp(0.0, 1.0);
+    final complete = state.reportTotal > 0 ? state.generated : state.completed;
+    final progress = total == 0
+        ? 0.0
+        : ((complete + failureCount) / total).clamp(0.0, 1.0);
     final eta = _eta(
       total: initialReportTotal > 0 ? initialReportTotal : total,
       complete: complete,
@@ -2322,6 +2389,10 @@ class _GenerationProgressPanel extends StatelessWidget {
           Text(
             '$complete of $total reports complete • ${state.queued} queued • ${state.running} running • $failureCount failed${state.retrying > 0 ? ' • ${state.retrying} retrying' : ''}',
           ),
+          for (final message in state.failureMessages) ...[
+            const SizedBox(height: 8),
+            Text(message, style: TextStyle(color: Colors.red.shade800)),
+          ],
           if (eta != null)
             Text('Estimated time remaining: ${_formatDuration(eta)}'),
           if (!state.ready) ...[
@@ -2375,6 +2446,7 @@ class _ReportGenerationState {
   final int reportTotal;
   final int generated;
   final int reportFailed;
+  final List<String> failureMessages;
 
   const _ReportGenerationState({
     required this.sectionIds,
@@ -2390,6 +2462,7 @@ class _ReportGenerationState {
     required this.reportTotal,
     required this.generated,
     required this.reportFailed,
+    this.failureMessages = const [],
   });
 
   factory _ReportGenerationState.fromJson(
@@ -2437,6 +2510,9 @@ class _ReportGenerationState {
       reportTotal: number(artifacts, 'total'),
       generated: number(artifacts, 'generated'),
       reportFailed: number(artifacts, 'failed'),
+      failureMessages: (json['failure_messages'] as List? ?? const [])
+          .map((value) => value.toString())
+          .toList(),
     );
   }
 
@@ -2489,6 +2565,9 @@ class _ReportGenerationState {
       reportTotal: number(artifacts, 'total'),
       generated: number(artifacts, 'generated'),
       reportFailed: number(artifacts, 'failed'),
+      failureMessages: (json['failure_messages'] as List? ?? const [])
+          .map((value) => value.toString())
+          .toList(),
     );
   }
 }

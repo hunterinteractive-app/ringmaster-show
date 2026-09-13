@@ -425,6 +425,23 @@ CloseoutFailureDisplay closeoutFailureDisplay({
     fallbackError,
   ].map((value) => value.trim()).where((value) => value.isNotEmpty).toList();
   final searchable = details.join('\n');
+  if (RegExp(r'column .+ does not exist|code: 42703').hasMatch(searchable)) {
+    return const CloseoutFailureDisplay(
+      title: 'Report system error',
+      message:
+          'The report requested an unavailable database field. '
+          'Contact support; your show information does not need changing.',
+    );
+  }
+  if (RegExp(
+    r'timeout|timed out|57014',
+    caseSensitive: false,
+  ).hasMatch(searchable)) {
+    return const CloseoutFailureDisplay(
+      title: 'Report timed out',
+      message: 'Generation took too long. Retry this report.',
+    );
+  }
   final normalizedMissingField = missingField.trim().toLowerCase();
   final isBestInShowAddress =
       normalizedMissingField == 'best_in_show_exhibitor_address' ||
