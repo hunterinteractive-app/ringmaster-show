@@ -1,3 +1,4 @@
+import 'services/household_session.dart';
 // lib/main.dart
 import 'dart:async';
 
@@ -287,6 +288,12 @@ class _RootState extends State<Root> {
 
     try {
       await AppInitService.initializeForCurrentUser();
+      try {
+        await HouseholdSession.refresh();
+      } on PostgrestException catch (e) {
+        // Allow the existing portal during a staged database rollout.
+        if (e.code != 'PGRST202') rethrow;
+      }
 
       final row = await supabase
           .from('exhibitors')
@@ -297,7 +304,10 @@ class _RootState extends State<Root> {
 
       if (!mounted) return;
       setState(() {
-        _hasExhibitor = row != null;
+        _hasExhibitor =
+            row != null ||
+            HouseholdSession.invitations.isNotEmpty ||
+            HouseholdSession.households.length > 1;
         _loading = false;
       });
     } catch (e) {

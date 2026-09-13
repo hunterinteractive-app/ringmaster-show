@@ -366,7 +366,7 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
   }
 
   Future<void> _viewCart() async {
-    final userId = AppSession.effectiveUserId;
+    final userId = AppSession.householdOwnerUserId;
     if (userId == null) {
       setState(() => _msg = 'Not signed in.');
       return;
@@ -429,7 +429,7 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
   }
 
   Future<List<Map<String, dynamic>>> _loadActiveExhibitors() async {
-    final userId = AppSession.effectiveUserId;
+    final userId = AppSession.householdOwnerUserId;
     if (userId == null) return [];
 
     final rows = await supabase
@@ -505,7 +505,7 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
   }
 
   Future<void> _loadActiveCartIdIfExists() async {
-    final userId = AppSession.effectiveUserId;
+    final userId = AppSession.householdOwnerUserId;
     if (userId == null) {
       _activeCartId = null;
       return;
@@ -901,7 +901,7 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
   }
 
   Future<List<Map<String, dynamic>>> _loadAnimals() async {
-    final userId = AppSession.effectiveUserId;
+    final userId = AppSession.householdOwnerUserId;
     if (userId == null) return [];
 
     final res = await supabase
@@ -1538,7 +1538,7 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
   Future<void> _addSelectedToCart(
     List<Map<String, dynamic>> eligibleAnimals,
   ) async {
-    final userId = AppSession.effectiveUserId;
+    final userId = AppSession.householdOwnerUserId;
     if (userId == null) {
       setState(() => _msg = 'Not signed in.');
       return;
@@ -2204,7 +2204,7 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
     required Map<String, dynamic> animal,
     required String classCode,
   }) async {
-    final userId = AppSession.effectiveUserId;
+    final userId = AppSession.householdOwnerUserId;
     if (userId == null) {
       setState(() => _msg = 'Not signed in.');
       return;
@@ -2316,7 +2316,7 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
   }
 
   Future<void> _addMeatPenToCart() async {
-    final userId = AppSession.effectiveUserId;
+    final userId = AppSession.householdOwnerUserId;
     if (userId == null) {
       setState(() => _msg = 'Not signed in.');
       return;

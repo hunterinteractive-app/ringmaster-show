@@ -1,3 +1,4 @@
+import { assertHouseholdAccess } from "../_shared/household.ts";
 import { errorMessage, handleOptions, jsonResponse } from "../_shared/http.ts";
 import {
   attachProviderHostedCheckout,
@@ -37,7 +38,7 @@ Deno.serve(async (request: Request) => {
   const backend = serviceClient();
   let attempt: PaymentAttempt | null = null;
   try {
-    const { user } = await authenticatedUser(request);
+    const { user, client: actorClient } = await authenticatedUser(request);
     const body = await request.json() as RequestBody;
     const cartId = body.cart_id?.trim() ?? "";
     const clientAttemptKey = body.client_attempt_key?.trim() ?? "";
@@ -53,9 +54,10 @@ Deno.serve(async (request: Request) => {
         "show_id,user_id,status,payment_status,active_payment_session_id,selected_payment_timing,selected_payment_provider",
       )
       .eq("id", cartId).maybeSingle();
-    if (cartError || !cart || cart.user_id !== user.id) {
+    if (cartError || !cart) {
       throw new Error("You do not have access to this cart.");
     }
+    await assertHouseholdAccess(actorClient, String(cart.user_id));
     if (cart.status !== "active" || cart.payment_status === "paid") {
       throw new Error("This cart is no longer available for checkout.");
     }

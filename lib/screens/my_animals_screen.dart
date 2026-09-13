@@ -27,7 +27,7 @@ class MyAnimalsScreen extends StatefulWidget {
 
 class _MyAnimalsScreenState extends State<MyAnimalsScreen> {
   Future<List<Map<String, dynamic>>> _loadAnimals() async {
-    final userId = AppSession.effectiveUserId;
+    final userId = AppSession.householdOwnerUserId;
     if (userId == null) return [];
 
     final res = await supabase

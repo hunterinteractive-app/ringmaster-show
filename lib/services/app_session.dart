@@ -2,6 +2,7 @@
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'support_impersonation_session.dart';
+import 'household_session.dart';
 
 class AppSession {
   static final _supabase = Supabase.instance.client;
@@ -10,6 +11,9 @@ class AppSession {
       SupportImpersonationSession.targetUserId ??
       _supabase.auth.currentUser?.id;
 
+  static String? get householdOwnerUserId =>
+      SupportImpersonationSession.targetUserId ?? HouseholdSession.ownerUserId;
+
   static String? get impersonatedUserId =>
       SupportImpersonationSession.targetUserId;
 
@@ -17,8 +21,7 @@ class AppSession {
 
   static String? get impersonatedUserName => null;
 
-  static bool get isSupportMode =>
-      SupportImpersonationSession.isActive;
+  static bool get isSupportMode => SupportImpersonationSession.isActive;
 
   static void stopImpersonation() {
     // SupportImpersonationSession does not expose a clear/stop method here yet.

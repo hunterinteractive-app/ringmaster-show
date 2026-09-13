@@ -58,7 +58,10 @@ class _ExhibitorPastReportsScreenState
     final targetUserId = _supportTargetUserId;
 
     final rows = targetUserId == null
-        ? await supabase.rpc('exhibitor_past_show_reports')
+        ? await supabase.rpc(
+            'household_exhibitor_past_show_reports',
+            params: {'p_owner_user_id': AppSession.householdOwnerUserId},
+          )
         : await supabase.rpc(
             'support_exhibitor_past_show_reports',
             params: {'p_target_user_id': targetUserId},
@@ -91,8 +94,11 @@ class _ExhibitorPastReportsScreenState
       final targetUserId = _supportTargetUserId;
       final rows = targetUserId == null
           ? await supabase.rpc(
-              'exhibitor_report_download_info',
-              params: {'p_artifact_id': report.artifactId},
+              'household_exhibitor_report_download_info',
+              params: {
+                'p_artifact_id': report.artifactId,
+                'p_owner_user_id': AppSession.householdOwnerUserId,
+              },
             )
           : await supabase.rpc(
               'support_exhibitor_report_download_info',

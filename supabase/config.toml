@@ -33,3 +33,6 @@ verify_jwt = true
 
 [functions.payment-quote-preview]
 verify_jwt = true
+
+[functions.household-send-invitation]
+verify_jwt = true

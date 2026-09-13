@@ -363,7 +363,7 @@ class _AnimalEditorDialogState extends State<AnimalEditorDialog> {
       return;
     }
 
-    final ownerUserId = AppSession.effectiveUserId;
+    final ownerUserId = AppSession.householdOwnerUserId;
     if (ownerUserId == null) {
       setState(() => _msg = 'Not signed in.');
       return;

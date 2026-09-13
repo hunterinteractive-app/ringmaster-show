@@ -1,3 +1,8 @@
+import 'package:shared_preferences/shared_preferences.dart';
+import '../widgets/household_access_announcement.dart';
+import '../services/household_session.dart';
+import 'household_access_screen.dart';
+import 'package:ringmaster_show/widgets/account_exhibitor_welcome.dart';
 import 'package:ringmaster_show/reporting_core/network/transient_retry.dart';
 // lib/screens/show_list_screen.dart
 // ignore_for_file: deprecated_member_use
@@ -136,6 +141,15 @@ class _ShowListScreenState extends State<ShowListScreen> {
     }
 
     if (_resolvingExhibitorAccount) return false;
+    try {
+      await HouseholdSession.refresh();
+      if (HouseholdSession.invitations.isNotEmpty ||
+          HouseholdSession.households.length > 1) {
+        return true;
+      }
+    } on PostgrestException catch (e) {
+      if (e.code != 'PGRST202') rethrow;
+    }
 
     final user = supabase.auth.currentUser;
     if (user == null) return false;
@@ -762,9 +776,50 @@ class _ShowListScreenState extends State<ShowListScreen> {
     );
   }
 
+  bool _householdNoticeScheduled = false;
+  void _scheduleHouseholdNotice(_ExhibitorWelcome? welcome) {
+    final actor = supabase.auth.currentUser?.id;
+    if (_householdNoticeScheduled ||
+        widget.demoMode ||
+        AppSession.isSupportMode ||
+        actor == null ||
+        actor != AppSession.householdOwnerUserId ||
+        (welcome?.exhibitors.length ?? 0) < 2) {
+      return;
+    }
+    _householdNoticeScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final prefs = await SharedPreferences.getInstance();
+      final key = 'household_access_announcement_v1_$actor';
+      if (!mounted ||
+          prefs.getBool(key) == true ||
+          supabase.auth.currentUser?.id != actor) {
+        return;
+      }
+      final edit = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => const HouseholdAccessAnnouncement(),
+      );
+      await prefs.setBool(key, true);
+      if (edit == true && mounted) {
+        await Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const HouseholdAccessScreen()),
+        );
+        if (mounted) {
+          setState(() {
+            _bundleFuture = _loadBundle();
+          });
+        }
+      }
+    });
+  }
+
   Future<_ShowListBundle> _loadBundle() async {
     final shows = await _loadShows();
     final exhibitorWelcome = await _loadExhibitorWelcome();
+    _scheduleHouseholdNotice(exhibitorWelcome);
     final supportAccess = SupportImpersonationSession.isActive
         ? await _loadSupportAccessSnapshot()
         : null;
@@ -828,7 +883,7 @@ class _ShowListScreenState extends State<ShowListScreen> {
 
   Future<_ExhibitorWelcome?> _loadExhibitorWelcome() async {
     if (widget.demoMode) return null;
-    final userId = _effectiveUserId;
+    final userId = AppSession.householdOwnerUserId;
     if (userId == null) return null;
 
     try {
@@ -865,22 +920,9 @@ class _ShowListScreenState extends State<ShowListScreen> {
       final selectedExhibitor = selected;
       if (selectedExhibitor == null) return null;
 
-      final displayName = (selectedExhibitor['display_name'] ?? '')
-          .toString()
-          .trim();
-      final firstName = (selectedExhibitor['first_name'] ?? '')
-          .toString()
-          .trim();
-      final lastName = (selectedExhibitor['last_name'] ?? '').toString().trim();
-      final name = displayName.isNotEmpty
-          ? displayName
-          : [firstName, lastName].where((part) => part.isNotEmpty).join(' ');
-      if (name.isEmpty) return null;
       return _ExhibitorWelcome(
-        name: name,
-        exhibitorNumber: (selectedExhibitor['exhibitor_number'] ?? '')
-            .toString()
-            .trim(),
+        initialExhibitorId: selectedExhibitor['id'].toString(),
+        exhibitors: exhibitors,
       );
     } catch (_) {
       return null;
@@ -1363,7 +1405,7 @@ class _ShowListScreenState extends State<ShowListScreen> {
             (provider) => provider.enabled && provider.ready,
           );
 
-      final userId = AppSession.effectiveUserId;
+      final userId = AppSession.householdOwnerUserId;
       if (userId != null && userId.isNotEmpty) {
         final carts = await supabase
             .from('entry_carts')
@@ -1525,13 +1567,18 @@ class _ShowListScreenState extends State<ShowListScreen> {
                 });
               });
             },
-            onAccount: () {
-              Navigator.push(
+            onAccount: () async {
+              await Navigator.push(
                 context,
                 MaterialPageRoute(
                   builder: (_) => const AccountSettingsScreen(),
                 ),
               );
+              if (mounted) {
+                setState(() {
+                  _bundleFuture = _loadBundle();
+                });
+              }
             },
             onHelp: () => showDialog<void>(
               context: context,
@@ -1594,6 +1641,27 @@ class _ShowListScreenState extends State<ShowListScreen> {
                           return SingleChildScrollView(
                             child: Column(
                               children: [
+                                if (!widget.demoMode)
+                                  TextButton.icon(
+                                    icon: const Icon(Icons.house),
+                                    label: const Text(
+                                      'Switch household / Household access',
+                                    ),
+                                    onPressed: () async {
+                                      await Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) =>
+                                              const HouseholdAccessScreen(),
+                                        ),
+                                      );
+                                      if (mounted) {
+                                        setState(() {
+                                          _bundleFuture = _loadBundle();
+                                        });
+                                      }
+                                    },
+                                  ),
                                 if (bundle.exhibitorWelcome != null)
                                   Padding(
                                     padding: EdgeInsets.fromLTRB(
@@ -1604,38 +1672,15 @@ class _ShowListScreenState extends State<ShowListScreen> {
                                     ),
                                     child: Align(
                                       alignment: Alignment.centerLeft,
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            'Welcome, ${bundle.exhibitorWelcome!.name}',
-                                            style: Theme.of(context)
-                                                .textTheme
-                                                .titleLarge
-                                                ?.copyWith(
-                                                  color: AppColors.surface,
-                                                  fontWeight: FontWeight.w800,
-                                                ),
-                                          ),
-                                          if (bundle
-                                              .exhibitorWelcome!
-                                              .exhibitorNumber
-                                              .isNotEmpty) ...[
-                                            const SizedBox(height: 2),
-                                            Text(
-                                              'Exhibitor #${bundle.exhibitorWelcome!.exhibitorNumber}',
-                                              style: Theme.of(context)
-                                                  .textTheme
-                                                  .bodyMedium
-                                                  ?.copyWith(
-                                                    color: AppColors.surface
-                                                        .withValues(alpha: .86),
-                                                    fontWeight: FontWeight.w600,
-                                                  ),
-                                            ),
-                                          ],
-                                        ],
+                                      child: AccountExhibitorWelcome(
+                                        key: ValueKey(
+                                          AppSession.householdOwnerUserId,
+                                        ),
+                                        exhibitors:
+                                            bundle.exhibitorWelcome!.exhibitors,
+                                        initialExhibitorId: bundle
+                                            .exhibitorWelcome!
+                                            .initialExhibitorId,
                                       ),
                                     ),
                                   ),
@@ -2467,10 +2512,13 @@ class _ShowListBundle {
 }
 
 class _ExhibitorWelcome {
-  final String name;
-  final String exhibitorNumber;
+  final String initialExhibitorId;
+  final List<Map<String, dynamic>> exhibitors;
 
-  const _ExhibitorWelcome({required this.name, required this.exhibitorNumber});
+  const _ExhibitorWelcome({
+    required this.initialExhibitorId,
+    required this.exhibitors,
+  });
 }
 
 class _SupportAccessSnapshot {

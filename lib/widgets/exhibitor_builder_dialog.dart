@@ -1,3 +1,6 @@
+import '../services/household_session.dart';
+import '../utils/household_eligibility.dart';
+import '../services/app_session.dart';
 import 'package:ringmaster_show/services/registration_write.dart';
 import 'package:ringmaster_show/reporting_core/network/transient_retry.dart';
 // lib/widgets/exhibitor_builder_dialog.dart
@@ -298,6 +301,8 @@ class _ExhibitorBuilderDialogState extends State<ExhibitorBuilderDialog> {
     }
   }
 
+  String _originalEmail = '';
+
   Future<void> _loadIfEditing() async {
     final user = supabase.auth.currentUser;
     if (user == null) {
@@ -310,7 +315,7 @@ class _ExhibitorBuilderDialogState extends State<ExhibitorBuilderDialog> {
 
     if (!_isEdit) {
       try {
-        await _prefillFromPrimaryExhibitor(user.id);
+        await _prefillFromPrimaryExhibitor(AppSession.householdOwnerUserId!);
       } catch (_) {
         // Non-blocking on purpose.
       }
@@ -357,6 +362,7 @@ class _ExhibitorBuilderDialogState extends State<ExhibitorBuilderDialog> {
       _showingName.text = showing;
       _arba.text = (row['arba_number'] ?? '').toString();
       _email.text = (row['email'] ?? '').toString();
+      _originalEmail = _email.text.trim().toLowerCase();
       _phone.text = (row['phone'] ?? '').toString();
 
       _address1.text = (row['address_line1'] ?? '').toString();
@@ -497,7 +503,7 @@ class _ExhibitorBuilderDialogState extends State<ExhibitorBuilderDialog> {
 
     if (showing.isEmpty) return _fail('Showing name is required.');
 
-    if (email.isNotEmpty && !_isValidEmail(email)) {
+    if (_active && email.isNotEmpty && !_isValidEmail(email)) {
       return _fail('Please enter a valid email.');
     }
 
@@ -566,7 +572,7 @@ class _ExhibitorBuilderDialogState extends State<ExhibitorBuilderDialog> {
           : null;
 
       final payload = <String, dynamic>{
-        'owner_user_id': user.id,
+        if (!_isEdit) 'owner_user_id': AppSession.householdOwnerUserId,
         'type': _type,
         'is_active': _active,
         'group_shows_as_youth': _isGroup ? _groupShowsAsYouth : false,
@@ -617,6 +623,34 @@ class _ExhibitorBuilderDialogState extends State<ExhibitorBuilderDialog> {
         ])).single;
       }
 
+      final email = _email.text.trim().toLowerCase();
+      if (_active &&
+          email.isNotEmpty &&
+          email != _originalEmail &&
+          email != user.email?.trim().toLowerCase() &&
+          AppSession.householdOwnerUserId == user.id &&
+          canInviteHouseholdExhibitor(_type, _birthDate)) {
+        try {
+          await HouseholdSession.sendInvitation(email);
+        } catch (_) {
+          if (!mounted) return;
+          await showDialog<void>(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: const Text('Exhibitor saved'),
+              content: const Text(
+                'The exhibitor was saved, but the invitation email could not be sent. Open Household Access to retry the invitation.',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('OK'),
+                ),
+              ],
+            ),
+          );
+        }
+      }
       if (!mounted) return;
       Navigator.pop(context, savedRow);
     } catch (e) {
@@ -1050,6 +1084,9 @@ class _ExhibitorBuilderDialogState extends State<ExhibitorBuilderDialog> {
                                   keyboardType: TextInputType.emailAddress,
                                   decoration: const InputDecoration(
                                     labelText: 'Email',
+                                    helperMaxLines: 6,
+                                    helperText:
+                                        'When the household owner saves a new email for an adult or youth aged 14 or older, we send an invitation to access the entire household with their own login. They must verify their email and accept. Show Secretary and admin rights are not shared. Younger youth use a parent’s login.',
                                     border: OutlineInputBorder(),
                                   ),
                                 ),

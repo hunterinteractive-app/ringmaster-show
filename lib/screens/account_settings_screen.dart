@@ -1,3 +1,4 @@
+import 'household_access_screen.dart';
 // lib/screens/account_settings_screen.dart
 
 import 'package:flutter/material.dart';
@@ -33,7 +34,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
   // Load Exhibitors
   // ------------------------------
   Future<void> _load() async {
-    final userId = AppSession.effectiveUserId;
+    final userId = AppSession.householdOwnerUserId;
     if (userId == null) {
       setState(() {
         _loading = false;
@@ -48,16 +49,27 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
     });
 
     try {
-      final rows = await supabase
-          .from('exhibitors')
-          .select(
-            'id,type,display_name,arba_number,email,phone,'
-            'birth_date,is_active,created_at',
-          )
-          .eq('owner_user_id', userId)
-          .order('created_at', ascending: true);
-
-      final exhibitors = (rows as List).cast<Map<String, dynamic>>();
+      const columns =
+          'id,type,display_name,exhibitor_number,arba_number,email,phone,birth_date,is_active,created_at';
+      List<Map<String, dynamic>> exhibitors;
+      try {
+        final rows = await supabase
+            .from('exhibitors')
+            .select('$columns,account_hidden_at')
+            .eq('owner_user_id', userId)
+            .isFilter('account_hidden_at', null)
+            .order('created_at');
+        exhibitors = List<Map<String, dynamic>>.from(rows);
+      } on PostgrestException catch (e) {
+        // Keep the account list usable while the database update is pending.
+        if (e.code != '42703' && e.code != 'PGRST204') rethrow;
+        final rows = await supabase
+            .from('exhibitors')
+            .select(columns)
+            .eq('owner_user_id', userId)
+            .order('created_at');
+        exhibitors = List<Map<String, dynamic>>.from(rows);
+      }
 
       String? primaryExhibitorId;
       try {
@@ -102,7 +114,9 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
 
         primaryExhibitorId = defaultExhibitor?['id']?.toString();
 
-        if (primaryExhibitorId != null && !AppSession.isSupportMode) {
+        if (primaryExhibitorId != null &&
+            !AppSession.isSupportMode &&
+            userId == supabase.auth.currentUser?.id) {
           await supabase
               .from('profiles')
               .update({'primary_exhibitor_id': primaryExhibitorId})
@@ -162,7 +176,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
       return;
     }
 
-    final userId = AppSession.effectiveUserId;
+    final userId = AppSession.householdOwnerUserId;
     final exhibitorId = exhibitor['id']?.toString();
 
     if (userId == null || exhibitorId == null || exhibitorId.isEmpty) {
@@ -213,8 +227,8 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
           .eq('id', id);
 
       if (!newActive && id == _primaryExhibitorId) {
-        final userId = AppSession.effectiveUserId;
-        if (userId != null) {
+        final userId = AppSession.householdOwnerUserId;
+        if (userId != null && userId == supabase.auth.currentUser?.id) {
           await supabase
               .from('profiles')
               .update({'primary_exhibitor_id': null})
@@ -229,6 +243,41 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
     }
   }
 
+  Future<void> _removeFromAccountView(String id) async {
+    if (AppSession.isSupportMode) return;
+    final owner = AppSession.householdOwnerUserId;
+    if (owner == null) return;
+    try {
+      await supabase
+          .from('exhibitors')
+          .update({
+            'account_hidden_at': DateTime.now().toUtc().toIso8601String(),
+          })
+          .eq('id', id)
+          .eq('owner_user_id', owner)
+          .or('is_active.eq.false,is_active.is.null')
+          .select('id')
+          .single();
+      await _load();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Removed from account view. The exhibitor record and show history are preserved.',
+            ),
+          ),
+        );
+      }
+    } on PostgrestException catch (e) {
+      if (!mounted) return;
+      setState(
+        () => _msg = e.code == '42703' || e.code == 'PGRST204'
+            ? 'Removing from account view requires the pending database update.'
+            : 'Unable to remove exhibitor from account view: ${e.message}',
+      );
+    }
+  }
+
   // ------------------------------
   // UI
   // ------------------------------
@@ -240,6 +289,17 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
       showBackButton: true,
       useScrollView: false,
       actions: [
+        IconButton(
+          tooltip: 'Household access',
+          icon: const Icon(Icons.house),
+          onPressed: () async {
+            await Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const HouseholdAccessScreen()),
+            );
+            if (mounted) await _load();
+          },
+        ),
         IconButton(
           tooltip: AppSession.isSupportMode
               ? 'Add exhibitor is disabled while viewing as another user'
@@ -316,6 +376,8 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                             final id = e['id'].toString();
                             final type = (e['type'] ?? '').toString();
                             final name = (e['display_name'] ?? '').toString();
+                            final exhibitorNumber =
+                                (e['exhibitor_number'] ?? '').toString().trim();
                             final active = e['is_active'] == true;
                             final bd = e['birth_date']?.toString();
                             final isPrimary = id == _primaryExhibitorId;
@@ -347,14 +409,36 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                                     title: Row(
                                       children: [
                                         Expanded(
-                                          child: Text(
-                                            name,
-                                            style: Theme.of(context)
-                                                .textTheme
-                                                .titleMedium
-                                                ?.copyWith(
-                                                  fontWeight: FontWeight.w700,
-                                                ),
+                                          child: Wrap(
+                                            spacing: 12,
+                                            runSpacing: 4,
+                                            crossAxisAlignment:
+                                                WrapCrossAlignment.center,
+                                            children: [
+                                              Text(
+                                                name,
+                                                style: Theme.of(context)
+                                                    .textTheme
+                                                    .titleMedium
+                                                    ?.copyWith(
+                                                      fontWeight:
+                                                          FontWeight.w700,
+                                                    ),
+                                              ),
+                                              Text(
+                                                exhibitorNumber.isEmpty
+                                                    ? 'Exhibitor #—'
+                                                    : 'Exhibitor #$exhibitorNumber',
+                                                style: Theme.of(context)
+                                                    .textTheme
+                                                    .bodyMedium
+                                                    ?.copyWith(
+                                                      color: AppColors.muted,
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                    ),
+                                              ),
+                                            ],
                                           ),
                                         ),
                                         if (isPrimary)
@@ -423,16 +507,33 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                                               if (v == 'deactivate') {
                                                 _toggleActive(id, false);
                                               }
+                                              if (v == 'remove_view') {
+                                                _removeFromAccountView(id);
+                                              }
                                               if (v == 'activate') {
                                                 _toggleActive(id, true);
                                               }
                                             },
                                             itemBuilder: (_) => [
+                                              if (!active)
+                                                const PopupMenuItem(
+                                                  value: 'remove_view',
+                                                  child: Text(
+                                                    'Remove from account view',
+                                                  ),
+                                                ),
                                               const PopupMenuItem(
                                                 value: 'edit',
                                                 child: Text('Edit'),
                                               ),
-                                              if (active && !isPrimary)
+                                              if (active &&
+                                                  !isPrimary &&
+                                                  AppSession
+                                                          .householdOwnerUserId ==
+                                                      supabase
+                                                          .auth
+                                                          .currentUser
+                                                          ?.id)
                                                 const PopupMenuItem(
                                                   value: 'primary',
                                                   child: Row(

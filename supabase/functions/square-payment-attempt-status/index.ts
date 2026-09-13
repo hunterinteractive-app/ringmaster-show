@@ -1,3 +1,4 @@
+import { assertHouseholdAccess } from "../_shared/household.ts";
 import { errorMessage, handleOptions, jsonResponse } from "../_shared/http.ts";
 import { authenticatedUser, serviceClient } from "../_shared/supabase.ts";
 import {
@@ -27,16 +28,17 @@ Deno.serve(async (request: Request) => {
         400,
       );
     }
-    const { user } = await authenticatedUser(request);
+    const { client: actorClient } = await authenticatedUser(request);
     const admin = serviceClient();
     let { data: cart, error: cartError } = await admin.from("entry_carts")
       .select(
         "id,show_id,user_id,status,payment_status,completed_payment_session_id",
       )
       .eq("id", cartId).maybeSingle();
-    if (cartError || !cart || cart.user_id !== user.id) {
+    if (cartError || !cart) {
       throw new Error("You do not have access to this payment attempt.");
     }
+    await assertHouseholdAccess(actorClient, String(cart.user_id));
     let { data: attempt, error: attemptError } = await admin
       .from("show_payment_sessions")
       .select(

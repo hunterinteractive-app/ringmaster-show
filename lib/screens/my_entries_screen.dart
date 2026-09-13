@@ -80,7 +80,7 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
   }
 
   Future<void> _load() async {
-    final userId = AppSession.effectiveUserId;
+    final userId = AppSession.householdOwnerUserId;
     if (userId == null) {
       setState(() {
         _loading = false;
@@ -370,7 +370,7 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
   Future<List<Map<String, dynamic>>> _loadMyAnimals({
     String? currentAnimalId,
   }) async {
-    final userId = AppSession.effectiveUserId;
+    final userId = AppSession.householdOwnerUserId;
     if (userId == null) return [];
 
     final myExhibitorRows = await supabase
@@ -439,7 +439,7 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
   }
 
   Future<List<Map<String, dynamic>>> _loadMyExhibitors() async {
-    final userId = AppSession.effectiveUserId;
+    final userId = AppSession.householdOwnerUserId;
     if (userId == null) return [];
 
     final rows = await supabase
