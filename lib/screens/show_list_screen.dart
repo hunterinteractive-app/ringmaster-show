@@ -20,8 +20,7 @@ import 'my_entries_screen.dart';
 import 'my_help_requests_screen.dart';
 import 'package:ringmaster_show/screens/exhibitor_past_reports_screen.dart'
     as past_reports;
-import 'legal/terms_screen.dart';
-import 'legal/privacy_policy_screen.dart';
+import 'legal/legal_agreement_dialog.dart';
 import 'super_admin/superadmin_home_screen.dart';
 import 'package:ringmaster_show/superintendent/superintendent_shows_screen.dart';
 import 'package:ringmaster_show/services/superintendent_access_service.dart';
@@ -1175,80 +1174,7 @@ class _ShowListScreenState extends State<ShowListScreen> {
     return await showDialog<bool>(
           context: context,
           barrierDismissible: false,
-          builder: (context) {
-            bool checked = false;
-
-            return StatefulBuilder(
-              builder: (context, setState) {
-                return AlertDialog(
-                  title: const Text('Terms & Privacy Agreement'),
-                  content: SingleChildScrollView(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Text(
-                          'Our Terms of Service or Privacy Policy have changed. '
-                          'Please review and agree before continuing.',
-                        ),
-                        const SizedBox(height: AppSpacing.md),
-                        Wrap(
-                          alignment: WrapAlignment.center,
-                          children: [
-                            TextButton(
-                              onPressed: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => const TermsScreen(),
-                                  ),
-                                );
-                              },
-                              child: const Text('View Terms of Service'),
-                            ),
-                            TextButton(
-                              onPressed: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => const PrivacyPolicyScreen(),
-                                  ),
-                                );
-                              },
-                              child: const Text('View Privacy Policy'),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: AppSpacing.sm),
-                        CheckboxListTile(
-                          value: checked,
-                          controlAffinity: ListTileControlAffinity.leading,
-                          contentPadding: EdgeInsets.zero,
-                          title: const Text(
-                            'I have reviewed and agree to the current Terms of Service and Privacy Policy.',
-                          ),
-                          onChanged: (value) {
-                            setState(() => checked = value ?? false);
-                          },
-                        ),
-                      ],
-                    ),
-                  ),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context, false),
-                      child: const Text('Cancel'),
-                    ),
-                    FilledButton(
-                      onPressed: checked
-                          ? () => Navigator.pop(context, true)
-                          : null,
-                      child: const Text('Agree & Continue'),
-                    ),
-                  ],
-                );
-              },
-            );
-          },
+          builder: (_) => const LegalAgreementDialog(),
         ) ??
         false;
   }

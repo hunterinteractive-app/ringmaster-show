@@ -2,9 +2,129 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ringmaster_show/screens/legal/legal_agreement_dialog.dart';
+import 'package:ringmaster_show/screens/legal/privacy_policy_screen.dart';
+import 'package:ringmaster_show/screens/legal/terms_screen.dart';
+import 'package:ringmaster_show/theme/app_theme.dart';
 import 'package:ringmaster_show/widgets/accessible_icon_button.dart';
 
+Future<void> _openLegalAgreement(
+  WidgetTester tester, {
+  ValueChanged<bool?>? onResult,
+  double textScale = 1,
+}) async {
+  await tester.pumpWidget(
+    MaterialApp(
+      theme: AppTheme.lightTheme,
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(
+          context,
+        ).copyWith(textScaler: TextScaler.linear(textScale)),
+        child: child!,
+      ),
+      home: Scaffold(
+        body: Builder(
+          builder: (context) => TextButton(
+            onPressed: () async {
+              final result = await showDialog<bool>(
+                context: context,
+                barrierDismissible: false,
+                builder: (_) => const LegalAgreementDialog(),
+              );
+              onResult?.call(result);
+            },
+            child: const Text('Open agreement'),
+          ),
+        ),
+      ),
+    ),
+  );
+  await tester.tap(find.text('Open agreement'));
+  await tester.pumpAndSettle();
+}
+
 void main() {
+  testWidgets('legal agreement has readable text before and after checking', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    bool? result;
+    await _openLegalAgreement(tester, onResult: (value) => result = value);
+
+    expect(
+      tester.widget<FilledButton>(find.byType(FilledButton)).onPressed,
+      isNull,
+    );
+    await expectLater(tester, meetsGuideline(textContrastGuideline));
+    await tester.tap(find.text('Agree & Continue'));
+    await tester.pumpAndSettle();
+    expect(find.byType(LegalAgreementDialog), findsOneWidget);
+    expect(result, isNull);
+
+    await tester.tap(find.byType(CheckboxListTile));
+    await tester.pumpAndSettle();
+    await expectLater(tester, meetsGuideline(textContrastGuideline));
+    expect(
+      tester.widget<FilledButton>(find.byType(FilledButton)).onPressed,
+      isNotNull,
+    );
+
+    await tester.tap(find.text('Agree & Continue'));
+    await tester.pumpAndSettle();
+    expect(result, isTrue);
+    semantics.dispose();
+  });
+
+  testWidgets(
+    'legal agreement keeps its choice while reviewing either policy',
+    (tester) async {
+      bool? result;
+      await _openLegalAgreement(tester, onResult: (value) => result = value);
+      await tester.tap(find.byType(CheckboxListTile));
+      await tester.pumpAndSettle();
+
+      for (final entry in {
+        'View Terms of Service': TermsScreen,
+        'View Privacy Policy': PrivacyPolicyScreen,
+      }.entries) {
+        await tester.tap(find.text(entry.key));
+        await tester.pumpAndSettle();
+        expect(find.byType(entry.value), findsOneWidget);
+        await tester.pageBack();
+        await tester.pumpAndSettle();
+        expect(
+          tester.widget<CheckboxListTile>(find.byType(CheckboxListTile)).value,
+          isTrue,
+        );
+      }
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(result, isFalse);
+    },
+  );
+
+  testWidgets('legal agreement fits a narrow screen with enlarged text', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 640);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await _openLegalAgreement(tester, textScale: 1.5);
+    expect(tester.takeException(), isNull);
+
+    await tester.ensureVisible(find.byType(Checkbox));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(Checkbox));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(
+      tester.widget<FilledButton>(find.byType(FilledButton)).onPressed,
+      isNotNull,
+    );
+    expect(find.text('Agree & Continue').hitTestable(), findsOneWidget);
+  });
+
   testWidgets('accessible icon button exposes a named button action', (
     tester,
   ) async {
