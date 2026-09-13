@@ -34,7 +34,7 @@ class Rehearsal:
         for e in self.entries: self.by_exhibitor[e['exhibitor']].append(e)
         self.lock=threading.Lock(); self.events=[]; self.children=[]; self.logs=[]
         self.started=time.monotonic(); self.stop=threading.Event()
-        self.providers=None
+        self.providers=None;self.email_codes=None;self.registration_nonce=secrets.token_hex(6)
         self.summary={'status':'running','checks':{},'phases':{},'limitations':[
             'Local API concurrency, not rendered browser sessions or hosted capacity.',
             'Stripe and Resend protocol responses are emulated locally; external provider behavior is not certified.',
@@ -88,6 +88,13 @@ class Rehearsal:
             self.stop.wait(1)
         else: raise RuntimeError('Local signed webhook did not become ready')
 
+    def start_email_code_login(self):
+        from email_code_login import LocalEmailCodes
+        if self.email_codes is None:
+            self.email_codes=LocalEmailCodes(self.lab,self.registration_nonce,self.output,recipient_filter=self.registration_nonce)
+            self.email_codes.start()
+            self.summary['registration_login']='actual email OTP request, local SMTP receipt, six-digit verification'
+
     def webhook(self, obj, event_id):
         event=dict(id=event_id,object='event',type='checkout.session.completed',livemode=False,
                    account='acct_local_synthetic',created=int(time.time()),data={'object':obj})
@@ -110,16 +117,20 @@ class Rehearsal:
                 self.log('webhook_delivery_retry',event_id=event_id,attempt=attempt,status='transport')
             self.stop.wait(.5*attempt)
 
-    def register(self,n):
+    def register(self,n,*,wait_for_completion=True):
         p=getattr(self,'registration_people',{}).get(n)
         if p is None:
-            email=f'exhibitor-{n}-{secrets.token_hex(6)}@example.invalid'
-            password=secrets.token_urlsafe(32)
-            auth=self.measured('public_signup',n,lambda:self.lab.request('/auth/v1/signup',
-                {'email':email,'password':password},self.lab.anon,timeout=90))
-            login=self.measured('password_signin',n,lambda:self.lab.request('/auth/v1/token?grant_type=password',
-                {'email':email,'password':password},self.lab.anon,timeout=90))
-            assert auth['user']['id']==login['user']['id']
+            if self.email_codes is not None:
+                email=f'exhibitor-{n}-{self.registration_nonce}@example.invalid'
+                login=self.measured('email_code_login',n,lambda:self.email_codes.login(self,email,n))
+            else:
+                email=f'exhibitor-{n}-{secrets.token_hex(6)}@example.invalid'
+                password=secrets.token_urlsafe(32)
+                auth=self.measured('public_signup',n,lambda:self.lab.request('/auth/v1/signup',
+                    {'email':email,'password':password},self.lab.anon,timeout=90))
+                login=self.measured('password_signin',n,lambda:self.lab.request('/auth/v1/token?grant_type=password',
+                    {'email':email,'password':password},self.lab.anon,timeout=90))
+                assert auth['user']['id']==login['user']['id']
             p=dict(user_id=login['user']['id'],token=login['access_token'],email=email)
         token=p['token']; rows=self.by_exhibitor[n]
         if getattr(self, 'verify_account_lookup', False):
@@ -149,17 +160,30 @@ class Rehearsal:
         if n<=16:
             result=self.measured('payment_webhook_retry',n,lambda:self.webhook(obj,event))
             assert result.get('duplicate') is True, result
+        if wait_for_completion:
+            self.measured('persisted_registration',n,lambda:self.wait_for_registration(cart,token,n,len(rows)))
         return n
+
+    def wait_for_registration(self,cart,token,session,expected_entries,timeout=120):
+        deadline=time.monotonic()+timeout;latest=None
+        while time.monotonic()<deadline:
+            latest=registration_retry(self,'registration_status',session,lambda:self.lab.rpc('get_stripe_registration_status',{'p_cart_id':cart},token))
+            if latest.get('completed'):
+                assert latest['expected_entries']==latest['saved_paid_entries']==expected_entries,latest
+                assert latest['payment_records']==latest['paid_records'] and latest['paid_records']>0,latest
+                return latest
+            self.stop.wait(.75+random.random()*.5)
+        raise RuntimeError('Registration not durably finalized before deadline: '+str(latest))
 
     def checkout_with_client_retry(self,cart,token,session):
         # Match StripeConnectService.startCheckout + retryTransient exactly:
-        # three attempts, only the four transient function statuses, same cart.
+        # three attempts, transient service/worker statuses, same cart.
         # Keep every failed attempt visible even when the user action recovers.
         for attempt in range(1,4):
             try:
                 return self.lab.edge('stripe-create-checkout-session',{'cart_id':cart},token)
             except ApiError as error:
-                retry=error.code in (500,502,503,504) and attempt<3
+                retry=error.code in (500,502,503,504,546) and attempt<3
                 record=dict(session=session,cart_id=cart,attempt=attempt,status=error.code,retry=retry)
                 with self.lock:
                     with (self.output/'checkout-http-failures.jsonl').open('a') as f:
@@ -212,6 +236,7 @@ class Rehearsal:
             try: child.wait(timeout=20)
             except subprocess.TimeoutExpired: child.kill();child.wait(timeout=5)
         for log in self.logs: log.close()
+        if self.email_codes is not None:self.email_codes.close()
         if self.providers is not None: self.providers.stop()
         metrics={}
         for kind in sorted({e['kind'] for e in self.events}):
@@ -234,7 +259,7 @@ def main():
         p.error('Partial registration requires --registration-only')
     test=Rehearsal(Local(args.workspace),args.output)
     try:
-        test.start();test.registration(args.registration_limit)
+        test.start();test.start_email_code_login();test.registration(args.registration_limit)
         test.summary['status']='registration_passed'
         if not args.registration_only:
             from workflows import Workflows

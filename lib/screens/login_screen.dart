@@ -1,4 +1,3 @@
-import 'package:ringmaster_show/reporting_core/network/transient_retry.dart';
 // lib/screens/login_screen.dart
 // ignore_for_file: control_flow_in_finally
 
@@ -11,6 +10,7 @@ import '../theme/app_theme.dart';
 import '../utils/date_time_utils.dart';
 import '../widgets/rm_widgets.dart';
 import '../services/app_init_service.dart';
+import '../services/email_code_request.dart';
 import 'show_list_screen.dart';
 import 'admin/admin_shows_screen.dart';
 import 'legal/terms_screen.dart';
@@ -317,7 +317,7 @@ class _LoginScreenState extends State<LoginScreen>
     });
 
     try {
-      await retryTransient(
+      final sent = await sendEmailCodeOnce(
         () => supabase.auth.signInWithOtp(email: email, shouldCreateUser: true),
       );
 
@@ -327,9 +327,11 @@ class _LoginScreenState extends State<LoginScreen>
       setState(() {
         _pendingEmail = email;
         _awaitingCode = true;
-        _msg = isResend
+        _msg = !sent
+            ? 'The request may have gone through. If a code arrives, enter it below. Otherwise, use Resend code when it becomes available.'
+            : isResend
             ? 'A new login code was sent to $email.'
-            : 'Enter the 6-digit login code sent to $email.';
+            : 'Enter the 6-digit code from the most recent email sent to $email.';
       });
       _startResendCountdown();
     } on AuthException catch (e) {

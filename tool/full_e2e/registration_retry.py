@@ -16,7 +16,7 @@ def transient(error, function=False):
         if function:
             # FunctionException uses HTTP status, regardless of provider/runtime
             # diagnostic codes in its JSON body. PostgrestException uses code.
-            return error.code in (500,502,503,504)
+            return error.code in (500,502,503,504,546)
         body=error.body
         return (body.get('code') in TRANSIENT_DATABASE if isinstance(body,dict) and body.get('code')
                 else str(error.code) in TRANSIENT_DATABASE)

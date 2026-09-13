@@ -43,7 +43,7 @@ bool isTransientServiceError(Object error) {
     return const {'500', '502', '503', '504'}.contains(error.statusCode);
   }
   if (error is FunctionException) {
-    return const {500, 502, 503, 504}.contains(error.status);
+    return const {500, 502, 503, 504, 546}.contains(error.status);
   }
   return false;
 }

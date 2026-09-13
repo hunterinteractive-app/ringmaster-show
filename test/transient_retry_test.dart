@@ -4,6 +4,24 @@ import 'package:supabase/supabase.dart';
 
 void main() {
   test(
+    'a retired Edge worker retries the same operation within the limit',
+    () async {
+      var attempts = 0;
+      final result = await retryTransient(() async {
+        if (++attempts < 3) {
+          throw const FunctionException(
+            status: 546,
+            details: {'code': 'WORKER_LIMIT'},
+          );
+        }
+        return 'saved';
+      }, wait: (_) async {});
+      expect(result, 'saved');
+      expect(attempts, 3);
+    },
+  );
+
+  test(
     'an Edge worker 500 uses its HTTP status despite its diagnostic code',
     () {
       expect(

@@ -1,3 +1,4 @@
+import 'package:ringmaster_show/reporting_core/network/transient_retry.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -36,9 +37,11 @@ class _ShowCheckinDashboardScreenState
       _error = null;
     });
     try {
-      final result = await _db.rpc(
-        'get_show_checkin_dashboard',
-        params: {'p_show_id': widget.showId},
+      final result = await retryTransient(
+        () => _db.rpc(
+          'get_show_checkin_dashboard',
+          params: {'p_show_id': widget.showId},
+        ),
       );
       if (!mounted) return;
       setState(() => _data = Map<String, dynamic>.from(result as Map));

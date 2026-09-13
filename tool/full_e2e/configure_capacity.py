@@ -55,6 +55,8 @@ def gateway_entrypoint(entrypoint,settings):
     files=int(settings['KONG_NGINX_MAIN_WORKER_RLIMIT_NOFILE'])
     configured=f'worker_rlimit_nofile {files};\n\nevents {{\n    worker_connections {connections};\n    multi_accept on;\n}}'
     anchors={original,previous,configured}
+    for prior_connections in (4096,8192,16384):
+        anchors.add(f'worker_rlimit_nofile {prior_connections*2};\n\nevents {{\n    worker_connections {prior_connections};\n    multi_accept on;\n}}')
     matches=[anchor for anchor in anchors for text in entrypoint for _ in range(text.count(anchor))]
     if len(matches)!=1:
         raise RuntimeError('Unrecognized local gateway template; refusing to alter it')
@@ -123,41 +125,48 @@ def _configure_service(lab,service,settings):
         raise
     finally:conn.close()
 
-def configure(lab,pool_size=20,rest_pool=None):
-    if not 1<=pool_size<=25:raise ValueError('Local Auth budget must be 1–25 connections')
+def configure(lab,pool_size=None,rest_pool=None,gateway_connections=None,auth_request_timeout=None):
     plan=lab.workspace/'rehearsal-capacity.json'
     saved_plan=json.loads(plan.read_text()) if plan.exists() else {}
+    if auth_request_timeout is None:auth_request_timeout=saved_plan.get('auth_request_timeout_seconds',10)
+    if auth_request_timeout not in (10,20,30):raise ValueError('Unsupported local Auth request deadline')
+    if pool_size is None:pool_size=saved_plan.get('auth_pool',20)
+    if not 1<=pool_size<=40:raise ValueError('Local Auth budget must be 1–40 connections')
+    if gateway_connections is None:gateway_connections=saved_plan.get('gateway_connections',8192)
+    if gateway_connections not in (4096,8192,16384):raise ValueError('Unsupported gateway budget')
     if rest_pool is None:rest_pool=saved_plan.get('rest_pool',20)
     if not 5<=rest_pool<=30:raise ValueError('Local REST budget must be 5–30 connections')
     maximum=int(lab.sql('show max_connections'))
     # Reserve 25 connections for platform services/administration, plus 20 spare.
     if pool_size+rest_pool+45>maximum:raise ValueError('Pool budgets leave insufficient database headroom')
     database=configure_database(lab)
-    auth=_configure_service(lab,'auth',{'GOTRUE_DB_MAX_POOL_SIZE':str(pool_size),'GOTRUE_DB_MAX_IDLE_POOL_SIZE':'5'})
+    auth=_configure_service(lab,'auth',{'GOTRUE_DB_MAX_POOL_SIZE':str(pool_size),'GOTRUE_DB_MAX_IDLE_POOL_SIZE':'5','GOTRUE_API_MAX_REQUEST_DURATION':str(auth_request_timeout)+'s'})
     rest=_configure_service(lab,'rest',{'PGRST_DB_POOL':str(rest_pool),'PGRST_ADMIN_SERVER_PORT':'3001'})
     # The pinned local Kong image defaults to 512 worker connections, counting
     # client and upstream sockets together. Sustained 500-purchaser arrivals
     # exhausted 2,048 slots even though a single 500-purchaser burst passed.
-    # Keep this same gateway budget for the 51k and 102k full-event comparisons.
+    # Preserve and record the selected budget so burst comparisons are explicit.
     gateway=_configure_service(lab,'kong',{
-        'KONG_NGINX_EVENTS_WORKER_CONNECTIONS':'4096',
-        'KONG_NGINX_MAIN_WORKER_RLIMIT_NOFILE':'8192'})
+        'KONG_NGINX_EVENTS_WORKER_CONNECTIONS':str(gateway_connections),
+        'KONG_NGINX_MAIN_WORKER_RLIMIT_NOFILE':str(gateway_connections*2)})
     nginx=subprocess.check_output(['docker','exec','supabase_kong_'+lab.project,
         'cat','/usr/local/kong/nginx.conf'],text=True)
     gateway_limits={name:int(re.search(r'\b'+name+r'\s+(\d+)\s*;',nginx).group(1))
                     for name in ('worker_connections','worker_rlimit_nofile')}
-    assert gateway_limits==dict(worker_connections=4096,worker_rlimit_nofile=8192),gateway_limits
+    assert gateway_limits==dict(worker_connections=gateway_connections,worker_rlimit_nofile=gateway_connections*2),gateway_limits
     dump=subprocess.check_output(['docker','exec','supabase_rest_'+lab.project,'postgrest','--dump-config'],text=True)
     settings={line.split(' = ',1)[0]:line.split(' = ',1)[1] for line in dump.splitlines() if ' = ' in line and line.split(' = ',1)[0] in ('db-pool','db-pool-acquisition-timeout','admin-server-port')}
     assert settings['db-pool']==str(rest_pool),settings
     # Rehearsal.start() calls this again. Preserve an explicit CLI selection
     # so starting the workload cannot silently undo its capacity preflight.
-    plan.write_text(json.dumps({**saved_plan,'rest_pool':rest_pool},indent=2))
-    return dict(auth_pool=pool_size,rest_pool=rest_pool,database_max_connections=maximum,
+    plan.write_text(json.dumps({**saved_plan,'rest_pool':rest_pool,'auth_pool':pool_size,'gateway_connections':gateway_connections,'auth_request_timeout_seconds':auth_request_timeout},indent=2))
+    return dict(auth_pool=pool_size,rest_pool=rest_pool,auth_request_timeout_seconds=auth_request_timeout,database_max_connections=maximum,
                 reserved_connections=25,spare_connections=maximum-pool_size-rest_pool-25,
                 database=database,auth=auth,rest=rest,gateway=gateway,
                 verified_gateway_settings=gateway_limits,verified_rest_settings=settings)
 
-if __name__=='__main__':
-    p=argparse.ArgumentParser();p.add_argument('workspace');p.add_argument('--auth-pool',type=int,default=20);p.add_argument('--rest-pool',type=int)
-    args=p.parse_args();print(json.dumps(configure(Local(args.workspace),args.auth_pool,args.rest_pool)))
+def main():
+    p=argparse.ArgumentParser();p.add_argument('workspace');p.add_argument('--auth-pool',type=int);p.add_argument('--rest-pool',type=int);p.add_argument('--gateway-connections',type=int,choices=(4096,8192,16384));p.add_argument('--auth-request-timeout',type=int,choices=(10,20,30))
+    args=p.parse_args();print(json.dumps(configure(Local(args.workspace),args.auth_pool,args.rest_pool,args.gateway_connections,args.auth_request_timeout)))
+
+if __name__=='__main__':main()

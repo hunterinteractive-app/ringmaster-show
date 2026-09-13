@@ -1,3 +1,4 @@
+import 'package:ringmaster_show/reporting_core/network/transient_retry.dart';
 import 'closeout/data/loaders/delivery_status_loader.dart';
 import 'dart:async';
 import 'dart:convert';
@@ -2029,16 +2030,18 @@ class _GenerateReportsPanelState extends State<_GenerateReportsPanel> {
       if (sectionIds.isEmpty) {
         throw StateError('No enabled show sections found.');
       }
-      final dashboard = await Supabase.instance.client.rpc(
-        'get_closeout_dashboard_scoped_for_species',
-        params: {
-          'p_show_id': widget.showId,
-          'p_scope_key': '${widget.showId}:${sectionIds.join(',')}',
-          'p_section_ids': sectionIds,
-          'p_artifact_limit': 100,
-          'p_artifact_offset': 0,
-          'p_species_filter': null,
-        },
+      final dashboard = await retryTransient(
+        () => Supabase.instance.client.rpc(
+          'get_closeout_dashboard_scoped_for_species',
+          params: {
+            'p_show_id': widget.showId,
+            'p_scope_key': '${widget.showId}:${sectionIds.join(',')}',
+            'p_section_ids': sectionIds,
+            'p_artifact_limit': 100,
+            'p_artifact_offset': 0,
+            'p_species_filter': null,
+          },
+        ),
       );
       var next = _ReportGenerationState.fromJson(
         Map<String, dynamic>.from(dashboard as Map),
@@ -3577,16 +3580,18 @@ class _FinalCloseoutPreviewPanelState
         throw StateError('No enabled show sections found.');
       }
       final values = await Future.wait<Object?>([
-        Supabase.instance.client.rpc(
-          'get_closeout_dashboard_scoped_for_species',
-          params: {
-            'p_show_id': widget.showId,
-            'p_scope_key': '${widget.showId}:${sectionIds.join(',')}',
-            'p_section_ids': sectionIds,
-            'p_artifact_limit': 1,
-            'p_artifact_offset': 0,
-            'p_species_filter': null,
-          },
+        retryTransient(
+          () => Supabase.instance.client.rpc(
+            'get_closeout_dashboard_scoped_for_species',
+            params: {
+              'p_show_id': widget.showId,
+              'p_scope_key': '${widget.showId}:${sectionIds.join(',')}',
+              'p_section_ids': sectionIds,
+              'p_artifact_limit': 1,
+              'p_artifact_offset': 0,
+              'p_species_filter': null,
+            },
+          ),
         ),
         Supabase.instance.client
             .from('show_arba_report_details')

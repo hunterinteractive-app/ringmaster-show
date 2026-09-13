@@ -180,6 +180,7 @@ class EventFlow(Workflows):
                 quote=self.t.measured('resumed_cart_checkout',n,lambda:self.lab.edge('stripe-create-checkout-session',{'cart_id':r['cart_id']},token))
                 import uuid
                 self.t.measured('resumed_cart_webhook',n,lambda:self.t.webhook(self.t.providers.checkout(quote['checkout_session_id']),'evt_local_'+str(uuid.uuid4())))
+                self.t.wait_for_registration(r['cart_id'],token,n,len(self.t.by_exhibitor[n]))
             peak=self.profile['peak_concurrency_assumption']
             failures=[];todo=[n for n in missing if n not in partial_ids];gate=threading.Barrier(min(peak,len(todo)))
             lock=threading.Lock();started=0
@@ -330,6 +331,7 @@ def main():
     try:
         flow.staff()
         if args.stage in ('registration','registration-recovery','closeout'):test.start()
+        if args.stage=='registration':test.start_email_code_login()
         if args.stage=='registration':flow.registration_calendar()
         elif args.stage=='registration-recovery':flow.recover_registration()
         elif args.stage in ('preprint','judgeprint','coop-recheck'):flow.print_stage(args.stage)

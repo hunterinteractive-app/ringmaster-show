@@ -1,3 +1,4 @@
+import 'package:ringmaster_show/reporting_core/network/transient_retry.dart';
 // lib/screens/admin/show_closeout.dart
 // ignore_for_file: deprecated_member_use, use_build_context_synchronously
 
@@ -2910,16 +2911,18 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
         : null;
 
     Future<CloseoutDashboard> loadPage(int offset) async {
-      final response = await supabase.rpc(
-        'get_closeout_dashboard_scoped_for_species',
-        params: {
-          'p_show_id': widget.showId,
-          'p_scope_key': resolved.stableScopeKey,
-          'p_section_ids': resolved.sectionIds.toList()..sort(),
-          'p_artifact_limit': pageSize,
-          'p_artifact_offset': offset,
-          'p_species_filter': _speciesFilterForScope(resolved),
-        },
+      final response = await retryTransient(
+        () => supabase.rpc(
+          'get_closeout_dashboard_scoped_for_species',
+          params: {
+            'p_show_id': widget.showId,
+            'p_scope_key': resolved.stableScopeKey,
+            'p_section_ids': resolved.sectionIds.toList()..sort(),
+            'p_artifact_limit': pageSize,
+            'p_artifact_offset': offset,
+            'p_species_filter': _speciesFilterForScope(resolved),
+          },
+        ),
       );
       return CloseoutDashboard.fromJson(
         Map<String, dynamic>.from(response as Map),

@@ -16,6 +16,7 @@ import '../utils/date_time_utils.dart';
 import '../utils/entry_class_name.dart';
 import '../utils/species_sex.dart';
 import '../widgets/rm_widgets.dart';
+import '../widgets/stripe_payment_confirmation_dialog.dart';
 
 final supabase = Supabase.instance.client;
 
@@ -50,21 +51,14 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
 
       if (!mounted) return;
 
-      await showDialog<void>(
-        context: context,
-        builder: (_) => AlertDialog(
-          title: const Text('Payment Successful'),
-          content: const Text(
-            'Your payment was received and your entries have been submitted successfully.',
-          ),
-          actions: [
-            FilledButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('OK'),
-            ),
-          ],
-        ),
+      final returnUri = Uri.parse(fragment);
+      final confirmed = await showStripePaymentConfirmation(
+        context,
+        checkoutSessionId: returnUri.queryParameters['session_id'],
       );
+      if (!mounted) return;
+      await _load();
+      if (!confirmed || !mounted) return;
       html.window.history.replaceState(
         null,
         '',

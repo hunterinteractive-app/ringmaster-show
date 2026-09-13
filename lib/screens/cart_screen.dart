@@ -13,6 +13,7 @@ import '../utils/section_breed_scope.dart';
 import '../utils/species_sex.dart';
 import '../services/app_session.dart';
 import '../services/stripe_connect_service.dart';
+import '../widgets/stripe_payment_confirmation_dialog.dart';
 import '../services/show_payment_configuration_service.dart';
 import '../services/square_checkout_service.dart';
 import '../services/payment_quote_preview_service.dart';
@@ -842,34 +843,17 @@ class _CartScreenState extends State<CartScreen> {
         await _load();
         if (!mounted) return;
 
-        await showDialog<void>(
-          context: context,
-          barrierDismissible: false,
-          builder: (_) => AlertDialog(
-            title: const Text('Payment Successful'),
-            content: const Text(
-              'Your payment was received and your entries were submitted successfully.',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () {
-                  Navigator.pop(context);
-                  Navigator.pop(context, true);
-                },
-                child: const Text('Back to Show'),
-              ),
-              FilledButton(
-                onPressed: () {
-                  Navigator.pop(context);
-                  Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const MyEntriesScreen()),
-                  );
-                },
-                child: const Text('View My Entries'),
-              ),
-            ],
-          ),
+        final confirmed = await showStripePaymentConfirmation(
+          context,
+          cartId: widget.cartId,
         );
+        if (!mounted) return;
+        await _load();
+        if (confirmed && mounted) {
+          await Navigator.of(
+            context,
+          ).push(MaterialPageRoute(builder: (_) => const MyEntriesScreen()));
+        }
       });
     } else if (stripeStatus == 'cancel') {
       setState(() {

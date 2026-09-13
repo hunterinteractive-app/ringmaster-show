@@ -3,6 +3,10 @@ from copy import deepcopy
 
 
 def staff_counts(manifest):
+    if manifest.get('fixture_kind') == 'smoke':
+        assert manifest['totals'] == dict(entries=120, exhibitors=24)
+        return dict(judges=2, admins=1, superintendents=1,
+                    checkin=1, support=2, total=4)
     scale = manifest.get('staff_scale', manifest.get('scale', 1))
     return dict(judges=110*scale, admins=10*scale, superintendents=15*scale,
                 checkin=30*scale, support=25*scale, total=135*scale)

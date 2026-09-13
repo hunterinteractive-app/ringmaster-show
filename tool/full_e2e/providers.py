@@ -28,6 +28,12 @@ class Providers:
                 super().setup()
                 self.connection.settimeout(30)
             def log_message(self, *_): pass
+            def do_GET(self):
+                if self.path != '/auth-email-template':
+                    self.send_error(404); return
+                body=b'<p>Synthetic login code: {{ .Token }}</p>'
+                self.send_response(200);self.send_header('Content-Type','text/html')
+                self.send_header('Content-Length',str(len(body)));self.end_headers();self.wfile.write(body)
             def do_POST(self):
                 started=time.monotonic()
                 size = int(self.headers.get('Content-Length','0'))
@@ -127,7 +133,7 @@ class Providers:
 def prepare_functions(lab, output):
     from local import ROOT
     import shutil
-    for name in ('claim-or-import-exhibitor','_shared',):
+    for name in ('claim-or-import-exhibitor','stripe-webhook','_shared',):
         shutil.copytree(ROOT/'supabase/functions'/name, lab.workspace/'supabase/functions'/name, dirs_exist_ok=True)
     patches = {
         'stripe-create-checkout-session':('https://api.stripe.com/v1/checkout/sessions','http://host.docker.internal:8769/stripe/v1/checkout/sessions'),

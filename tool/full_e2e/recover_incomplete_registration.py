@@ -77,6 +77,7 @@ def main():
             obj=test.providers.checkout(quote['checkout_session_id']);event='evt_local_'+uuid.uuid4().hex
             test.measured('resumed_payment',n,lambda:test.webhook(obj,event))
             assert test.webhook(obj,event).get('duplicate') is True
+            test.wait_for_registration(c,token,n,len(rows))
             record=dict(exhibitor=n,entries=len(rows),reused_cart=bool(carts),cart_id=c,
                 owner_user_id=account['id'],write_replay_verified=True,lost_response_injected=n==missing[0],dart=saved)
             records.append(record);(out/'recovered.json').write_text(json.dumps(records,indent=2))

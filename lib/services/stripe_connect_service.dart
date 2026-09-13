@@ -86,6 +86,22 @@ class StripeConnectService {
     return url;
   }
 
+  static Future<Map<String, dynamic>> registrationStatus({
+    String? checkoutSessionId,
+    String? cartId,
+  }) async {
+    final result = await retryTransient(
+      () => _supabase.rpc(
+        'get_stripe_registration_status',
+        params: {
+          'p_checkout_session_id': checkoutSessionId,
+          'p_cart_id': cartId,
+        },
+      ),
+    );
+    return _normalizeMap(result);
+  }
+
   // ============================================================
   // 📊 ACCOUNT STATUS (UI STATE)
   // ============================================================

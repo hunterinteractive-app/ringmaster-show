@@ -31,7 +31,7 @@ def main():
     else:
         with dump.open('xb') as target:
             subprocess.run(['docker','exec',container,'pg_dump','-U','postgres','-d','postgres','-Fc',
-                '--schema=public','--schema=auth','--schema=storage','--schema=report_generation_private','--schema=judging_private','--no-owner'],stdout=target,check=True)
+                '--schema=public','--schema=auth','--schema=storage','--schema=report_generation_private','--schema=judging_private','--schema=payment_processing_private','--no-owner'],stdout=target,check=True)
     dump.chmod(0o600)
     lab.sql(f'create database {database};')
     def sql(statement):
@@ -42,7 +42,7 @@ def main():
     with dump.open('rb') as source,(out/'database-restore.log').open('w') as log:
         restored=subprocess.run(['docker','exec','-i',container,'pg_restore','-U','postgres','-d',database,'--no-owner','--no-acl','--exit-on-error'],stdin=source,stdout=log,stderr=subprocess.STDOUT)
     if restored.returncode:raise RuntimeError('Database restore failed; inspect database-restore.log')
-    tables=lab.rows("select schemaname,tablename from pg_tables where schemaname in ('public','auth','storage','report_generation_private','judging_private') order by 1,2")
+    tables=lab.rows("select schemaname,tablename from pg_tables where schemaname in ('public','auth','storage','report_generation_private','judging_private','payment_processing_private') order by 1,2")
     results=[]
     for row in tables:
         table='"'+row['schemaname']+'"."'+row['tablename']+'"'
@@ -56,7 +56,7 @@ def main():
         'definition', md5(pg_get_functiondef(p.oid)))
         order by n.nspname, p.proname, pg_get_function_identity_arguments(p.oid)), '[]'::jsonb)
         from pg_proc p join pg_namespace n on n.oid=p.pronamespace
-        where n.nspname in ('report_generation_private','judging_private') and p.prokind='f';"""
+        where n.nspname in ('report_generation_private','judging_private','payment_processing_private') and p.prokind='f';"""
     original_functions=json.loads(lab.sql(function_query))
     recovered_functions=json.loads(sql(function_query))
     private_functions_match=original_functions==recovered_functions

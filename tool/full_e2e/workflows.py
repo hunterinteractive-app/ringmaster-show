@@ -6,6 +6,7 @@ import subprocess
 import threading
 import time
 from local import ROOT, SHOW, uid, sql_quote
+from registration_retry import retry as registration_retry
 
 
 class Workflows:
@@ -27,7 +28,9 @@ class Workflows:
                 self.awards[b['first']].append(code)
 
     def rpc(self,name,params,p,kind=None):
-        return self.t.measured(kind or name,p['index'],lambda:self.lab.rpc(name,params,self.lab.session_token(p)))
+        def call():return self.lab.rpc(name,params,self.lab.session_token(p))
+        operation=(lambda:registration_retry(self.t,kind,p['index'],call)) if kind in ('admin_dashboard','superintendent_dashboard') else call
+        return self.t.measured(kind or name,p['index'],operation)
 
     def staff(self):
         def create(i):
