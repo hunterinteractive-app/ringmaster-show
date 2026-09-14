@@ -11,6 +11,9 @@ import 'package:ringmaster_show/screens/admin/closeout/pdf/builders/breed_awards
 import 'package:flutter/material.dart';
 import 'package:ringmaster_show/reporting_core/assets/flutter_report_asset_loader.dart';
 import 'package:ringmaster_show/screens/admin/closeout/csv/builders/michelles_special_report_csv.dart';
+import 'package:ringmaster_show/screens/admin/closeout/csv/builders/other_reports_csv.dart';
+import 'package:ringmaster_show/screens/admin/closeout/services/other_reports_csv_service.dart';
+import 'package:ringmaster_show/utils/csv_exporter.dart';
 import 'package:ringmaster_show/screens/admin/closeout/data/closeout_repository.dart';
 import 'package:ringmaster_show/screens/admin/closeout/data/loaders/entered_exhibitors_contact_report_loader.dart';
 import 'package:ringmaster_show/screens/admin/closeout/data/loaders/entered_exhibitors_list_report_loader.dart';
@@ -4516,6 +4519,7 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
   bool _loading = true;
   String? _error;
   String? _downloadingArtifactId;
+  bool _downloadingCsv = false;
   List<ReportArtifactSummary> _artifacts = const [];
   String? _selectedGroup;
   String? _selectedReportName;
@@ -5605,6 +5609,43 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
     }
   }
 
+  Future<void> _downloadSelectedCsv() async {
+    final reportName = _selectedReportName;
+    if (_downloadingCsv || reportName == null) return;
+    final artifact = _selectedArtifact;
+    final labelMode = _mailingLabelMode;
+    final labelSort = _mailingLabelSort;
+    setState(() => _downloadingCsv = true);
+    try {
+      final file = await OtherReportsCsvService(_supabase).build(
+        showId: widget.showId,
+        reportName: reportName,
+        title: _friendlyReportName(reportName),
+        artifact: artifact,
+        labelMode: labelMode,
+        labelSort: labelSort,
+      );
+      if (!mounted) return;
+      final message = await exportCsvBytes(
+        bytes: file.bytes,
+        suggestedName: file.fileName,
+      );
+      if (!mounted || message == null) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${_friendlyReportName(reportName)} CSV downloaded.'),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Unable to download CSV: $error')));
+    } finally {
+      if (mounted) setState(() => _downloadingCsv = false);
+    }
+  }
+
   Widget _metadataDropdown({
     required String label,
     required String? value,
@@ -5869,7 +5910,17 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
           artifact: _selectedArtifact,
           reportName: _selectedReportName,
           friendlyReportName: _friendlyReportName,
-          downloading: _downloadingArtifactId == _selectedArtifact?.id,
+          downloading:
+              _downloadingArtifactId != null &&
+              _downloadingArtifactId == _selectedArtifact?.id,
+          downloadingCsv: _downloadingCsv,
+          onDownloadCsv:
+              _selectedGroup == 'other' &&
+                  OtherReportsCsvBuilder.reportNames.contains(
+                    _selectedReportName,
+                  )
+              ? _downloadSelectedCsv
+              : null,
           queueing: _queueingSelectedReport,
           onDownload: _selectedArtifact?.artifactStatus == 'generated'
               ? () => _download(_selectedArtifact!)
@@ -5922,9 +5973,11 @@ class _SelectedReportStatus extends StatelessWidget {
   final String? reportName;
   final String Function(String reportName) friendlyReportName;
   final bool downloading;
+  final bool downloadingCsv;
   final bool queueing;
   final bool sending;
   final VoidCallback? onDownload;
+  final VoidCallback? onDownloadCsv;
   final VoidCallback? onQueue;
   final VoidCallback? onEmailThisShow;
   final VoidCallback? onEmailAllShows;
@@ -5936,6 +5989,8 @@ class _SelectedReportStatus extends StatelessWidget {
     required this.reportName,
     required this.friendlyReportName,
     required this.downloading,
+    required this.downloadingCsv,
+    required this.onDownloadCsv,
     required this.queueing,
     required this.sending,
     required this.onDownload,
@@ -5975,6 +6030,8 @@ class _SelectedReportStatus extends StatelessWidget {
             Text(
               selectedReportName == 'exhibitor_print_pack'
                   ? 'Generate the print pack to prepare one downloadable PDF.'
+                  : onDownloadCsv != null
+                  ? 'No PDF has been generated for this selection. You can download current report data as CSV.'
                   : 'No report artifact exists for this exact selection. This usually means the selected section has no eligible shown entries.',
             ),
           ],
@@ -5983,17 +6040,49 @@ class _SelectedReportStatus extends StatelessWidget {
             Text('Generated: ${_formatGeneratedAt(artifact!.generatedAt!)}'),
           ],
           const SizedBox(height: 12),
-          OutlinedButton.icon(
-            onPressed: downloading ? null : onDownload,
-            icon: downloading
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.download_outlined),
-            label: const Text('Download'),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              OutlinedButton.icon(
+                onPressed: downloading ? null : onDownload,
+                icon: downloading
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.download_outlined),
+                label: Text(
+                  onDownloadCsv != null &&
+                          selectedReportName != 'michelles_special_report'
+                      ? 'Download PDF'
+                      : 'Download',
+                ),
+              ),
+              if (onDownloadCsv != null)
+                OutlinedButton.icon(
+                  key: const ValueKey('other-reports-download-csv'),
+                  onPressed: downloadingCsv ? null : onDownloadCsv,
+                  icon: downloadingCsv
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.table_view_outlined),
+                  label: Text(
+                    downloadingCsv ? 'Preparing CSV…' : 'Download CSV',
+                  ),
+                ),
+            ],
           ),
+          if (onDownloadCsv != null) ...[
+            const SizedBox(height: 8),
+            const Text(
+              'CSV uses current data with the same scope as this report.',
+            ),
+          ],
           const SizedBox(height: 10),
           FilledButton.icon(
             onPressed: queueing ? null : onQueue,
