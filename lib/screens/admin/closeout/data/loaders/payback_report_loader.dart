@@ -143,11 +143,11 @@ class PaybackReportLoader {
     return _buildReport(show: show, showId: showId, rawRows: rawRows);
   }
 
-  PaybackReportData _buildReport({
+  Future<PaybackReportData> _buildReport({
     required Map<String, dynamic> show,
     required String showId,
     required List<Map<String, dynamic>> rawRows,
-  }) {
+  }) async {
     final breakdownRows = rawRows
         .map(PaybackBreakdownRow.fromJson)
         .where((row) => row.amountCents > 0)
@@ -169,6 +169,19 @@ class PaybackReportLoader {
       grouped[key]!.add(row);
     }
 
+    // Fetch only exhibitors in this payback report, in bounded batches using
+    // the caller's existing report permissions. Do not substitute a household
+    // member's address when an exhibitor has no email on file.
+    final contacts = await loadReportRowsByIds(
+      supabase,
+      table: 'exhibitors',
+      columns: 'id,email',
+      ids: grouped.keys.where((id) => !id.startsWith('unknown:')),
+    );
+    final emailsById = {
+      for (final contact in contacts)
+        contact['id'].toString(): (contact['email'] ?? '').toString().trim(),
+    };
     final exhibitors = <PaybackExhibitorSummary>[];
 
     for (final entry in grouped.entries) {
@@ -188,6 +201,7 @@ class PaybackReportLoader {
           exhibitorNumber: (matchingRaw['exhibitor_number'] ?? '').toString(),
           exhibitorName: (matchingRaw['exhibitor_name'] ?? 'Unknown Exhibitor')
               .toString(),
+          email: emailsById[entry.key] ?? '',
           mailingAddress: _formatMailingAddress(matchingRaw),
           totalCents: total,
           rows: rowsForExhibitor,

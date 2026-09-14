@@ -27,6 +27,7 @@ class PaybackExhibitorSummary {
   final String exhibitorId;
   final String exhibitorNumber;
   final String exhibitorName;
+  final String email;
   final String mailingAddress;
   final int totalCents;
   final List<PaybackBreakdownRow> rows;
@@ -35,6 +36,7 @@ class PaybackExhibitorSummary {
     required this.exhibitorId,
     required this.exhibitorNumber,
     required this.exhibitorName,
+    this.email = '',
     required this.mailingAddress,
     required this.totalCents,
     required this.rows,

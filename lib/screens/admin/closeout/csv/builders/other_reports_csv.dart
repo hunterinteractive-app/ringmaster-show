@@ -206,6 +206,7 @@ class OtherReportsCsvBuilder {
           [
             'Exhibitor Number',
             'Exhibitor',
+            'Email',
             'Mailing Address',
             'Section',
             'Source',
@@ -227,6 +228,7 @@ class OtherReportsCsvBuilder {
                 [
                   ex.exhibitorNumber,
                   ex.exhibitorName,
+                  ex.email,
                   ex.mailingAddress,
                   r.sectionLabel,
                   r.sourceLabel,

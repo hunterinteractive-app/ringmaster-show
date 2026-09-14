@@ -275,7 +275,7 @@ class PaybackReportPdfBuilder {
           decoration: const pw.BoxDecoration(color: PdfColors.grey200),
           children: [
             _headerCell('Exh #'),
-            _headerCell('Exhibitor'),
+            _headerCell('Exhibitor / Email'),
             _headerCell('Mailing Address'),
             _headerCell('Amount Due', alignRight: true),
           ],
@@ -303,7 +303,12 @@ class PaybackReportPdfBuilder {
               ? '—'
               : exhibitor.exhibitorNumber.trim(),
         ),
-        _bodyCell(exhibitor.exhibitorName),
+        _bodyCell(
+          [
+            exhibitor.exhibitorName,
+            if (exhibitor.email.isNotEmpty) exhibitor.email,
+          ].join('\n'),
+        ),
         _bodyCell(
           exhibitor.mailingAddress.trim().isEmpty
               ? '—'
@@ -362,6 +367,14 @@ class PaybackReportPdfBuilder {
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
         pw.SizedBox(height: isContinuation ? 8 : 0),
+        if (!isContinuation && exhibitor.email.isNotEmpty)
+          pw.Padding(
+            padding: const pw.EdgeInsets.only(bottom: 3),
+            child: pw.Text(
+              'Email: ${exhibitor.email}',
+              style: const pw.TextStyle(fontSize: 7, color: PdfColors.grey700),
+            ),
+          ),
         if (!isContinuation && exhibitor.mailingAddress.trim().isNotEmpty)
           pw.Padding(
             padding: const pw.EdgeInsets.only(bottom: 3),
