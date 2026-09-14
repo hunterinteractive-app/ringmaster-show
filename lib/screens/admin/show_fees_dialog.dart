@@ -11,6 +11,7 @@ import '../../services/show_payment_configuration_service.dart';
 import '../../services/role_service.dart';
 import '../../services/square_connect_service.dart';
 import '../../services/stripe_connect_service.dart';
+import '../../services/final_award_access_service.dart';
 
 class ShowFeesDialog {
   static Future<void> open(
@@ -70,6 +71,10 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
   final _discountRequiredShows = TextEditingController();
 
   bool _canManageCanadaSpecial = false;
+  bool _canManageExhibitorFee = false;
+  bool _exhibitorFeeEnabled = false;
+  final _exhibitorFeeLabel = TextEditingController(text: 'Exhibitor Fee');
+  final _exhibitorFeeAmount = TextEditingController(text: '0.00');
   String _discountEditor = 'volume';
   bool _canadaSpecialEnabled = false;
   String _canadaSpecialType = 'amount';
@@ -129,6 +134,8 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
     _discountMaximumEntries.dispose();
     _discountRequiredShows.dispose();
     _canadaSpecialValue.dispose();
+    _exhibitorFeeLabel.dispose();
+    _exhibitorFeeAmount.dispose();
 
     for (final c in _feePerEntryBySection.values) {
       c.dispose();
@@ -198,6 +205,8 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
           ? false
           : await RoleService.isSuperAdmin();
       _canManageCanadaSpecial = canadaSpecialAccess != null || isSuperAdmin;
+      _canManageExhibitorFee =
+          await FinalAwardAccessService.canConfigureBestOpposite(widget.showId);
 
       await _loadPaymentConfiguration();
 
@@ -217,7 +226,8 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
             'canada_special_discount_type,'
             'canada_special_discount_value,'
             'canada_special_discount_scope,'
-            'canada_special_show_letters',
+            'canada_special_show_letters,'
+            'exhibitor_fee_enabled,exhibitor_fee_label,exhibitor_fee_amount',
           )
           .eq('show_id', widget.showId)
           .maybeSingle();
@@ -250,6 +260,11 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
       };
 
       _discountEnabled = feeRow?['multi_show_discount_enabled'] == true;
+      _exhibitorFeeEnabled = feeRow?['exhibitor_fee_enabled'] == true;
+      _exhibitorFeeLabel.text =
+          (feeRow?['exhibitor_fee_label'] ?? 'Exhibitor Fee').toString();
+      _exhibitorFeeAmount.text = (feeRow?['exhibitor_fee_amount'] ?? 0)
+          .toString();
       _discountType = (feeRow?['multi_show_discount_type'] ?? 'amount')
           .toString();
       _discountValue.text = (feeRow?['multi_show_discount_value'] ?? 0)
@@ -409,6 +424,28 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
             : 'This show is locked. Fees and payment settings can no longer be changed.',
       );
       return false;
+    }
+
+    if (_canManageExhibitorFee && _exhibitorFeeEnabled) {
+      final amount = _parseMoney(_exhibitorFeeAmount.text);
+      if (_exhibitorFeeLabel.text.trim().isEmpty ||
+          _exhibitorFeeLabel.text.trim().length > 80) {
+        setState(() => _msg = 'Enter a fee name of 1 to 80 characters.');
+        return false;
+      }
+      if (amount == null ||
+          !amount.isFinite ||
+          amount <= 0 ||
+          amount > 99999.99 ||
+          !RegExp(
+            r'^\d+(\.\d{1,2})?$',
+          ).hasMatch(_exhibitorFeeAmount.text.trim())) {
+        setState(
+          () => _msg =
+              'Enter a fee greater than 0 with at most two decimal places.',
+        );
+        return false;
+      }
     }
 
     if (_onlinePaymentsSelected && _enabledReadyProviders.isEmpty) {
@@ -981,6 +1018,17 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
             ..sort(),
         });
       }
+      if (_canManageExhibitorFee) {
+        feeSettings.addAll({
+          'exhibitor_fee_enabled': _exhibitorFeeEnabled,
+          'exhibitor_fee_label': _exhibitorFeeLabel.text.trim().isEmpty
+              ? 'Exhibitor Fee'
+              : _exhibitorFeeLabel.text.trim(),
+          'exhibitor_fee_amount': _exhibitorFeeEnabled
+              ? double.parse(_exhibitorFeeAmount.text.trim())
+              : 0,
+        });
+      }
       await StripeConnectService.supabase
           .from('show_fee_settings')
           .upsert(feeSettings);
@@ -1274,6 +1322,46 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
         );
       }),
     ], icon: Icons.attach_money);
+  }
+
+  Widget _buildExhibitorFeeSection() {
+    return _section('One-Time Exhibitor Fee', [
+      SwitchListTile.adaptive(
+        contentPadding: EdgeInsets.zero,
+        title: const Text('Charge once per exhibitor number'),
+        subtitle: const Text(
+          'One charge for the full show, across all sections and waves. '
+          'Enabling this also charges exhibitors who have already entered.',
+        ),
+        value: _exhibitorFeeEnabled,
+        onChanged: (_saving || _isReadOnly)
+            ? null
+            : (value) => setState(() => _exhibitorFeeEnabled = value),
+      ),
+      if (_exhibitorFeeEnabled) ...[
+        const SizedBox(height: 12),
+        TextField(
+          controller: _exhibitorFeeLabel,
+          enabled: !_saving && !_isReadOnly,
+          maxLength: 80,
+          decoration: const InputDecoration(
+            labelText: 'Fee name',
+            hintText: 'Exhibitor Fee or Facility Fee',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        const SizedBox(height: 12),
+        _moneyField(
+          controller: _exhibitorFeeAmount,
+          label: 'Amount per exhibitor number',
+        ),
+        const SizedBox(height: 12),
+        const Text(
+          'Existing charges keep their original name and amount. '
+          'Turning this off stops new charges; it does not remove charges already assessed.',
+        ),
+      ],
+    ], icon: Icons.badge_outlined);
   }
 
   Widget _buildDiscountSection() {
@@ -2462,6 +2550,8 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
                                   child: Column(
                                     children: [
                                       _buildSectionFeesSection(),
+                                      if (_canManageExhibitorFee)
+                                        _buildExhibitorFeeSection(),
                                       _buildDiscountSection(),
                                       _buildPaymentTimingSection(),
                                       _buildOnlinePaymentFeeSection(),

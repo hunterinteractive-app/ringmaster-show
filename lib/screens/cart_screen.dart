@@ -17,6 +17,7 @@ import '../widgets/stripe_payment_confirmation_dialog.dart';
 import '../services/show_payment_configuration_service.dart';
 import '../services/square_checkout_service.dart';
 import '../services/payment_quote_preview_service.dart';
+import '../services/exhibitor_fee_service.dart';
 
 import 'my_entries_screen.dart';
 
@@ -47,6 +48,8 @@ class _CartScreenState extends State<CartScreen> {
   String? _checkoutUrl;
 
   List<Map<String, dynamic>> _items = [];
+  List<ExhibitorFee> _exhibitorFees = [];
+  bool get _hasCheckoutItems => _items.isNotEmpty || _exhibitorFees.isNotEmpty;
   Map<String, dynamic>? _show;
   Map<String, Map<String, dynamic>> _sectionById = {};
   List<String> _breedScopeErrors = [];
@@ -149,7 +152,7 @@ class _CartScreenState extends State<CartScreen> {
       final items = await supabase
           .from('entry_cart_items')
           .select(
-            'id,exhibitor_id,section_id,animal_id,species,breed,variety,fur_variety,sex,tattoo,animal_name,class_name,created_at,is_fur',
+            'id,exhibitor_id,section_id,animal_id,species,breed,variety,fur_variety,sex,tattoo,animal_name,class_name,created_at,is_fur,is_exhibitor_fee_carrier',
           )
           .eq('cart_id', widget.cartId)
           .order('created_at');
@@ -163,7 +166,11 @@ class _CartScreenState extends State<CartScreen> {
         for (final row in sectionFees) row['section_id'].toString(): row,
       };
 
-      final parsedItems = (items as List).cast<Map<String, dynamic>>();
+      final parsedItems = (items as List)
+          .cast<Map<String, dynamic>>()
+          .where((item) => item['is_exhibitor_fee_carrier'] != true)
+          .toList();
+      final exhibitorFees = await ExhibitorFee.forCart(widget.cartId);
       final breedScopeErrors = <String>[];
       for (final item in parsedItems) {
         final section = parsedSections[item['section_id']?.toString()];
@@ -179,7 +186,12 @@ class _CartScreenState extends State<CartScreen> {
         );
       }
 
-      await _loadExhibitorLabelsForCart(parsedItems);
+      await _loadExhibitorLabelsForCart([
+        ...parsedItems,
+        ...exhibitorFees.map(
+          (fee) => <String, dynamic>{'exhibitor_id': fee.exhibitorId},
+        ),
+      ]);
 
       final readyProviders = paymentConfiguration.providers
           .where((provider) => provider.enabled && provider.ready)
@@ -201,6 +213,7 @@ class _CartScreenState extends State<CartScreen> {
         _feeSettings = fee;
         _sectionById = parsedSections;
         _items = parsedItems;
+        _exhibitorFees = exhibitorFees;
         _breedScopeErrors = breedScopeErrors;
         _paymentConfiguration = paymentConfiguration;
         _selectedOnlineProvider = selectedProvider;
@@ -408,8 +421,8 @@ class _CartScreenState extends State<CartScreen> {
         !_payingOnline &&
         !_confirming &&
         !AppSession.isSupportMode &&
-        !_deadlinePassed() &&
-        _items.isNotEmpty &&
+        (_items.isEmpty || !_deadlinePassed()) &&
+        _hasCheckoutItems &&
         _selectedPaymentTiming == 'online' &&
         _selectedOnlineProvider != null &&
         _providerReady(_selectedOnlineProvider!);
@@ -656,8 +669,21 @@ class _CartScreenState extends State<CartScreen> {
       }
     }
 
+    final includedExhibitors = items
+        .map((i) => i['exhibitor_id']?.toString())
+        .toSet();
+    final exhibitorFee =
+        _exhibitorFees
+            .where(
+              (fee) =>
+                  includedExhibitors.contains(fee.exhibitorId) ||
+                  identical(items, _items),
+            )
+            .fold<int>(0, (total, fee) => total + fee.amountCents) /
+        100.0;
     final total =
-        (entriesSubtotal + furSubtotal + showFeeSubtotal) - discountAmount;
+        (entriesSubtotal + furSubtotal + showFeeSubtotal + exhibitorFee) -
+        discountAmount;
 
     return {
       'currency': currency,
@@ -666,6 +692,7 @@ class _CartScreenState extends State<CartScreen> {
       'entries_subtotal': entriesSubtotal,
       'fur_subtotal': furSubtotal,
       'show_fee': showFeeSubtotal,
+      'exhibitor_fee': exhibitorFee,
       'discount_enabled': discountEnabled,
       'discount_type': discountType,
       'discount_value': discountValue,
@@ -873,7 +900,7 @@ class _CartScreenState extends State<CartScreen> {
       });
       return;
     }
-    if (_items.isEmpty) {
+    if (!_hasCheckoutItems) {
       setState(
         () => _msg =
             'Your cart is empty. If you are looking for completed entries please return to the upcoming shows tab and select Entries.',
@@ -881,7 +908,7 @@ class _CartScreenState extends State<CartScreen> {
       return;
     }
 
-    if (_deadlinePassed()) {
+    if (_items.isNotEmpty && _deadlinePassed()) {
       setState(
         () => _msg = 'Entry deadline has passed. You can’t pay for this cart.',
       );
@@ -985,11 +1012,11 @@ class _CartScreenState extends State<CartScreen> {
       setState(() => _msg = _breedScopeErrors.first);
       return;
     }
-    if (_items.isEmpty) {
+    if (!_hasCheckoutItems) {
       setState(() => _msg = 'Your cart is empty.');
       return;
     }
-    if (_deadlinePassed()) {
+    if (_items.isNotEmpty && _deadlinePassed()) {
       setState(
         () => _msg = 'Entry deadline has passed. You can’t submit this cart.',
       );
@@ -1029,7 +1056,9 @@ class _CartScreenState extends State<CartScreen> {
         builder: (_) => AlertDialog(
           title: const Text('Entries Received'),
           content: Text(
-            insertedCount == 1
+            _items.isEmpty
+                ? 'Your exhibitor fee is recorded and can be paid at the show.'
+                : insertedCount == 1
                 ? 'We have received your 1 entry. To review it, please view the Entries tab.'
                 : 'We have received your $insertedCount entries. To review them, please view the Entries tab.',
           ),
@@ -1060,8 +1089,14 @@ class _CartScreenState extends State<CartScreen> {
     final entriesSubtotal = f['entries_subtotal'] as double;
     final furSubtotal = f['fur_subtotal'] as double;
     final showFee = f['show_fee'] as double;
+    final exhibitorFee = f['exhibitor_fee'] as double;
     final discountAmount = f['discount_amount'] as double;
-    final total = (entriesSubtotal + furSubtotal + showFee - discountAmount);
+    final total =
+        (entriesSubtotal +
+        furSubtotal +
+        showFee +
+        exhibitorFee -
+        discountAmount);
     final count = f['entry_count'] as int;
     final furCount = f['fur_count'] as int;
 
@@ -1077,6 +1112,14 @@ class _CartScreenState extends State<CartScreen> {
 
     if (showFee > 0) {
       parts.add('Show fees: ${_money(showFee, currency: currency)}');
+    }
+    for (final fee in _exhibitorFees.where(
+      (fee) =>
+          exhibitorItems.any((item) => item['exhibitor_id'] == fee.exhibitorId),
+    )) {
+      parts.add(
+        '${fee.label} (once): ${_money(fee.amountCents / 100, currency: currency)}',
+      );
     }
 
     if (discountAmount > 0) {
@@ -1348,6 +1391,13 @@ class _CartScreenState extends State<CartScreen> {
                                         '-${_money(overallFee['discount_amount'] as double, currency: currency)}',
                                       ),
                                     ),
+                                  for (final fee in _exhibitorFees)
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 4),
+                                      child: Text(
+                                        '${fee.label} — ${_exhibitorLabelById[fee.exhibitorId] ?? 'Exhibitor'} (once per exhibitor number): ${_money(fee.amountCents / 100, currency: currency)}',
+                                      ),
+                                    ),
                                   if (onlinePaymentFee > 0) ...[
                                     const SizedBox(height: 4),
                                     Text(
@@ -1540,13 +1590,15 @@ class _CartScreenState extends State<CartScreen> {
                         : FilledButton(
                             onPressed:
                                 (_confirming ||
-                                    _deadlinePassed() ||
-                                    _items.isEmpty)
+                                    (_items.isNotEmpty && _deadlinePassed()) ||
+                                    !_hasCheckoutItems)
                                 ? null
                                 : _confirmDayOf,
                             child: Text(
                               _confirming
                                   ? 'Confirming…'
+                                  : _items.isEmpty
+                                  ? 'Confirm Fee (Pay at Show)'
                                   : 'Confirm Entries (Pay Day-of-Show)',
                             ),
                           ),
