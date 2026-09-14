@@ -3504,6 +3504,9 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
       _animal = null;
       _msg = 'Enter the animal details below, then save the entry.';
     });
+    // Breed settings may have changed while this entry sheet was open.
+    // Refresh before offering the manual animal breed picker.
+    await _loadBreedsForSpecies();
   }
 
   Future<Map<String, dynamic>?> _findExistingShowExhibitor() async {
