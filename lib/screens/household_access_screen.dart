@@ -140,7 +140,11 @@ class _HouseholdAccessScreenState extends State<HouseholdAccessScreen> {
                             },
                       child: const Text('Accept'),
                     ),
-                  TextButton(
+                  OutlinedButton(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF3B2078),
+                      side: const BorderSide(color: Color(0xFF3B2078)),
+                    ),
                     onPressed: (_busy || _readOnly)
                         ? null
                         : () {
