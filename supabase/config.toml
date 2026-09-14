@@ -34,5 +34,10 @@ verify_jwt = true
 [functions.payment-quote-preview]
 verify_jwt = true
 
+[functions.refund-show-entries]
+# getUser validates user calls; the background reconciler uses constant-time
+# service key verification. Never rely on an unverified JWT payload.
+verify_jwt = false
+
 [functions.household-send-invitation]
 verify_jwt = true

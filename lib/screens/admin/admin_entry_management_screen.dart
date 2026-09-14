@@ -14,6 +14,8 @@ import 'package:ringmaster_show/screens/admin/entry_management_search.dart';
 import 'package:ringmaster_show/utils/section_breed_scope.dart';
 import 'package:ringmaster_show/utils/species_sex.dart';
 import 'package:ringmaster_show/utils/entry_class_options.dart';
+import 'package:ringmaster_show/services/entry_refund_service.dart';
+import 'entry_refund_dialog.dart';
 
 final supabase = Supabase.instance.client;
 
@@ -168,6 +170,7 @@ class AdminEntryManagementScreen extends StatefulWidget {
 class _AdminEntryManagementScreenState
     extends State<AdminEntryManagementScreen> {
   bool _loading = true;
+  bool _canRefund = false;
   bool _sortExhibitorsByLastName = false;
   String? _msg;
 
@@ -200,6 +203,11 @@ class _AdminEntryManagementScreenState
     });
 
     try {
+      // A missing permission RPC must not stop ordinary Entry Management
+      // during a rolling deployment. Refund access fails closed.
+      _canRefund = await EntryRefundService()
+          .canRefund(widget.showId)
+          .catchError((_) => false);
       await _loadSections();
       await _loadEntries();
       if (!mounted) return;
@@ -263,6 +271,27 @@ class _AdminEntryManagementScreenState
       if (!mounted) return;
       setState(() => _msg = 'Entry added.');
     }
+  }
+
+  Future<void> _openRefund(
+    Map<String, dynamic> entry, {
+    bool selectEntry = false,
+  }) async {
+    if (!_canRefund || AppSession.isSupportMode) return;
+    final exhibitorId = entry['exhibitor_id']?.toString();
+    if (exhibitorId == null || exhibitorId.isEmpty) return;
+    await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => EntryRefundDialog(
+        showId: widget.showId,
+        exhibitorId: exhibitorId,
+        exhibitorName: _exhibitorDisplayName(entry),
+        initialEntryId: selectEntry ? entry['id']?.toString() : null,
+      ),
+    );
+    await _loadEntries();
+    if (mounted) setState(() {});
   }
 
   Future<void> _openEditExhibitor(Map<String, dynamic> entry) async {
@@ -838,6 +867,19 @@ class _AdminEntryManagementScreenState
       useScrollView: false,
       bodyPadding: EdgeInsets.zero,
       actions: [
+        if (_canRefund && !AppSession.isSupportMode)
+          IconButton(
+            tooltip: 'Refund History',
+            icon: const Icon(Icons.history),
+            onPressed: () async {
+              await showDialog<void>(
+                context: context,
+                builder: (_) => EntryRefundHistoryDialog(showId: widget.showId),
+              );
+              await _loadEntries();
+              if (mounted) setState(() {});
+            },
+          ),
         IconButton(
           tooltip: AppSession.isSupportMode
               ? 'Add entry while viewing as another user'
@@ -1034,6 +1076,14 @@ class _AdminEntryManagementScreenState
                                         : 'Edit Exhibitor',
                                   ),
                                 ),
+                              if (hasExhibitor &&
+                                  _canRefund &&
+                                  !AppSession.isSupportMode)
+                                IconButton(
+                                  tooltip: 'Refund & Remove Entries',
+                                  icon: const Icon(Icons.currency_exchange),
+                                  onPressed: () => _openRefund(exEntries.first),
+                                ),
                             ],
                           ),
                           subtitle: Text(
@@ -1128,6 +1178,9 @@ class _AdminEntryManagementScreenState
                                       _toggleScratch(e);
                                     }
                                     if (v == 'delete') _deleteEntry(e);
+                                    if (v == 'refund') {
+                                      _openRefund(e, selectEntry: true);
+                                    }
                                   },
                                   itemBuilder: (_) => [
                                     const PopupMenuItem(
@@ -1148,6 +1201,11 @@ class _AdminEntryManagementScreenState
                                       value: 'delete',
                                       child: Text('Remove Entry'),
                                     ),
+                                    if (_canRefund && !AppSession.isSupportMode)
+                                      const PopupMenuItem(
+                                        value: 'refund',
+                                        child: Text('Refund & Remove Entries'),
+                                      ),
                                   ],
                                 ),
                                 onTap: () => _openEdit(e),

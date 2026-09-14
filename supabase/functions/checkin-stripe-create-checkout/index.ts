@@ -52,6 +52,11 @@ Deno.serve(async (request) => {
       throw new Error("Online payment is not ready for this show.");
     }
 
+    const { error: accountSnapshotError } = await backend.rpc("save_stripe_payment_account", {
+      p_session_id: attempt.payment_session_id, p_account_id: accountId,
+    });
+    if (accountSnapshotError) throw new Error("The original payment account could not be saved.");
+
     const appBase = "https://checkin.ringmasterone.com";
     const form = new URLSearchParams();
     form.set("mode", "payment");

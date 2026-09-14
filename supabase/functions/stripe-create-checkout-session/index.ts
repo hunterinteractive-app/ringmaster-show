@@ -75,6 +75,11 @@ serve(async (request) => {
       );
     }
 
+    const { error: accountSnapshotError } = await backend.rpc("save_stripe_payment_account", {
+      p_session_id: attempt.payment_session_id, p_account_id: connectedAccountId,
+    });
+    if (accountSnapshotError) throwDatabaseError(accountSnapshotError);
+
     const form = buildStripeSessionForm({
       attempt,
       appBaseUrl,
