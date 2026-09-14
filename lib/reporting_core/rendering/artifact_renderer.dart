@@ -222,6 +222,7 @@ final class RegistryArtifactRenderer implements ArtifactRenderer {
       showLetter: _text(metadata, 'show_letter'),
       scopeLabel: _text(metadata, 'scope_label'),
       sectionId: _text(metadata, 'section_id'),
+      waveId: _text(metadata, 'wave_id'),
       sectionIds: artifact.sectionIds,
       showName: show['name']?.toString(),
       showDate: _formatShowDate(show['start_date']),

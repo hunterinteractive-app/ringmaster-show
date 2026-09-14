@@ -13,6 +13,8 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
 import 'print_pack_pdf_helpers.dart';
+import '../../../services/show_wave_schedule.dart';
+import 'package:intl/intl.dart';
 import '../closeout/data/report_data_reader.dart';
 
 final supabase = Supabase.instance.client;
@@ -50,6 +52,47 @@ class _CheckInGeneratorSheetState extends State<CheckInGeneratorSheet> {
   bool _sortExhibitorsByLastName = false;
   String? _msg;
   Map<String, dynamic>? _showRow;
+  ShowWaveSchedule? _waveSchedule;
+  String? _waveId;
+  bool _loadingWaves = true;
+  String? _waveError;
+  late final Future<void> _wavesReady;
+  ShowWave? get _selectedWave {
+    for (final wave in _waveSchedule?.waves ?? <ShowWave>[]) {
+      if (wave.id == _waveId) return wave;
+    }
+    return null;
+  }
+
+  String get _selectionLabel => _selectedWave == null
+      ? widget.sectionLabel
+      : '${widget.sectionLabel} • ${_selectedWave!.name}';
+  @override
+  void initState() {
+    super.initState();
+    _wavesReady = _loadWaves();
+  }
+
+  Future<void> _loadWaves() async {
+    try {
+      final schedule = await ShowWaveScheduleService(
+        supabase,
+      ).load(widget.showId);
+      if (!mounted) return;
+      setState(() {
+        _waveSchedule = schedule;
+        _waveId = schedule.activeWaveId;
+        _loadingWaves = false;
+      });
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          _loadingWaves = false;
+          _waveError = 'Could not load the wave schedule: $error';
+        });
+      }
+    }
+  }
 
   Future<void> _loadShowContact() async {
     final row = await supabase
@@ -62,13 +105,21 @@ class _CheckInGeneratorSheetState extends State<CheckInGeneratorSheet> {
   }
 
   Future<List<Map<String, dynamic>>> _fetchEntries() async {
+    await _wavesReady;
+    if (_waveError != null) throw StateError(_waveError!);
+    if (_waveSchedule?.enabled == true && _waveId == null) {
+      throw StateError('Choose a wave to generate check-in sheets.');
+    }
     final list = await readAllReportPages(
       (from, to) async => List<Map<String, dynamic>>.from(
         await supabase
             .rpc(
-              'report_checkin_entries',
+              _waveSchedule?.enabled == true
+                  ? 'report_wave_checkin_entries'
+                  : 'report_checkin_entries',
               params: {
                 'p_show_id': widget.showId,
+                if (_waveSchedule?.enabled == true) 'p_wave_id': _waveId,
                 'p_section_id': widget.combineSections
                     ? null
                     : widget.sectionId,
@@ -537,14 +588,15 @@ class _CheckInGeneratorSheetState extends State<CheckInGeneratorSheet> {
         final pdfBytes = await _buildPdfBytesForEntries(entryList);
 
         final filename =
-            'check_in_${_safeFileName(widget.showName)}_${_safeFileName(exhibitorName)}.pdf';
+            'check_in_${_safeFileName(widget.showName)}_${_safeFileName(exhibitorName)}${_selectedWave == null ? '' : '_${_safeFileName(_selectedWave!.name)}'}.pdf';
 
         final response = await supabase.functions.invoke(
           'send-checkin-sheet-email',
           body: {
             'show_id': widget.showId,
             'show_name': widget.showName,
-            'section_label': widget.sectionLabel,
+            'section_label': _selectionLabel,
+            'wave_id': _waveId,
             'exhibitor_id': (entryList.first['exhibitor_id'] ?? '').toString(),
             'exhibitor_name': exhibitorName,
             'to_email': email,
@@ -1294,7 +1346,7 @@ class _CheckInGeneratorSheetState extends State<CheckInGeneratorSheet> {
                         ),
                         pw.SizedBox(height: 2),
                         pw.Text(
-                          widget.sectionLabel,
+                          _selectionLabel,
                           style: pw.TextStyle(fontSize: 12),
                         ),
                         pw.SizedBox(height: 2),
@@ -1349,6 +1401,33 @@ class _CheckInGeneratorSheetState extends State<CheckInGeneratorSheet> {
               ),
             );
 
+            if (_selectedWave != null) {
+              final wave = _selectedWave!;
+              final format = DateFormat('MMM d, yyyy • h:mm a');
+              widgets.add(
+                pw.Padding(
+                  padding: const pw.EdgeInsets.symmetric(vertical: 8),
+                  child: pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.Text(
+                        'Check-in: ${format.format(wave.checkinStart!)} to ${format.format(wave.checkinEnd!)} (${_waveSchedule!.timezone})',
+                        style: pw.TextStyle(fontSize: 9),
+                      ),
+                      pw.Text(
+                        'Show date: ${DateFormat.yMMMd().format(wave.showDate!)} • Check-out: ${DateFormat.yMMMd().format(wave.checkoutDate!)}',
+                        style: pw.TextStyle(fontSize: 9),
+                      ),
+                      pw.SizedBox(height: 4),
+                      pw.Text(
+                        waveCheckinSheetNote,
+                        style: pw.TextStyle(fontSize: 9),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }
             widgets.add(instructions());
 
             if (widget.combineSections) {
@@ -1430,9 +1509,12 @@ class _CheckInGeneratorSheetState extends State<CheckInGeneratorSheet> {
       final doc = _buildPdf(entries: entries, theme: theme);
       final bytes = await doc.save();
 
+      final suffix = _selectedWave == null
+          ? ''
+          : '_${_safeFileName(_selectedWave!.name)}';
       final name = widget.combineSections
-          ? 'check_in_${widget.showName}_ALL_SECTIONS.pdf'
-          : 'check_in_${widget.showName}_${widget.sectionLabel}.pdf';
+          ? 'check_in_${widget.showName}_ALL_SECTIONS$suffix.pdf'
+          : 'check_in_${widget.showName}_${widget.sectionLabel}$suffix.pdf';
 
       final savedPath = await savePdfToUserChosenLocation(
         bytes: Uint8List.fromList(bytes),
@@ -1485,7 +1567,7 @@ class _CheckInGeneratorSheetState extends State<CheckInGeneratorSheet> {
             ),
             const SizedBox(height: 10),
             Text(
-              '${widget.showName} • ${widget.sectionLabel}',
+              '${widget.showName} • $_selectionLabel',
               style: Theme.of(context).textTheme.bodyMedium,
             ),
             const SizedBox(height: 6),
@@ -1502,6 +1584,26 @@ class _CheckInGeneratorSheetState extends State<CheckInGeneratorSheet> {
                   : 'Mode: Single section',
               style: Theme.of(context).textTheme.bodySmall,
             ),
+            if (_loadingWaves) const LinearProgressIndicator(),
+            if (_waveError != null)
+              Text(_waveError!, style: const TextStyle(color: Colors.red)),
+            if (_waveSchedule?.enabled == true)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                child: DropdownButtonFormField<String>(
+                  initialValue: _waveId,
+                  decoration: const InputDecoration(labelText: 'Wave'),
+                  items: _waveSchedule!.waves
+                      .map(
+                        (w) =>
+                            DropdownMenuItem(value: w.id, child: Text(w.name)),
+                      )
+                      .toList(),
+                  onChanged: (_building || _emailing)
+                      ? null
+                      : (v) => setState(() => _waveId = v),
+                ),
+              ),
             const SizedBox(height: 12),
             Wrap(
               spacing: 12,
@@ -1568,7 +1670,13 @@ class _CheckInGeneratorSheetState extends State<CheckInGeneratorSheet> {
                 foregroundColor: AppColors.primaryButtonText,
                 padding: const EdgeInsets.symmetric(vertical: 16),
               ),
-              onPressed: (_building || _emailing) ? null : _generatePdf,
+              onPressed:
+                  (_building ||
+                      _emailing ||
+                      _loadingWaves ||
+                      _waveError != null)
+                  ? null
+                  : _generatePdf,
               icon: const Icon(Icons.picture_as_pdf),
               label: Text(_building ? 'Building PDF…' : 'Generate PDF'),
             ),
@@ -1580,7 +1688,13 @@ class _CheckInGeneratorSheetState extends State<CheckInGeneratorSheet> {
                 foregroundColor: AppColors.headerText,
                 padding: const EdgeInsets.symmetric(vertical: 16),
               ),
-              onPressed: (_building || _emailing) ? null : _emailCheckInSheets,
+              onPressed:
+                  (_building ||
+                      _emailing ||
+                      _loadingWaves ||
+                      _waveError != null)
+                  ? null
+                  : _emailCheckInSheets,
               icon: const Icon(Icons.email_outlined),
               label: Text(_emailing ? 'Emailing…' : 'Email Check-In Sheets'),
             ),

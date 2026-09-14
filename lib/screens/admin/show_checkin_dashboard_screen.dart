@@ -665,10 +665,15 @@ class _ShowCheckinDashboardScreenState
                   padding: const EdgeInsets.all(16),
                   children: [
                     Text(
-                      'Live check-in status',
+                      _data?['wave_name'] == null
+                          ? 'Live check-in status'
+                          : '${_data!['wave_name']} check-in status',
                       style: Theme.of(context).textTheme.headlineSmall
                           ?.copyWith(color: AppColors.headerForeground),
                     ),
+                    if (_data?['waves_enabled'] == true &&
+                        _data?['wave_name'] == null)
+                      const Text('No wave is currently open for check-in.'),
                     const SizedBox(height: 8),
                     Wrap(
                       spacing: 12,
@@ -709,8 +714,10 @@ class _ShowCheckinDashboardScreenState
                             ListTile(
                               leading: const Icon(Icons.people_outline),
                               title: const Text('Check-In Roster'),
-                              subtitle: const Text(
-                                'Search all entered exhibitors and see their check-in status',
+                              subtitle: Text(
+                                _data?['waves_enabled'] == true
+                                    ? 'Search exhibitors in the active wave and see their check-in status'
+                                    : 'Search all entered exhibitors and see their check-in status',
                               ),
                               trailing: const Icon(Icons.chevron_right),
                               onTap: () => Navigator.push(

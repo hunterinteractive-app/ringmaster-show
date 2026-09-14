@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:ringmaster_show/theme/app_theme.dart';
 import 'package:ringmaster_show/utils/entry_class_options.dart';
@@ -22,6 +23,7 @@ class _ExhibitorCheckinPortalScreenState
   final _initials = TextEditingController();
   final _signature = TextEditingController();
 
+  Timer? _waveEndTimer;
   String? _sessionToken;
   Map<String, dynamic>? _portalData;
   bool _verifying = false;
@@ -36,6 +38,7 @@ class _ExhibitorCheckinPortalScreenState
 
   @override
   void dispose() {
+    _waveEndTimer?.cancel();
     _exhibitorNumber.dispose();
     _lastName.dispose();
     _initials.dispose();
@@ -122,6 +125,23 @@ class _ExhibitorCheckinPortalScreenState
       if (!mounted) return;
       final data = Map<String, dynamic>.from(response as Map);
       data['payment'] = Map<String, dynamic>.from(payment as Map);
+      _waveEndTimer?.cancel();
+      final wave = data['wave'];
+      final endsAt = wave is Map
+          ? DateTime.tryParse('${wave['checkin_ends_at'] ?? ''}')
+          : null;
+      if (endsAt != null) {
+        _waveEndTimer = Timer(endsAt.difference(DateTime.now()), () {
+          if (!mounted) return;
+          setState(() {
+            _portalData = null;
+            _sessionToken = null;
+            _entriesConfirmed = false;
+            _message =
+                'This wave’s check-in window has ended. View all your entries in the Entries tab of your account.';
+          });
+        });
+      }
       setState(() {
         _portalData = data;
         _changeRequests = List<Map<String, dynamic>>.from(
@@ -1205,7 +1225,14 @@ class _ExhibitorCheckinPortalScreenState
     final payment = Map<String, dynamic>.from(
       _portalData?['payment'] as Map? ?? const {},
     );
-    final isCompleted = _text(checkin, 'status') == 'completed';
+    final wave = Map<String, dynamic>.from(
+      _portalData?['wave'] as Map? ?? const {},
+    );
+    final isCompleted = const [
+      'completed',
+      'reviewed_by_secretary',
+      'locked',
+    ].contains(_text(checkin, 'status'));
     for (final entry in _entries) {
       final label = _text(entry, 'show_label').isEmpty
           ? 'Show entries'
@@ -1225,6 +1252,17 @@ class _ExhibitorCheckinPortalScreenState
           'Checking in: ${_text(exhibitor, 'name')} ${_text(exhibitor, 'number').isEmpty ? '' : '• #${_text(exhibitor, 'number')}'}',
           style: TextStyle(color: muted),
         ),
+        if (wave.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          Text(
+            '${_text(wave, 'name')} check-in',
+            style: TextStyle(color: bright, fontWeight: FontWeight.bold),
+          ),
+          Text(
+            'Only animals in this wave appear here. You can view all your entries in the Entries tab of your account.',
+            style: TextStyle(color: muted),
+          ),
+        ],
         const SizedBox(height: 20),
         Text(
           'Review your entries',

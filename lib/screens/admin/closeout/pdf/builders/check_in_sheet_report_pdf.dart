@@ -32,81 +32,106 @@ class CheckInSheetReportPdfBuilder {
     }
 
     final exhibitorName = _exhibitorName(entries.first);
-    final exhibitorNumber = _exhibitorNumber(entries.first);
-    final exhibitorLabel = exhibitorNumber.isEmpty
-        ? exhibitorName
-        : '$exhibitorName    Exhibitor #: $exhibitorNumber';
-    final balanceDue = _checkInBalanceDue(entries);
+    for (final sheet in data.waveSheets.isEmpty ? [data] : data.waveSheets) {
+      final entries = sheet.entries;
+      final exhibitorNumber = _exhibitorNumber(entries.first);
+      final exhibitorLabel = exhibitorNumber.isEmpty
+          ? exhibitorName
+          : '$exhibitorName    Exhibitor #: $exhibitorNumber';
+      final balanceDue = _checkInBalanceDue(entries);
 
-    doc.addPage(
-      pw.MultiPage(
-        pageFormat: PdfPageFormat.letter,
-        margin: const pw.EdgeInsets.fromLTRB(28, 28, 28, 28),
-        build: (_) => [
-          pw.Row(
-            crossAxisAlignment: pw.CrossAxisAlignment.start,
-            children: [
-              pw.Expanded(
-                child: pw.Column(
-                  children: [
-                    pw.Text(
-                      data.showName,
-                      style: pw.TextStyle(
-                        fontSize: 14,
-                        fontWeight: pw.FontWeight.bold,
-                      ),
-                    ),
-                    pw.SizedBox(height: 2),
-                    pw.Text(
-                      data.sectionLabel,
-                      style: pw.TextStyle(fontSize: 12),
-                    ),
-                    pw.SizedBox(height: 2),
-                    pw.Text(
-                      'Exhibitor Check-In Sheet',
-                      style: pw.TextStyle(
-                        fontSize: 12,
-                        fontWeight: pw.FontWeight.bold,
-                      ),
-                    ),
-                  ],
+      doc.addPage(
+        pw.MultiPage(
+          pageFormat: PdfPageFormat.letter,
+          margin: const pw.EdgeInsets.fromLTRB(28, 28, 28, 28),
+          footer: sheet.waveNote == null
+              ? null
+              : (context) => pw.Align(
+                  alignment: pw.Alignment.centerRight,
+                  child: pw.Text(
+                    'Page ${context.pageNumber} of ${context.pagesCount}',
+                    style: const pw.TextStyle(fontSize: 9),
+                  ),
                 ),
-              ),
-              pw.Text('Page 1 of 1', style: pw.TextStyle(fontSize: 10)),
+          build: (_) => [
+            pw.Row(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Expanded(
+                  child: pw.Column(
+                    children: [
+                      pw.Text(
+                        sheet.showName,
+                        style: pw.TextStyle(
+                          fontSize: 14,
+                          fontWeight: pw.FontWeight.bold,
+                        ),
+                      ),
+                      pw.SizedBox(height: 2),
+                      pw.Text(
+                        sheet.sectionLabel,
+                        style: pw.TextStyle(fontSize: 12),
+                      ),
+                      pw.SizedBox(height: 2),
+                      pw.Text(
+                        'Exhibitor Check-In Sheet',
+                        style: pw.TextStyle(
+                          fontSize: 12,
+                          fontWeight: pw.FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (sheet.waveNote == null)
+                  pw.Text('Page 1 of 1', style: pw.TextStyle(fontSize: 10)),
+              ],
+            ),
+            pw.SizedBox(height: 8),
+            _grayBar(
+              left: exhibitorLabel,
+              right: 'Number Entered  ${entries.length}',
+              trailing: 'Balance Due: $balanceDue',
+            ),
+            pw.SizedBox(height: 8),
+            pw.Row(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Expanded(child: _exhibitorContact(entries.first)),
+                pw.SizedBox(width: 24),
+                pw.Container(
+                  width: 190,
+                  child: _showSecretary(sheet.showContact),
+                ),
+              ],
+            ),
+            if (sheet.waveNote != null) ...[
+              pw.SizedBox(height: 8),
+              if (sheet.waveSchedule != null)
+                pw.Text(sheet.waveSchedule!, style: pw.TextStyle(fontSize: 9)),
+              pw.SizedBox(height: 4),
+              pw.Text(sheet.waveNote!, style: pw.TextStyle(fontSize: 9)),
             ],
-          ),
-          pw.SizedBox(height: 8),
-          _grayBar(
-            left: exhibitorLabel,
-            right: 'Number Entered  ${entries.length}',
-            trailing: 'Balance Due: $balanceDue',
-          ),
-          pw.SizedBox(height: 8),
-          pw.Row(
-            crossAxisAlignment: pw.CrossAxisAlignment.start,
-            children: [
-              pw.Expanded(child: _exhibitorContact(entries.first)),
-              pw.SizedBox(width: 24),
-              pw.Container(width: 190, child: _showSecretary(data.showContact)),
-            ],
-          ),
-          _instructions(),
-          ..._entrySections(entries),
-          pw.SizedBox(height: 12),
-          pw.Row(
-            children: [
-              pw.Text('RingMaster One Show', style: pw.TextStyle(fontSize: 9)),
-              pw.Spacer(),
-              pw.Text(
-                DateTime.now().toLocal().toString(),
-                style: pw.TextStyle(fontSize: 9),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-
+            _instructions(),
+            ..._entrySections(entries, repeatHeaders: sheet.waveNote != null),
+            pw.SizedBox(height: 12),
+            pw.Row(
+              children: [
+                pw.Text(
+                  'RingMaster One Show',
+                  style: pw.TextStyle(fontSize: 9),
+                ),
+                pw.Spacer(),
+                pw.Text(
+                  DateTime.now().toLocal().toString(),
+                  style: pw.TextStyle(fontSize: 9),
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
+    }
     final bytes = await doc.save();
     final fileName =
         'check_in_${_safeFileName(data.showName)}_${_safeFileName(exhibitorName)}.pdf';
@@ -118,7 +143,10 @@ class CheckInSheetReportPdfBuilder {
     );
   }
 
-  List<pw.Widget> _entrySections(List<Map<String, dynamic>> entries) {
+  List<pw.Widget> _entrySections(
+    List<Map<String, dynamic>> entries, {
+    bool repeatHeaders = false,
+  }) {
     final bySection = <String, List<Map<String, dynamic>>>{};
     for (final entry in entries) {
       final key = [
@@ -139,7 +167,7 @@ class CheckInSheetReportPdfBuilder {
           style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold),
         ),
         pw.SizedBox(height: 4),
-        _entriesTable(rows),
+        _entriesTable(rows, repeatHeaders: repeatHeaders),
       ];
     }).toList();
   }
@@ -272,7 +300,10 @@ class CheckInSheetReportPdfBuilder {
     );
   }
 
-  pw.Widget _entriesTable(List<Map<String, dynamic>> entries) {
+  pw.Widget _entriesTable(
+    List<Map<String, dynamic>> entries, {
+    bool repeatHeaders = false,
+  }) {
     final header = pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold);
     final cell = pw.TextStyle(fontSize: 10);
 
@@ -289,6 +320,7 @@ class CheckInSheetReportPdfBuilder {
       },
       children: [
         pw.TableRow(
+          repeat: repeatHeaders,
           decoration: const pw.BoxDecoration(color: PdfColors.grey300),
           children: [
             _tableCell('Ear #', header),

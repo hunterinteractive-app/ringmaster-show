@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../theme/app_theme.dart';
+import '../../services/show_wave_schedule.dart';
 import '../../utils/species_sex.dart';
 import 'admin_entry_management_screen.dart';
 
@@ -33,6 +34,7 @@ class _SecretaryCheckinEntryReviewScreenState
   List<Map<String, dynamic>> _entries = const [];
   String? _error;
   bool _loading = true;
+  String? _waveLabel;
 
   @override
   void initState() {
@@ -46,6 +48,14 @@ class _SecretaryCheckinEntryReviewScreenState
       _error = null;
     });
     try {
+      final schedule = await ShowWaveScheduleService(_db).load(widget.showId);
+      final breeds = schedule.breeds
+          .where((b) => b.waveId == schedule.activeWaveId && b.waveId != null)
+          .map((b) => '${b.species}:${b.name.trim().toLowerCase()}')
+          .toSet();
+      final active = schedule.waves
+          .where((w) => w.id == schedule.activeWaveId)
+          .firstOrNull;
       final rows = await _db
           .from('entries')
           .select(
@@ -58,7 +68,21 @@ class _SecretaryCheckinEntryReviewScreenState
           .eq('exhibitor_id', widget.exhibitorId)
           .order('created_at');
       if (!mounted) return;
-      setState(() => _entries = (rows as List).cast<Map<String, dynamic>>());
+      setState(() {
+        _waveLabel = schedule.enabled
+            ? active?.name ?? 'No wave is currently open for check-in.'
+            : null;
+        _entries = (rows as List)
+            .cast<Map<String, dynamic>>()
+            .where(
+              (e) =>
+                  !schedule.enabled ||
+                  breeds.contains(
+                    '${e['species']}:${e['breed'].toString().trim().toLowerCase()}',
+                  ),
+            )
+            .toList();
+      });
     } catch (_) {
       if (!mounted) return;
       setState(() => _error = 'We could not load this exhibitor’s entries.');
@@ -166,6 +190,10 @@ class _SecretaryCheckinEntryReviewScreenState
                 ),
                 const SizedBox(height: 4),
                 Text('Exhibitor #${widget.exhibitorNumber}'),
+                if (_waveLabel != null) ...[
+                  const SizedBox(height: 8),
+                  Text(_waveLabel!),
+                ],
                 const SizedBox(height: 24),
                 Text(
                   'Review entries',

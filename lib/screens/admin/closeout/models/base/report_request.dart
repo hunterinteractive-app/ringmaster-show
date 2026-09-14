@@ -26,6 +26,7 @@ class ReportRequest {
     this.showLetter,
     this.scopeLabel,
     this.sectionId,
+    this.waveId,
     this.sectionIds,
     this.showName,
     this.showDate,
@@ -48,6 +49,7 @@ class ReportRequest {
   final String? showLetter;
   final String? scopeLabel;
   final String? sectionId;
+  final String? waveId;
   final List<String>? sectionIds;
   final String? showName;
   final String? showDate;
@@ -72,6 +74,7 @@ class ReportRequest {
       'showLetter': showLetter,
       'scopeLabel': scopeLabel,
       'sectionId': sectionId,
+      'waveId': waveId,
       'sectionIds': sectionIds,
       'showName': showName,
       'showDate': showDate,
@@ -95,6 +98,7 @@ class ReportRequest {
     String? showLetter,
     String? scopeLabel,
     String? sectionId,
+    String? waveId,
     List<String>? sectionIds,
     String? showName,
     String? showDate,
@@ -116,6 +120,7 @@ class ReportRequest {
       showLetter: showLetter ?? this.showLetter,
       scopeLabel: scopeLabel ?? this.scopeLabel,
       sectionId: sectionId ?? this.sectionId,
+      waveId: waveId ?? this.waveId,
       sectionIds: sectionIds ?? this.sectionIds,
       showName: showName ?? this.showName,
       showDate: showDate ?? this.showDate,

@@ -1,4 +1,6 @@
 import 'package:supabase/supabase.dart';
+import 'package:ringmaster_show/services/show_wave_schedule.dart';
+import 'package:intl/intl.dart';
 import 'package:ringmaster_show/utils/species_sex.dart';
 
 import '../report_data_reader.dart';
@@ -26,6 +28,20 @@ class CheckInSheetReportLoader {
             .maybeSingle() ??
         <String, dynamic>{};
 
+    final schedule = await ShowWaveScheduleService(
+      supabase,
+    ).load(request.showId);
+    ShowWave? wave;
+    final requestedWaveId = (request.waveId ?? '').trim();
+    if (schedule.enabled && requestedWaveId.isNotEmpty) {
+      final waveId = requestedWaveId;
+      for (final item in schedule.waves) {
+        if (item.id == waveId) wave = item;
+      }
+      if (wave == null) {
+        throw StateError('Choose a wave to generate check-in sheets.');
+      }
+    }
     final sectionIds = request.sectionIds ?? const <String>[];
     if (sectionIds.isEmpty) {
       throw StateError('Check-in sheet requires scoped section IDs.');
@@ -34,6 +50,7 @@ class CheckInSheetReportLoader {
       request.showId,
       exhibitorId,
       sectionIds,
+      wave?.id,
     );
     if (entries.isEmpty) {
       throw StateError('No entries found for this exhibitor.');
@@ -54,18 +71,59 @@ class CheckInSheetReportLoader {
 
     entries.sort(_compareEntries);
 
-    return CheckInSheetReportData(
+    CheckInSheetReportData sheet(
+      ShowWave? item,
+      List<Map<String, dynamic>> rows,
+    ) => CheckInSheetReportData(
       showName: request.showName ?? '',
-      sectionLabel: 'All Sections',
-      entries: entries,
+      sectionLabel: item == null
+          ? 'All Sections'
+          : '${item.name} • All Sections',
+      waveNote: item == null ? null : waveCheckinSheetNote,
+      waveSchedule: item == null
+          ? null
+          : 'Check-in: ${DateFormat('MMM d, yyyy • h:mm a').format(item.checkinStart!)} to ${DateFormat('MMM d, yyyy • h:mm a').format(item.checkinEnd!)} (${schedule.timezone})\nShow date: ${DateFormat.yMMMd().format(item.showDate!)} • Check-out: ${DateFormat.yMMMd().format(item.checkoutDate!)}',
+      entries: rows,
       showContact: Map<String, dynamic>.from(showContact),
     );
+    if (schedule.enabled && wave == null) {
+      final byBreed = {
+        for (final b in schedule.breeds)
+          '${b.species}:${b.name.trim().toLowerCase()}': b.waveId,
+      };
+      final waveSheets = <CheckInSheetReportData>[];
+      for (final item in schedule.waves) {
+        final rows = entries
+            .where(
+              (e) =>
+                  byBreed['${e['species']}:${e['breed'].toString().trim().toLowerCase()}'] ==
+                  item.id,
+            )
+            .toList();
+        if (rows.isNotEmpty) waveSheets.add(sheet(item, rows));
+      }
+      if (waveSheets.fold<int>(0, (count, s) => count + s.entries.length) !=
+          entries.length) {
+        throw StateError(
+          'Assign all entered breeds to a wave before generating check-in sheets.',
+        );
+      }
+      return CheckInSheetReportData(
+        showName: request.showName ?? '',
+        sectionLabel: 'All Waves',
+        entries: entries,
+        showContact: Map<String, dynamic>.from(showContact),
+        waveSheets: waveSheets,
+      );
+    }
+    return sheet(wave, entries);
   }
 
   Future<List<Map<String, dynamic>>> _fetchEntries(
     String showId,
     String exhibitorId,
     List<String> sectionIds,
+    String? waveId,
   ) async {
     const pageSize = 1000;
     final list = <Map<String, dynamic>>[];
@@ -74,9 +132,12 @@ class CheckInSheetReportLoader {
       final to = from + pageSize - 1;
       final rows = await supabase
           .rpc(
-            'report_closeout_checkin_entries',
+            waveId == null
+                ? 'report_closeout_checkin_entries'
+                : 'report_wave_checkin_entries',
             params: {
               'p_show_id': showId,
+              if (waveId != null) 'p_wave_id': waveId,
               'p_exhibitor_id': exhibitorId,
               'p_section_ids': sectionIds,
               'p_include_scratched': false,

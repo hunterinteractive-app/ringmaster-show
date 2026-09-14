@@ -22,6 +22,7 @@ import 'show_role_assignments_dialog.dart';
 import 'show_sections_dialog.dart';
 import 'show_judges_dialog.dart';
 import 'show_checkin_settings_dialog.dart';
+import 'show_wave_schedule_dialog.dart';
 import 'show_checkin_dashboard_screen.dart';
 import '../../widgets/rm_timezone_notice_banner.dart';
 import '../../services/show_permissions_service.dart';
@@ -2253,6 +2254,23 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                                     'Per-animal fees, discounts, day-of-show, and online payment setup',
                                 onTap: _saving ? null : _openFees,
                               ),
+                              if (_canConfigureBestOpposite)
+                                _buildSettingsActionTile(
+                                  icon: Icons.schedule,
+                                  title: 'Wave Schedule',
+                                  subtitle:
+                                      'Assign breeds to waves and schedule check-in, showing, check-out, and emails',
+                                  onTap: (_saving || _isReadOnly)
+                                      ? null
+                                      : () async {
+                                          await ShowWaveScheduleDialog.open(
+                                            context,
+                                            showId: widget.showId,
+                                            showName: _effectiveShowName(),
+                                          );
+                                          if (mounted) await _load();
+                                        },
+                                ),
                               if (_canManageCheckinSettings)
                                 _buildSettingsActionTile(
                                   icon: Icons.qr_code_2,
