@@ -755,6 +755,7 @@ class ExhibitorReportLoader {
       'FIRST_RIS',
       '1ST_RESERVE_IN_SHOW',
       'FIRST_RESERVE_IN_SHOW',
+      'BBOS',
       '2RIS',
       '2ND_RIS',
       'SECOND_RIS',
@@ -796,6 +797,8 @@ class ExhibitorReportLoader {
     return normalized
         .map((award) {
           switch (award) {
+            case 'BBOS':
+              return 'Best of the Best Opposite';
             case 'BEST_IN_SHOW':
               return 'Best In Show';
             case 'RESERVE_IN_SHOW':

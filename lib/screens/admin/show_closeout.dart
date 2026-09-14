@@ -2694,7 +2694,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
             : items
                   .map(
                     (item) => _CloseoutWarningDetailTile(
-                      title: '${item.sectionLabel} • ${item.awardLabel}',
+                      title: '${item.scopeLabel} • ${item.awardLabel}',
                       subtitle:
                           'Open Results Entry and assign ${item.awardCode}.',
                     ),
@@ -2734,7 +2734,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
         children: items
             .map(
               (item) => _CloseoutWarningDetailTile(
-                title: '${item.sectionLabel} • ${item.awardLabel}',
+                title: '${item.scopeLabel} • ${item.awardLabel}',
                 subtitle: 'Assign ${item.awardCode} in Results Entry if used.',
               ),
             )

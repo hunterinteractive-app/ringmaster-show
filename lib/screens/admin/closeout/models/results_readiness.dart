@@ -59,12 +59,17 @@ class MissingFinalAward {
   final String sectionLabel;
   final String awardCode;
   final String awardLabel;
+  final String species;
+
+  String get scopeLabel =>
+      species.isEmpty ? sectionLabel : '$sectionLabel • $species';
 
   const MissingFinalAward({
     required this.sectionId,
     required this.sectionLabel,
     required this.awardCode,
     required this.awardLabel,
+    this.species = '',
   });
 
   factory MissingFinalAward.fromJson(Map<String, dynamic> json) {
@@ -74,6 +79,7 @@ class MissingFinalAward {
       sectionLabel: (json['section_label'] ?? 'Section').toString(),
       awardCode: awardCode,
       awardLabel: (json['award_label'] ?? awardCode).toString(),
+      species: (json['species'] ?? '').toString(),
     );
   }
 }

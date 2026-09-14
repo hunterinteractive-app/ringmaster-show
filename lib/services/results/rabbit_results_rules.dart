@@ -1,3 +1,4 @@
+import '../final_award_format.dart';
 import 'rabbit_results_structure.dart';
 import 'results_rules.dart';
 
@@ -31,7 +32,10 @@ class RabbitResultsRules implements ResultsRules {
           'best opposite sex of group': 'BOSG',
           'bob': 'BOB',
           'best of breed': 'BOB',
+          'bos': 'BOSB',
           'bosb': 'BOSB',
+          'bbos': bestOppositeAwardCode,
+          'best of the best opposite': bestOppositeAwardCode,
           'best opposite sex of breed': 'BOSB',
           'b4c': 'Best 4-Class',
           'best 4 class': 'Best 4-Class',
@@ -156,7 +160,10 @@ class RabbitResultsRules implements ResultsRules {
       if (usesVarietyLayer(entry)) ...[
         // Himalayan specialty shows award Best Junior/Senior of Breed. Their
         // Best Junior/Senior of Variety awards are a national-show rule.
-        if (!isHimalayan || isNationalShow) ...['BJV', 'BIV', 'BSV'],
+        if (isHimalayan && isNationalShow) ...[
+          if (className.contains('junior') && !className.contains('pre')) 'BJV',
+          if (className.contains('senior')) 'BSV',
+        ],
         'BOV',
         'BOSV',
       ],
@@ -165,14 +172,8 @@ class RabbitResultsRules implements ResultsRules {
       'BOSB',
     ];
     if (supportsBestAge) {
-      if (isHimalayan && !isNationalShow) {
-        if (className.contains('junior') && !className.contains('pre')) {
-          awards.add('BJB');
-        }
-        if (className.contains('senior')) awards.add('BSB');
-      } else if (isHimalayan) {
-        // Nationals award at both the variety and breed levels. The variety
-        // award was added above; add the matching breed-level award here.
+      if (isHimalayan) {
+        // Breed-level age awards apply to both specialty and national shows.
         if (className.contains('junior') && !className.contains('pre')) {
           awards.add('BJB');
         }
@@ -180,8 +181,7 @@ class RabbitResultsRules implements ResultsRules {
       } else if (className.contains('junior') && !className.contains('pre')) {
         awards.add('Best Junior');
       } else {
-        if (classSystem.toLowerCase() == 'six' &&
-            className.contains('intermediate')) {
+        if (_isSixClass(classSystem) && className.contains('intermediate')) {
           awards.add('Best Intermediate');
         }
         if (className.contains('senior')) awards.add('Best Senior');
@@ -191,8 +191,11 @@ class RabbitResultsRules implements ResultsRules {
       awards.addAll(['Best 4-Class', 'Best 6-Class', 'Best In Show']);
     } else if (finalAwardMode == 'bis_ris') {
       awards.addAll(['Best In Show', 'Reserve In Show']);
-    } else if (finalAwardMode == 'bis_1ris_2ris') {
+    } else if (usesRankedReserveAwards(finalAwardMode)) {
       awards.addAll(['Best In Show', '1RIS', '2RIS']);
+      if (finalAwardMode == bestOppositeFinalAwardMode) {
+        awards.add(bestOppositeAwardCode);
+      }
     } else {
       awards.add('Best In Show');
     }
@@ -215,6 +218,11 @@ class RabbitResultsRules implements ResultsRules {
     required Set<String> selectedAwards,
   }) {
     final awards = normalizeStoredAwards(selectedAwards);
+    if (awards.contains(bestOppositeAwardCode) && !awards.contains('BOSB')) {
+      return const AwardCompatibilityResult.invalid(
+        'Best of the Best Opposite requires Best Opposite Sex of Breed (BOS) first.',
+      );
+    }
     if (awards.intersection(const {'BOG', 'BOSG'}).isNotEmpty &&
         !usesGroupLayer(entry)) {
       return const AwardCompatibilityResult.invalid(
@@ -277,30 +285,29 @@ class RabbitResultsRules implements ResultsRules {
       return false;
     }
     final selected = normalizeStoredAwards(selectedAwards);
+    if (_canonical(award) == bestOppositeAwardCode) {
+      return finalAwardMode == bestOppositeFinalAwardMode &&
+          selected.contains('BOSB');
+    }
     final code = _canonical(award);
-    if (const {'BJV', 'BIV', 'BSV', 'BOV', 'BOSV'}.contains(code)) {
-      final breed = normalizeResultsRuleKey(
-        resultsRuleText(entry, const ['breed', 'breed_name']),
-      );
-      if (breed == 'himalayan' &&
-          entry['is_national_show'] != true &&
-          const {'BJV', 'BIV', 'BSV'}.contains(code)) {
-        return false;
-      }
-      return usesVarietyLayer(entry);
+    if (const {
+      'BJV',
+      'BIV',
+      'BSV',
+      'BJB',
+      'BIB',
+      'BSB',
+      'Best Junior',
+      'Best Intermediate',
+      'Best Senior',
+    }.contains(code)) {
+      return buildAwardOptions(
+        entry: entry,
+        classSystem: classSystem,
+        finalAwardMode: finalAwardMode,
+      ).contains(code);
     }
-    if (code == 'BJB' || code == 'BSB') {
-      final breed = normalizeResultsRuleKey(
-        resultsRuleText(entry, const ['breed', 'breed_name']),
-      );
-      if (breed != 'himalayan') {
-        return false;
-      }
-      final className = normalizeResultsRuleKey(entry['class_name']);
-      return code == 'BJB'
-          ? className.contains('junior') && !className.contains('pre')
-          : className.contains('senior');
-    }
+    if (const {'BOV', 'BOSV'}.contains(code)) return usesVarietyLayer(entry);
     if (const {'BOG', 'BOSG'}.contains(code)) return usesGroupLayer(entry);
     if (code == 'HM') return false;
     if (code == 'BOB' || code == 'BOSB') {
@@ -329,13 +336,13 @@ class RabbitResultsRules implements ResultsRules {
           !selected.contains('Best In Show');
     }
     if (code == '1RIS') {
-      return finalAwardMode == 'bis_1ris_2ris' &&
+      return usesRankedReserveAwards(finalAwardMode) &&
           selected.contains('BOB') &&
           !selected.contains('Best In Show') &&
           !selected.contains('2RIS');
     }
     if (code == '2RIS') {
-      return finalAwardMode == 'bis_1ris_2ris' &&
+      return usesRankedReserveAwards(finalAwardMode) &&
           selected.contains('BOB') &&
           !selected.contains('Best In Show') &&
           !selected.contains('1RIS');
@@ -349,6 +356,9 @@ class RabbitResultsRules implements ResultsRules {
     required String award,
   }) {
     final code = _canonical(award);
+    if (code == bestOppositeAwardCode) {
+      return 'Requires Best Opposite Sex of Breed (BOS) first.';
+    }
     if (const {'BOV', 'BOSV'}.contains(code)) {
       return 'Only rabbit breeds with variety awards use this award.';
     }
@@ -392,6 +402,7 @@ class RabbitResultsRules implements ResultsRules {
     'BOSG' => 'Best Opposite Sex of Rabbit Group',
     'BOB' => 'Best of Breed',
     'BOSB' => 'Best Opposite Sex of Breed',
+    bestOppositeAwardCode => bestOppositeAwardLabel,
     'Best 4-Class' => 'Best 4-Class',
     'Best 6-Class' => 'Best 6-Class',
     'Best In Show' => 'Best In Show',

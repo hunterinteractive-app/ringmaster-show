@@ -1,5 +1,7 @@
 // lib/screens/admin/show_rules_dialog.dart
 
+import 'package:ringmaster_show/services/final_award_format.dart';
+import 'package:ringmaster_show/services/final_award_access_service.dart';
 import 'package:flutter/material.dart';
 import 'package:ringmaster_show/theme/app_theme.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -54,6 +56,7 @@ class _ShowRulesDialogState extends State<_ShowRulesDialog> {
   bool blockUnpublished = true;
 
   String _finalAwardMode = 'four_six_bis';
+  bool _canConfigureBestOpposite = false;
 
   @override
   void initState() {
@@ -68,15 +71,7 @@ class _ShowRulesDialogState extends State<_ShowRulesDialog> {
     super.dispose();
   }
 
-  String _finalAwardModeLabel(String mode) {
-    switch (mode) {
-      case 'bis_ris':
-        return 'Best in Show / Reserve in Show';
-      case 'four_six_bis':
-      default:
-        return 'Best 4-Class / Best 6-Class / Best in Show';
-    }
-  }
+  String _finalAwardModeLabel(String mode) => finalAwardFormatLabel(mode);
 
   Future<void> _load() async {
     setState(() {
@@ -101,6 +96,8 @@ class _ShowRulesDialogState extends State<_ShowRulesDialog> {
           .eq('id', widget.showId)
           .single();
 
+      _canConfigureBestOpposite =
+          await FinalAwardAccessService.canConfigureBestOpposite(widget.showId);
       _finalAwardMode = (showData['final_award_mode'] ?? 'four_six_bis')
           .toString();
       _isLocked = showData['is_locked'] == true;
@@ -176,7 +173,7 @@ class _ShowRulesDialogState extends State<_ShowRulesDialog> {
       }
     }
 
-    if (_finalAwardMode != 'four_six_bis' && _finalAwardMode != 'bis_ris') {
+    if (!isValidFinalAwardMode(_finalAwardMode)) {
       setState(() => _msg = 'Final award format is invalid.');
       return false;
     }
@@ -518,20 +515,30 @@ class _ShowRulesDialogState extends State<_ShowRulesDialog> {
                                                     'Choose how final show awards are selected.',
                                                 border: OutlineInputBorder(),
                                               ),
-                                              items: const [
-                                                DropdownMenuItem(
-                                                  value: 'four_six_bis',
-                                                  child: Text(
-                                                    'Best 4-Class / Best 6-Class / Best in Show',
+                                              isExpanded: true,
+                                              items: [
+                                                for (final mode in [
+                                                  'four_six_bis',
+                                                  'bis_ris',
+                                                  'bis_1ris_2ris',
+                                                  if (_canConfigureBestOpposite ||
+                                                      _finalAwardMode ==
+                                                          bestOppositeFinalAwardMode)
+                                                    bestOppositeFinalAwardMode,
+                                                ])
+                                                  DropdownMenuItem(
+                                                    value: mode,
+                                                    child: Text(
+                                                      finalAwardFormatLabel(
+                                                        mode,
+                                                      ),
+                                                      maxLines: 2,
+                                                      overflow:
+                                                          TextOverflow.ellipsis,
+                                                    ),
                                                   ),
-                                                ),
-                                                DropdownMenuItem(
-                                                  value: 'bis_ris',
-                                                  child: Text(
-                                                    'Best in Show / Reserve in Show',
-                                                  ),
-                                                ),
                                               ],
+
                                               onChanged:
                                                   (_saving || _isReadOnly)
                                                   ? null

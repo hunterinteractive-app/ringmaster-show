@@ -1,3 +1,4 @@
+import 'final_award_format.dart';
 import 'results_entry_validation.dart';
 import 'results_group_resolution.dart';
 
@@ -64,7 +65,10 @@ String canonicalResultsAwardCode(Object? award) {
     'best opposite of variety': 'BOSV',
     'bob': 'BOB',
     'best of breed': 'BOB',
+    'bos': 'BOSB',
     'bosb': 'BOSB',
+    'bbos': bestOppositeAwardCode,
+    'best of the best opposite': bestOppositeAwardCode,
     'best opposite sex of breed': 'BOSB',
     'best opposite of breed': 'BOSB',
     'bjv': 'BJV',
@@ -168,6 +172,7 @@ String resultsAwardLabel(String award, ResultsAwardMode mode) {
       'BOSV' => 'Best Opposite Sex of Variety',
       'BOB' => 'Best of Breed',
       'BOSB' => 'Best Opposite Sex of Breed',
+      bestOppositeAwardCode => bestOppositeAwardLabel,
       'Best 4-Class' => 'Best 4-Class',
       'Best 6-Class' => 'Best 6-Class',
       'Best In Show' || 'BIS' => 'Best in Show',
@@ -183,6 +188,7 @@ String resultsAwardLabel(String award, ResultsAwardMode mode) {
     'BOSV' => 'Best Opposite Sex of Variety',
     'BOB' => 'Best of Breed',
     'BOSB' => 'Best Opposite Sex of Breed',
+    bestOppositeAwardCode => bestOppositeAwardLabel,
     _ => code,
   };
 }
@@ -219,8 +225,11 @@ List<String> visibleResultsAwardCodes({
   if (finalAwardMode == 'bis_ris') {
     awards.addAll(const ['Best In Show', 'Reserve In Show']);
     if (mode == ResultsAwardMode.cavyGroup) awards.add('HM');
-  } else if (finalAwardMode == 'bis_1ris_2ris') {
+  } else if (usesRankedReserveAwards(finalAwardMode)) {
     awards.addAll(const ['Best In Show', '1RIS', '2RIS']);
+    if (finalAwardMode == bestOppositeFinalAwardMode) {
+      awards.add(bestOppositeAwardCode);
+    }
   } else {
     awards.addAll(const ['Best 4-Class', 'Best 6-Class', 'Best In Show']);
   }

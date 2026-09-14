@@ -1,3 +1,4 @@
+import 'package:ringmaster_show/services/final_award_format.dart';
 import 'package:ringmaster_show/reporting_core/network/transient_retry.dart';
 import 'closeout/data/loaders/delivery_status_loader.dart';
 import 'dart:async';
@@ -175,7 +176,7 @@ class _ShowCloseoutV2PreviewPageState extends State<ShowCloseoutV2PreviewPage> {
         client
             .from('shows')
             .select(
-              'secretary_name,secretary_address,secretary_email,secretary_phone',
+              'secretary_name,secretary_address,secretary_email,secretary_phone,final_award_mode',
             )
             .eq('id', widget.showId)
             .maybeSingle(),
@@ -273,7 +274,14 @@ class _ShowCloseoutV2PreviewPageState extends State<ShowCloseoutV2PreviewPage> {
                   0) >
               0;
 
+      final optionalAwards = await _optionalFinalAwards(
+        widget.showId,
+        show,
+        sections,
+      );
+      if (!mounted) return;
       final hasWarning =
+          optionalAwards.isNotEmpty ||
           sections.any((section) {
             final sectionId = text(section, 'id');
             return !sanctions.any(
@@ -1284,6 +1292,27 @@ class _ResultsReadinessIssue {
   }
 }
 
+Future<List<Map<String, dynamic>>> _optionalFinalAwards(
+  String showId,
+  Map<String, dynamic> show,
+  List<Map<String, dynamic>> sections,
+) async {
+  if (show['final_award_mode'] != bestOppositeFinalAwardMode) return const [];
+  final sectionIds = sections
+      .map((row) => row['id']?.toString() ?? '')
+      .where((id) => id.isNotEmpty)
+      .toList();
+  if (sectionIds.isEmpty) return const [];
+  final readiness = await Supabase.instance.client.rpc(
+    'show_results_readiness_scoped',
+    params: {'p_show_id': showId, 'p_section_ids': sectionIds},
+  );
+  return ((readiness as Map)['suggested_final_awards'] as List? ?? const [])
+      .whereType<Map>()
+      .map((row) => Map<String, dynamic>.from(row))
+      .toList();
+}
+
 class _ReviewWarningsPanel extends StatefulWidget {
   final String showId;
 
@@ -1335,7 +1364,7 @@ class _ReviewWarningsPanelState extends State<_ReviewWarningsPanel> {
         client
             .from('shows')
             .select(
-              'secretary_name,secretary_address,secretary_email,secretary_phone',
+              'secretary_name,secretary_address,secretary_email,secretary_phone,final_award_mode',
             )
             .eq('id', widget.showId)
             .maybeSingle(),
@@ -1356,6 +1385,27 @@ class _ReviewWarningsPanelState extends State<_ReviewWarningsPanel> {
           value(section, 'id'): _sectionLabel(section),
       };
       final warnings = <_CloseoutWarning>[];
+      final optionalAwards = await _optionalFinalAwards(
+        widget.showId,
+        show,
+        sections,
+      );
+      for (final award in optionalAwards) {
+        final label = value(award, 'award_label');
+        final species = value(award, 'species');
+        final scope = [
+          value(award, 'section_label'),
+          species,
+        ].where((part) => part.isNotEmpty).join(' • ');
+        warnings.add(
+          _CloseoutWarning(
+            title: 'Missing $label',
+            detail:
+                '$scope has no $label selected. This is optional and does not block closeout or reports.',
+            icon: Icons.emoji_events_outlined,
+          ),
+        );
+      }
 
       for (final section in sections) {
         final sectionId = value(section, 'id');

@@ -105,6 +105,8 @@ void main() {
             return _json(request, {'coop_numbering_mode': 'separate'});
           case 'exhibitors':
             return _json(request, {'display_name': 'Test Exhibitor'});
+          case 'get_show_wave_schedule':
+            return _json(request, {'enabled': false});
           case 'report_closeout_checkin_entries':
             expect(jsonDecode(request.body)['p_section_ids'], ['open']);
             return _page(request, entries);

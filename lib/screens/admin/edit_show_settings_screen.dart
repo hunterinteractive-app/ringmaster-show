@@ -1,6 +1,8 @@
 // lib/screens/admin/edit_show_settings_screen.dart
 // ignore_for_file: avoid_web_libraries_in_flutter, deprecated_member_use, use_build_context_synchronously
 
+import 'package:ringmaster_show/services/final_award_format.dart';
+import 'package:ringmaster_show/services/final_award_access_service.dart';
 import 'package:flutter/material.dart';
 import 'package:ringmaster_show/theme/app_theme.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -179,6 +181,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
   String _timezone = 'America/Indiana/Indianapolis';
   String _showNameForTitle = 'Show';
   String _finalAwardMode = 'four_six_bis';
+  bool _canConfigureBestOpposite = false;
 
   List<Map<String, dynamic>> _clubs = [];
   String? _selectedClubId;
@@ -238,17 +241,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
     return DateTime.tryParse(s);
   }
 
-  String _finalAwardModeLabel(String mode) {
-    switch (mode) {
-      case 'bis_ris':
-        return 'Best in Show / Reserve in Show';
-      case 'bis_1ris_2ris':
-        return 'Best in Show / 1st Reserve in Show / 2nd Reserve in Show';
-      case 'four_six_bis':
-      default:
-        return 'Best 4-Class / Best 6-Class / Best in Show';
-    }
-  }
+  String _finalAwardModeLabel(String mode) => finalAwardFormatLabel(mode);
 
   Future<void> _toggleShowLock() async {
     if (_isFinalized) return;
@@ -665,6 +658,8 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
       _entryOpenAt = _parseTs(show['entry_open_at']?.toString());
       _entryCloseAt = _parseTs(show['entry_close_at']?.toString());
 
+      _canConfigureBestOpposite =
+          await FinalAwardAccessService.canConfigureBestOpposite(widget.showId);
       _finalAwardMode = (show['final_award_mode'] ?? 'four_six_bis').toString();
 
       _selectedClubId = show['club_id']?.toString();
@@ -839,9 +834,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
       }
     }
 
-    if (_finalAwardMode != 'four_six_bis' &&
-        _finalAwardMode != 'bis_ris' &&
-        _finalAwardMode != 'bis_1ris_2ris') {
+    if (!isValidFinalAwardMode(_finalAwardMode)) {
       setState(() => _msg = 'Final award mode is invalid.');
       return false;
     }
@@ -2039,25 +2032,25 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                                   labelText: 'Final award format',
                                   border: OutlineInputBorder(),
                                 ),
-                                items: const [
-                                  DropdownMenuItem(
-                                    value: 'four_six_bis',
-                                    child: Text(
-                                      'Best 4-Class / Best 6-Class / Best in Show',
+                                isExpanded: true,
+                                items: [
+                                  for (final mode in [
+                                    'four_six_bis',
+                                    'bis_ris',
+                                    'bis_1ris_2ris',
+                                    if (_canConfigureBestOpposite ||
+                                        _finalAwardMode ==
+                                            bestOppositeFinalAwardMode)
+                                      bestOppositeFinalAwardMode,
+                                  ])
+                                    DropdownMenuItem(
+                                      value: mode,
+                                      child: Text(
+                                        finalAwardFormatLabel(mode),
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
                                     ),
-                                  ),
-                                  DropdownMenuItem(
-                                    value: 'bis_ris',
-                                    child: Text(
-                                      'Best in Show / Reserve in Show',
-                                    ),
-                                  ),
-                                  DropdownMenuItem(
-                                    value: 'bis_1ris_2ris',
-                                    child: Text(
-                                      'Best in Show / 1st RIS / 2nd RIS',
-                                    ),
-                                  ),
                                 ],
                                 onChanged: (_saving || _isReadOnly)
                                     ? null

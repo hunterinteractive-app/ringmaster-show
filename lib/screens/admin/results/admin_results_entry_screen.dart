@@ -1,3 +1,4 @@
+import 'package:ringmaster_show/services/final_award_format.dart';
 import 'package:ringmaster_show/screens/admin/closeout/data/results_entry_reader.dart';
 import 'package:ringmaster_show/screens/admin/closeout/data/manual_judging_reader.dart';
 //lib/screens/admin/results/admin_results_entry_screen.dart
@@ -1159,6 +1160,7 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
     _finalAwardMode = switch (mode) {
       'bis_ris' => 'bis_ris',
       'bis_1ris_2ris' => 'bis_1ris_2ris',
+      bestOppositeFinalAwardMode => bestOppositeFinalAwardMode,
       _ => kDefaultFinalAwardMode,
     };
     _showIsLocked = row?['is_locked'] == true;
@@ -1998,6 +2000,7 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
           case 'Reserve In Show':
           case '1RIS':
           case '2RIS':
+          case bestOppositeAwardCode:
           case 'HM':
             final key = resultsFinalAwardScopeKey(e, award);
             awardBuckets.putIfAbsent(key, () => <Map<String, dynamic>>[]);
@@ -2281,7 +2284,7 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
         );
       }
 
-      if (_finalAwardMode == 'bis_1ris_2ris') {
+      if (usesRankedReserveAwards(_finalAwardMode)) {
         final hasBis = _awardListContains(a, 'Best In Show');
         final hasFirstRis = _awardListContains(a, '1RIS');
         final hasSecondRis = _awardListContains(a, '2RIS');
@@ -2588,11 +2591,7 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
                           ),
                           const SizedBox(height: 10),
                           Text(
-                            _finalAwardMode == 'bis_ris'
-                                ? 'Final awards: Best in Show / Reserve in Show'
-                                : _finalAwardMode == 'bis_1ris_2ris'
-                                ? 'Final awards: Best in Show / 1st Reserve in Show / 2nd Reserve in Show'
-                                : 'Final awards: Best 4-Class / Best 6-Class / Best in Show',
+                            'Final awards: ${finalAwardFormatLabel(_finalAwardMode)}',
                             style: const TextStyle(
                               color: Colors.white70,
                               fontSize: 14,
@@ -2833,6 +2832,7 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
                                   'RIS',
                                   '1RIS',
                                   '2RIS',
+                                  bestOppositeAwardCode,
                                   'HM',
                                 ]);
                             final byGroup = _showsByGroup(breedEntries);
@@ -4805,6 +4805,7 @@ class _ResultsClassSexScreenState extends State<_ResultsClassSexScreen> {
                         'RIS',
                         '1RIS',
                         '2RIS',
+                        bestOppositeAwardCode,
                         'HM',
                       ]);
 
@@ -5019,6 +5020,7 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
       'RIS',
       '1RIS',
       '2RIS',
+      bestOppositeAwardCode,
       'HM',
     ].where(awards.contains).length;
 
@@ -5201,6 +5203,21 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
       }
     }
 
+    if (awards.contains(bestOppositeAwardCode)) {
+      if (widget.finalAwardMode != bestOppositeFinalAwardMode ||
+          !awards.contains('BOSB') ||
+          _otherWinnerInScope(
+                entry: e,
+                award: bestOppositeAwardCode,
+                sameScope: (other) =>
+                    sameSection(other) &&
+                    resultsSpeciesForEntry(other) == resultsSpeciesForEntry(e),
+              ) !=
+              null) {
+        return true;
+      }
+    }
+
     if (awards.contains('Best 4-Class')) {
       if (_otherWinnerInScope(
             entry: e,
@@ -5272,7 +5289,7 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
         return true;
       }
 
-      if (widget.finalAwardMode != 'bis_1ris_2ris') return true;
+      if (!usesRankedReserveAwards(widget.finalAwardMode)) return true;
       if (!awards.contains('BOB')) return true;
       if (awards.contains('Best In Show') || awards.contains('BIS')) {
         return true;
@@ -5289,7 +5306,7 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
         return true;
       }
 
-      if (widget.finalAwardMode != 'bis_1ris_2ris') return true;
+      if (!usesRankedReserveAwards(widget.finalAwardMode)) return true;
       if (!awards.contains('BOB')) return true;
       if (awards.contains('Best In Show') || awards.contains('BIS')) {
         return true;
@@ -6693,6 +6710,12 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
       classSystem: _classSystemForEntry(widget.entry),
       finalAwardMode: widget.finalAwardMode,
     );
+    awards.removeWhere(
+      (award) =>
+          !_selectedAwards.contains(_canonicalAwardCode(award)) &&
+          !_canUseAward(award),
+    );
+    // Keep recorded awards available for correction if eligibility changes.
     for (final stored in _selectedAwards) {
       if (!awards.contains(stored)) awards.add(stored);
     }
@@ -6792,6 +6815,21 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
 
     bool sameSection(Map<String, dynamic> e) =>
         _sectionId(e) == _sectionId(widget.entry);
+
+    if (_hasAward(bestOppositeAwardCode)) {
+      if (!_canUseAward(bestOppositeAwardCode)) {
+        return 'Best of the Best Opposite requires BOS and the matching final award format.';
+      }
+      final winner = _winnerForAwardInScope(
+        award: bestOppositeAwardCode,
+        sameScope: (e) =>
+            sameSection(e) &&
+            resultsSpeciesForEntry(e) == resultsSpeciesForEntry(widget.entry),
+      );
+      if (winner != null) {
+        return 'Best of the Best Opposite is already assigned for this species in this section.';
+      }
+    }
 
     if (_isCavyEntry(widget.entry)) {
       bool sameClassAge(Map<String, dynamic> e) =>
@@ -7368,6 +7406,7 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
         !scratched &&
         effectiveResultStatus == 'Shown' &&
         (_placement ?? '').trim() == '1';
+    final visibleAwards = _visibleAwardCodes;
 
     return Padding(
       padding: EdgeInsets.only(
@@ -7545,14 +7584,16 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
                         },
                 ),
               if (canPlace) const SizedBox(height: 16),
-              Text(
-                'Awards',
-                style: Theme.of(
-                  context,
-                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-              ),
-              const SizedBox(height: 8),
-              ..._visibleAwardCodes.map((award) {
+              if (visibleAwards.isNotEmpty) ...[
+                Text(
+                  'Awards',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 8),
+              ],
+              ...visibleAwards.map((award) {
                 final awardCode = _canonicalAwardCode(award);
                 final allowed = _canUseAward(award);
                 final checked = _selectedAwards.contains(awardCode);
@@ -7566,10 +7607,10 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
                       ? Text(_awardDisabledReason(award))
                       : null,
                   onChanged:
-                      (!canAward ||
+                      (scratched ||
                           _saving ||
                           AppSession.isSupportMode ||
-                          !allowed)
+                          (!checked && (!canAward || !allowed)))
                       ? null
                       : (v) {
                           setState(() {
@@ -7583,8 +7624,14 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
                                 }
                               }
                               _selectedAwards.add(awardCode);
+                              if (!_selectedAwards.contains('BOSB')) {
+                                _selectedAwards.remove(bestOppositeAwardCode);
+                              }
                             } else {
                               _selectedAwards.remove(awardCode);
+                              if (awardCode == 'BOSB') {
+                                _selectedAwards.remove(bestOppositeAwardCode);
+                              }
                             }
                           });
                         },

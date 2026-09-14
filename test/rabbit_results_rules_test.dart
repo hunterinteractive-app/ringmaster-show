@@ -398,6 +398,94 @@ void main() {
     },
   );
 
+  test('rabbit age awards follow breed, age, and national-show rules', () {
+    const ageAwards = {
+      'BJV',
+      'BIV',
+      'BSV',
+      'BJB',
+      'BIB',
+      'BSB',
+      'Best Junior',
+      'Best Intermediate',
+      'Best Senior',
+    };
+    final cases = [
+      (rabbit(), 'four', <String>{}),
+      (rabbit(isNationalShow: true), 'four', <String>{}),
+      (rabbit(breed: 'Himalayan'), 'four', {'BSB'}),
+      (
+        rabbit(breed: 'Himalayan', isNationalShow: true),
+        'four',
+        {'BSV', 'BSB'},
+      ),
+      (
+        rabbit(
+          breed: 'Himalayan',
+          className: 'Junior Buck',
+          isNationalShow: true,
+        ),
+        'four',
+        {'BJV', 'BJB'},
+      ),
+      (
+        rabbit(
+          breed: 'Himalayan',
+          className: 'Pre-Junior Buck',
+          isNationalShow: true,
+        ),
+        'four',
+        <String>{},
+      ),
+      (rabbit(breed: 'American Sable'), 'four', {'Best Senior'}),
+      (
+        rabbit(breed: 'Checkered Giant', className: 'Junior Doe'),
+        'six',
+        {'Best Junior'},
+      ),
+      (
+        rabbit(breed: 'Checkered Giant', className: 'Intermediate Buck'),
+        '6 class',
+        {'Best Intermediate'},
+      ),
+      (
+        rabbit(breed: 'American Sable', className: 'Intermediate Buck'),
+        'four',
+        <String>{},
+      ),
+    ];
+    for (final (entry, classSystem, expected) in cases) {
+      final description =
+          '${entry['breed']} ${entry['class_name']} '
+          'national=${entry['is_national_show']}';
+      final options = rules.buildAwardOptions(
+        entry: entry,
+        classSystem: classSystem,
+        finalAwardMode: 'bis_ris',
+      );
+      expect(
+        options.toSet().intersection(ageAwards),
+        expected,
+        reason: description,
+      );
+      for (final award in ageAwards) {
+        expect(
+          rules.canUseAward(
+            entry: entry,
+            award: award,
+            selectedAwards: const {},
+            effectiveStatus: 'Shown',
+            effectivePlacement: '1',
+            classSystem: classSystem,
+            finalAwardMode: 'bis_ris',
+          ),
+          expected.contains(award),
+          reason: '$description: $award',
+        );
+      }
+    }
+  });
+
   test('display metadata alone never enables rabbit group awards', () {
     final row = rabbit(usesGroups: false, usesVarieties: true);
     final options = rules.buildAwardOptions(

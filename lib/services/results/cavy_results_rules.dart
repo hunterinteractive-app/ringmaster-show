@@ -1,3 +1,4 @@
+import '../final_award_format.dart';
 import '../results_group_resolution.dart';
 import 'results_rules.dart';
 
@@ -42,7 +43,10 @@ class CavyResultsRules implements ResultsRules {
           'best senior': 'BSV',
           'bob': 'BOB',
           'best of breed': 'BOB',
+          'bos': 'BOSB',
           'bosb': 'BOSB',
+          'bbos': bestOppositeAwardCode,
+          'best of the best opposite': bestOppositeAwardCode,
           'best opposite sex of breed': 'BOSB',
           'bis': 'BIS',
           'best in show': 'Best In Show',
@@ -138,8 +142,11 @@ class CavyResultsRules implements ResultsRules {
     awards.addAll(['BOV', 'BOSV', 'BOB', 'BOSB']);
     if (finalAwardMode == 'bis_ris') {
       awards.addAll(['Best In Show', 'Reserve In Show', 'HM']);
-    } else if (finalAwardMode == 'bis_1ris_2ris') {
+    } else if (usesRankedReserveAwards(finalAwardMode)) {
       awards.addAll(['Best In Show', '1RIS', '2RIS']);
+      if (finalAwardMode == bestOppositeFinalAwardMode) {
+        awards.add(bestOppositeAwardCode);
+      }
     } else {
       awards.addAll(['Best 4-Class', 'Best 6-Class', 'Best In Show']);
     }
@@ -152,6 +159,11 @@ class CavyResultsRules implements ResultsRules {
     required Set<String> selectedAwards,
   }) {
     final awards = normalizeStoredAwards(selectedAwards);
+    if (awards.contains(bestOppositeAwardCode) && !awards.contains('BOSB')) {
+      return const AwardCompatibilityResult.invalid(
+        'Best of the Best Opposite requires Best Opposite Sex of Breed (BOS) first.',
+      );
+    }
     if (awards.contains('BOG') || awards.contains('BOSG')) {
       return const AwardCompatibilityResult.invalid(
         'Group awards are invalid for cavy results. Use variety awards.',
@@ -199,6 +211,10 @@ class CavyResultsRules implements ResultsRules {
       return false;
     }
     final selected = normalizeStoredAwards(selectedAwards);
+    if (_canonical(award) == bestOppositeAwardCode) {
+      return finalAwardMode == bestOppositeFinalAwardMode &&
+          selected.contains('BOSB');
+    }
     final code = _canonical(award);
     final className = normalizeResultsRuleKey(entry['class_name']);
     switch (code) {
@@ -246,12 +262,12 @@ class CavyResultsRules implements ResultsRules {
             !selected.contains('Best In Show') &&
             !selected.contains('Reserve In Show');
       case '1RIS':
-        return finalAwardMode == 'bis_1ris_2ris' &&
+        return usesRankedReserveAwards(finalAwardMode) &&
             selected.contains('BOB') &&
             !selected.contains('Best In Show') &&
             !selected.contains('2RIS');
       case '2RIS':
-        return finalAwardMode == 'bis_1ris_2ris' &&
+        return usesRankedReserveAwards(finalAwardMode) &&
             selected.contains('BOB') &&
             !selected.contains('Best In Show') &&
             !selected.contains('1RIS');
@@ -266,6 +282,9 @@ class CavyResultsRules implements ResultsRules {
     required String award,
   }) {
     final code = _canonical(award);
+    if (code == bestOppositeAwardCode) {
+      return 'Requires Best Opposite Sex of Breed (BOS) first.';
+    }
     if ((code == 'BOV' || code == 'BOSV') &&
         !resolveCavyGroup(entry).recognized) {
       return '${unresolvedCavyGroupMessage(entry)} ${awardLabel(code)} cannot be assigned.';
@@ -297,6 +316,7 @@ class CavyResultsRules implements ResultsRules {
     'BOSV' => 'Best Opposite Sex of Variety',
     'BOB' => 'Best of Breed',
     'BOSB' => 'Best Opposite Sex of Breed',
+    bestOppositeAwardCode => bestOppositeAwardLabel,
     'HM' => 'Honorable Mention',
     final value => value,
   };
