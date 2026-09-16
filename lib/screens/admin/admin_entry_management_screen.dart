@@ -225,7 +225,7 @@ class _AdminEntryManagementScreenState
     final rows = await supabase
         .from('show_sections')
         .select(
-          'id,letter,display_name,kind,is_enabled,sort_order,breed_scope,allowed_breed_ids,allow_meat_classes',
+          'id,letter,display_name,kind,is_enabled,sort_order,judging_date,breed_scope,allowed_breed_ids,allow_meat_classes',
         )
         .eq('show_id', widget.showId)
         .eq('is_enabled', true)
@@ -1377,7 +1377,9 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
       final showId = (widget.entry['show_id'] ?? '').toString();
       final globalBreedsRes = await supabase
           .from('breeds')
-          .select('id,name,species,class_system,has_prejunior,is_active')
+          .select(
+            'id,name,species,class_system,has_prejunior,is_active,prejunior_age_max_months,prejunior_buck_age_max_months,prejunior_doe_age_max_months',
+          )
           .eq('species', _species)
           .eq('is_active', true)
           .or('local_show_id.is.null,local_show_id.eq.$showId')
@@ -2812,6 +2814,7 @@ class _AdminAddEntrySheet extends StatefulWidget {
 }
 
 class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
+  DateTime? _showDate;
   bool _loading = true;
   bool _saving = false;
   bool get _allowNameOnlyManualExhibitors =>
@@ -4054,6 +4057,38 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
     );
   }
 
+  void _suggestSavedAnimalClass() {
+    if (_useLocalAnimal || _animal == null) return;
+    final animal = _animal!;
+    final breed = _breedOptions.firstWhere(
+      (b) =>
+          b['name'].toString().toLowerCase() ==
+          (animal['breed'] ?? '').toString().toLowerCase(),
+      orElse: () => <String, dynamic>{},
+    );
+    final dates = _selectedSectionIds
+        .map(
+          (id) =>
+              DateTime.tryParse(
+                (_sectionById(id)['judging_date'] ?? '').toString(),
+              ) ??
+              _showDate,
+        )
+        .toList();
+    final suggestions = dates
+        .map(
+          (date) => suggestEntryClassFromDob(
+            animal: animal,
+            breed: breed,
+            showDate: date,
+          ),
+        )
+        .toSet();
+    final suggestion = suggestions.length == 1 ? suggestions.single : null;
+    _classValue = suggestion;
+    _className.text = suggestion ?? '';
+  }
+
   void _clearInvalidRegularClassSelection() {
     final value = _classValue;
     if (value == null || value.startsWith('commercial:')) return;
@@ -4066,9 +4101,17 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
     setState(() => _loadingBreeds = true);
 
     try {
+      final show = await supabase
+          .from('shows')
+          .select('start_date')
+          .eq('id', widget.showId)
+          .single();
+      _showDate = DateTime.tryParse((show['start_date'] ?? '').toString());
       final globalBreedsRes = await supabase
           .from('breeds')
-          .select('id,name,species,class_system,has_prejunior,is_active')
+          .select(
+            'id,name,species,class_system,has_prejunior,is_active,prejunior_age_max_months,prejunior_buck_age_max_months,prejunior_doe_age_max_months',
+          )
           .eq('species', _species)
           .eq('is_active', true)
           .or('local_show_id.is.null,local_show_id.eq.${widget.showId}')
@@ -4132,6 +4175,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
           _varietyOptions = [];
         }
         _clearInvalidRegularClassSelection();
+        if (_className.text.trim().isEmpty) _suggestSavedAnimalClass();
       });
     } catch (e) {
       if (!mounted) return;
@@ -4776,7 +4820,24 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
 
       final selectedClassValue = (_classValue ?? _className.text).trim();
       if (selectedClassValue.isEmpty) {
-        throw Exception('Select class');
+        if (!mounted) return;
+        setState(() => _saving = false);
+        await showDialog<void>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Class required'),
+            content: const Text(
+              'Please select a class for this animal before saving.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+        return;
       }
       final commercialClassCode = selectedClassValue.startsWith('commercial:')
           ? selectedClassValue.substring('commercial:'.length)
@@ -5210,6 +5271,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                                                 : _selectedSectionIds.first;
                                           }
                                         }
+                                        _suggestSavedAnimalClass();
                                         _msg = null;
                                       });
                                     },
@@ -5621,6 +5683,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                             ? null
                             : (v) => setState(() {
                                 _animal = v;
+                                _suggestSavedAnimalClass();
                                 final savedSex = displaySexForSpecies(
                                   species: v?['species'],
                                   sex: v?['sex'],
