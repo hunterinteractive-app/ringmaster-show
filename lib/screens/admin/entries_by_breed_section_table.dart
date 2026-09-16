@@ -672,41 +672,39 @@ class _EntriesByBreedSectionTableState
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
             ),
             const SizedBox(height: 10),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  ..._sections.map((s) {
-                    final sid = s['id'].toString();
-                    var showing = 0;
-                    final exhibitors = <String>{};
+            Wrap(
+              runSpacing: 8,
+              children: [
+                ..._sections.map((s) {
+                  final sid = s['id'].toString();
+                  var showing = 0;
+                  final exhibitors = <String>{};
 
-                    for (final breed in _breedGroups) {
-                      showing += _countForSection(breed.countsBySection, sid);
-                      exhibitors.addAll(
-                        breed.exhibitorsBySection[sid] ?? const <String>{},
-                      );
-                    }
-
-                    return Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: _summaryChip(
-                        widget.showExhibitorCounts
-                            ? '${_sectionHeader(s)}: $showing/${exhibitors.length}'
-                            : '${_sectionHeader(s)}: $showing',
-                      ),
+                  for (final breed in _breedGroups) {
+                    showing += _countForSection(breed.countsBySection, sid);
+                    exhibitors.addAll(
+                      breed.exhibitorsBySection[sid] ?? const <String>{},
                     );
-                  }),
-                  Padding(
+                  }
+
+                  return Padding(
                     padding: const EdgeInsets.only(right: 8),
                     child: _summaryChip(
                       widget.showExhibitorCounts
-                          ? 'Overall: $totalShowing/${totalExhibitors.length}'
-                          : 'Overall: $totalShowing',
+                          ? '${_sectionHeader(s)}: $showing/${exhibitors.length}'
+                          : '${_sectionHeader(s)}: $showing',
                     ),
+                  );
+                }),
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: _summaryChip(
+                    widget.showExhibitorCounts
+                        ? 'Overall: $totalShowing/${totalExhibitors.length}'
+                        : 'Overall: $totalShowing',
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ],
         ),
@@ -728,50 +726,46 @@ class _EntriesByBreedSectionTableState
   }
 
   Widget _breedSummaryBar(_BreedGroup breed) {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        children: [
-          _summaryChip('Section Summary'),
-          ..._sections.map((s) {
-            final sid = s['id'].toString();
-            final rabbits = _countForSection(breed.countsBySection, sid);
-            final exhibitors = _exhibitorsForSection(
-              breed.exhibitorsBySection,
-              sid,
-            );
-            return _summaryChip(
-              widget.showExhibitorCounts
-                  ? '${_sectionHeader(s)}: ${rabbits == 0 && exhibitors == 0 ? '-' : '$rabbits/$exhibitors'}'
-                  : '${_sectionHeader(s)}: ${rabbits == 0 ? '-' : rabbits}',
-            );
-          }),
-        ],
-      ),
+    return Wrap(
+      runSpacing: 8,
+      children: [
+        _summaryChip('Section Summary'),
+        ..._sections.map((s) {
+          final sid = s['id'].toString();
+          final rabbits = _countForSection(breed.countsBySection, sid);
+          final exhibitors = _exhibitorsForSection(
+            breed.exhibitorsBySection,
+            sid,
+          );
+          return _summaryChip(
+            widget.showExhibitorCounts
+                ? '${_sectionHeader(s)}: ${rabbits == 0 && exhibitors == 0 ? '-' : '$rabbits/$exhibitors'}'
+                : '${_sectionHeader(s)}: ${rabbits == 0 ? '-' : rabbits}',
+          );
+        }),
+      ],
     );
   }
 
   Widget _varietySummaryBar(_VarietyGroup variety) {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        children: [
-          _summaryChip('Variety Summary'),
-          ..._sections.map((s) {
-            final sid = s['id'].toString();
-            final rabbits = _countForSection(variety.countsBySection, sid);
-            final exhibitors = _exhibitorsForSection(
-              variety.exhibitorsBySection,
-              sid,
-            );
-            return _summaryChip(
-              widget.showExhibitorCounts
-                  ? '${_sectionHeader(s)}: ${rabbits == 0 && exhibitors == 0 ? '-' : '$rabbits/$exhibitors'}'
-                  : '${_sectionHeader(s)}: ${rabbits == 0 ? '-' : rabbits}',
-            );
-          }),
-        ],
-      ),
+    return Wrap(
+      runSpacing: 8,
+      children: [
+        _summaryChip('Variety Summary'),
+        ..._sections.map((s) {
+          final sid = s['id'].toString();
+          final rabbits = _countForSection(variety.countsBySection, sid);
+          final exhibitors = _exhibitorsForSection(
+            variety.exhibitorsBySection,
+            sid,
+          );
+          return _summaryChip(
+            widget.showExhibitorCounts
+                ? '${_sectionHeader(s)}: ${rabbits == 0 && exhibitors == 0 ? '-' : '$rabbits/$exhibitors'}'
+                : '${_sectionHeader(s)}: ${rabbits == 0 ? '-' : rabbits}',
+          );
+        }),
+      ],
     );
   }
 
