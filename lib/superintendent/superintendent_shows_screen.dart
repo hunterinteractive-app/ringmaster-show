@@ -1,6 +1,8 @@
 // lib/superintendent/superintendent_shows_screen.dart
 
 import 'package:flutter/material.dart';
+import 'linked_workspace_data.dart';
+import 'linked_superintendent_screen.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:ringmaster_show/services/app_session.dart';
@@ -51,8 +53,7 @@ class _SuperintendentShowsScreenState extends State<SuperintendentShowsScreen> {
           .select('id, name, start_date, end_date, location_name');
 
       final shows = List<Map<String, dynamic>>.from(rows as List);
-      shows.sort(_compareShowsForSuperintendent);
-      return shows;
+      return _groupShows(shows);
     }
 
     final showIds = access.showIds.toList();
@@ -65,8 +66,25 @@ class _SuperintendentShowsScreenState extends State<SuperintendentShowsScreen> {
         .inFilter('id', showIds);
 
     final shows = List<Map<String, dynamic>>.from(rows as List);
-    shows.sort(_compareShowsForSuperintendent);
-    return shows;
+    return _groupShows(shows);
+  }
+
+  Future<List<Map<String, dynamic>>> _groupShows(
+    List<Map<String, dynamic>> shows,
+  ) async {
+    List<Map<String, dynamic>> groups;
+    try {
+      groups = List<Map<String, dynamic>>.from(
+        await supabase.from('superintendent_workspaces').select(),
+      );
+    } on PostgrestException catch (error) {
+      // Old servers can still open their individual show lineups during rollout.
+      if (error.code != '42P01' && error.code != 'PGRST205') rethrow;
+      groups = [];
+    }
+    final grouped = groupSuperintendentShows(shows, groups);
+    grouped.sort(_compareShowsForSuperintendent);
+    return grouped;
   }
 
   int _compareShowsForSuperintendent(
@@ -122,6 +140,19 @@ class _SuperintendentShowsScreenState extends State<SuperintendentShowsScreen> {
   }
 
   void _openLineup(Map<String, dynamic> show) {
+    if (show['workspace_id'] != null) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => LinkedSuperintendentScreen(
+            workspaceId: show['workspace_id'].toString(),
+            name: show['name'].toString(),
+            shows: List<Map<String, dynamic>>.from(show['member_shows']),
+          ),
+        ),
+      );
+      return;
+    }
     final showId = (show['id'] ?? '').toString();
     if (showId.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
