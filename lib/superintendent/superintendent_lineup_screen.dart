@@ -2,6 +2,7 @@
 // ignore_for_file: use_build_context_synchronously
 
 import 'dart:typed_data';
+import 'linked_workspace_data.dart';
 
 import 'package:flutter/material.dart';
 import 'package:pdf/pdf.dart';
@@ -40,11 +41,15 @@ class SuperintendentLineupScreen extends StatefulWidget {
     required this.showId,
     required this.showName,
     this.readOnly = false,
+    this.workspaceId,
+    this.linkedShows = const {},
   });
 
   final String showId;
   final String showName;
   final bool readOnly;
+  final String? workspaceId;
+  final Map<String, String> linkedShows;
 
   @override
   State<SuperintendentLineupScreen> createState() =>
@@ -62,6 +67,55 @@ class _SuperintendentLineupScreenState
   String _addBreedSortMode = 'letter';
   String? _addBreedShowLetter;
 
+  List<Map<String, dynamic>> _workspaceVersions = [];
+  List<Map<String, dynamic>>? _autoFillRows;
+  bool get _isLinked => widget.workspaceId != null;
+  Future<void> _mutateWorkspace(
+    String action,
+    Map<String, dynamic> payload,
+  ) async {
+    final result = await supabase.rpc(
+      'mutate_workspace_lineup',
+      params: {
+        'p_workspace_id': widget.workspaceId,
+        'p_expected': _workspaceVersions,
+        'p_action': action,
+        'p_payload': payload,
+      },
+    );
+    _workspaceVersions = List<Map<String, dynamic>>.from(result as List);
+  }
+
+  Future<bool> _tryWorkspaceChange(
+    String action,
+    Map<String, dynamic> payload,
+  ) async {
+    try {
+      await _mutateWorkspace(action, payload);
+      return true;
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Line-up was not changed: $error')),
+        );
+        await _refresh();
+      }
+      return false;
+    }
+  }
+
+  Future<void> _writeAssignment(Map<String, dynamic> params) async {
+    if (_autoFillRows != null) {
+      _autoFillRows!.add(params);
+      return;
+    }
+    if (_isLinked) {
+      await _mutateWorkspace('add', params);
+      return;
+    }
+    await supabase.rpc('upsert_show_judging_assignment', params: params);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -75,20 +129,26 @@ class _SuperintendentLineupScreenState
     await _future;
   }
 
-  Future<void> _syncLineupToEntries() async {
-    if (widget.readOnly) return;
+  Future<bool> _syncLineupToEntries() async {
+    if (widget.readOnly) return false;
     try {
+      if (_isLinked) {
+        await _mutateWorkspace('sync', {});
+        return true;
+      }
       await supabase.rpc(
         'apply_lineup_to_entries',
         params: {'p_show_id': widget.showId},
       );
+      return true;
     } catch (error) {
-      if (!mounted) return;
+      if (!mounted) return false;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Line-up saved, but entry judge sync failed: $error'),
         ),
       );
+      return false;
     }
   }
 
@@ -97,7 +157,7 @@ class _SuperintendentLineupScreenState
     if (_isSyncingEntries) return;
 
     setState(() => _isSyncingEntries = true);
-    await _syncLineupToEntries();
+    final synced = await _syncLineupToEntries();
 
     if (!mounted) return;
     await _refresh();
@@ -105,9 +165,11 @@ class _SuperintendentLineupScreenState
     if (!mounted) return;
     setState(() => _isSyncingEntries = false);
 
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('Judges synced to entries.')));
+    if (synced) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Judges synced to entries.')),
+      );
+    }
   }
 
   bool _isJudgeAssignment(Map<String, dynamic> row) {
@@ -332,18 +394,22 @@ class _SuperintendentLineupScreenState
     setState(() => _isSavingPublishedState = true);
 
     try {
-      await supabase
-          .from('shows')
-          .update({
-            'superintendent_judge_order_published': value,
-            'superintendent_judge_order_published_at': value
-                ? DateTime.now().toUtc().toIso8601String()
-                : null,
-            'superintendent_judge_order_published_by': value
-                ? supabase.auth.currentUser?.id
-                : null,
-          })
-          .eq('id', widget.showId);
+      if (_isLinked) {
+        await _mutateWorkspace('publish', {'published': value});
+      } else {
+        await supabase
+            .from('shows')
+            .update({
+              'superintendent_judge_order_published': value,
+              'superintendent_judge_order_published_at': value
+                  ? DateTime.now().toUtc().toIso8601String()
+                  : null,
+              'superintendent_judge_order_published_by': value
+                  ? supabase.auth.currentUser?.id
+                  : null,
+            })
+            .eq('id', widget.showId);
+      }
 
       if (!mounted) return;
 
@@ -373,25 +439,67 @@ class _SuperintendentLineupScreenState
   }
 
   Future<_LineupData> _loadData() async {
+    if (!_isLinked) return _loadShowData(widget.showId);
+    await supabase
+        .from('superintendent_workspaces')
+        .select('id')
+        .eq('id', widget.workspaceId!)
+        .single();
+    final versions = List<Map<String, dynamic>>.from(
+      await supabase.rpc(
+            'workspace_lineup_versions',
+            params: {'p_workspace_id': widget.workspaceId},
+          )
+          as List,
+    );
+    final ids = widget.linkedShows.keys.toList();
+    final data = await Future.wait(ids.map(_loadShowData));
+    _workspaceVersions = versions;
+    final assignments = <Map<String, dynamic>>[];
+    final breeds = <Map<String, dynamic>>[];
+    for (var i = 0; i < data.length; i++) {
+      final name = widget.linkedShows[ids[i]]!;
+      assignments.addAll(
+        data[i].assignments.map((r) => labelWorkspaceRow(r, name)),
+      );
+      breeds.addAll(
+        data[i].breedCounts.map(
+          (r) => labelWorkspaceRow({...r, 'show_id': ids[i]}, name),
+        ),
+      );
+    }
+    return _LineupData(
+      assignments: collapseWorkspaceMarkers(assignments, versions),
+      judges: commonWorkspaceJudges(data.map((d) => d.judges).toList()),
+      breedCounts: breeds,
+      workloads: data.expand((d) => d.workloads).toList(),
+      userPreferences: data.first.userPreferences,
+      judgeOrderPublished: data.every((d) => d.judgeOrderPublished),
+      judgeOrderPublishedAt: null,
+      judgeOrderPublishedBy: null,
+    );
+  }
+
+  Future<_LineupData> _loadShowData(String showId) async {
     // Load the RPCs sequentially to avoid type issues
     final assignments = await supabase.rpc(
       'get_show_judging_lineup',
-      params: {'p_show_id': widget.showId},
+      params: {'p_show_id': showId},
     );
 
     final judges = await supabase.rpc(
       'get_show_lineup_judges',
-      params: {'p_show_id': widget.showId},
+      params: {'p_show_id': showId},
     );
 
     final breedCounts = await supabase.rpc(
       'get_show_lineup_breed_counts',
-      params: {'p_show_id': widget.showId},
+      params: {'p_show_id': showId},
     );
 
     final workloads = await supabase.rpc(
       'get_show_judge_daily_workload',
-      params: {'p_show_id': widget.showId},
+      params: {'p_show_id': showId},
     );
 
     final showRow = await supabase
@@ -399,7 +507,7 @@ class _SuperintendentLineupScreenState
         .select(
           'superintendent_judge_order_published, superintendent_judge_order_published_at, superintendent_judge_order_published_by',
         )
-        .eq('id', widget.showId)
+        .eq('id', showId)
         .maybeSingle();
 
     final currentUserId = supabase.auth.currentUser?.id;
@@ -417,7 +525,7 @@ class _SuperintendentLineupScreenState
     final sections = await supabase
         .from('show_sections')
         .select('id, kind, letter, display_name')
-        .eq('show_id', widget.showId);
+        .eq('show_id', showId);
 
     final assignmentRows = List<Map<String, dynamic>>.from(assignments as List);
     final judgeRows = List<Map<String, dynamic>>.from(judges as List);
@@ -505,7 +613,10 @@ class _SuperintendentLineupScreenState
       }
     }
 
-    for (final backfill in sectionBackfills) {
+    for (final backfill
+        in widget.readOnly || _isLinked
+            ? <Map<String, String>>[]
+            : sectionBackfills) {
       try {
         await supabase
             .from('show_judging_assignments')
@@ -843,6 +954,7 @@ class _SuperintendentLineupScreenState
             constraints: const BoxConstraints(maxWidth: 520),
             child: _AddJudgeChangeSheet(
               showId: widget.showId,
+              saveAssignment: _isLinked ? _writeAssignment : null,
               judges: data.judges,
               tableNumber: tableNumber,
               sortOrder: sortOrder,
@@ -853,7 +965,7 @@ class _SuperintendentLineupScreenState
     );
 
     if (saved == true) {
-      await _syncLineupToEntries();
+      if (!_isLinked) await _syncLineupToEntries();
       await _refresh();
     }
   }
@@ -907,6 +1019,7 @@ class _SuperintendentLineupScreenState
             constraints: const BoxConstraints(maxWidth: 620),
             child: _AddAssignmentSheet(
               showId: widget.showId,
+              saveAssignment: _isLinked ? _writeAssignment : null,
               judges: data.judges,
               breedCounts: data.breedCounts,
               assignedRows: data.assignments,
@@ -928,7 +1041,7 @@ class _SuperintendentLineupScreenState
     );
 
     if (saved == true) {
-      await _syncLineupToEntries();
+      if (!_isLinked) await _syncLineupToEntries();
       await _refresh();
     }
   }
@@ -957,12 +1070,16 @@ class _SuperintendentLineupScreenState
 
     if (confirmed != true) return;
 
-    await supabase
-        .from('show_judging_assignments')
-        .delete()
-        .eq('id', assignmentId);
+    if (_isLinked) {
+      if (!await _tryWorkspaceChange('delete', {'id': assignmentId})) return;
+    } else {
+      await supabase
+          .from('show_judging_assignments')
+          .delete()
+          .eq('id', assignmentId);
+    }
 
-    await _syncLineupToEntries();
+    if (!_isLinked) await _syncLineupToEntries();
     await _refresh();
   }
 
@@ -978,17 +1095,28 @@ class _SuperintendentLineupScreenState
     final moved = reordered.removeAt(oldIndex);
     reordered.insert(newIndex, moved);
 
-    for (var i = 0; i < reordered.length; i++) {
-      final id = reordered[i]['id']?.toString();
-      if (id == null || id.isEmpty) continue;
+    if (_isLinked) {
+      if (!await _tryWorkspaceChange('reorder', {
+        'rows': [
+          for (var i = 0; i < reordered.length; i++)
+            {'id': reordered[i]['id'], 'sort_order': i},
+        ],
+      })) {
+        return;
+      }
+    } else {
+      for (var i = 0; i < reordered.length; i++) {
+        final id = reordered[i]['id']?.toString();
+        if (id == null || id.isEmpty) continue;
 
-      await supabase
-          .from('show_judging_assignments')
-          .update({'sort_order': i})
-          .eq('id', id);
+        await supabase
+            .from('show_judging_assignments')
+            .update({'sort_order': i})
+            .eq('id', id);
+      }
     }
 
-    await _syncLineupToEntries();
+    if (!_isLinked) await _syncLineupToEntries();
     await _refresh();
   }
 
@@ -1000,12 +1128,22 @@ class _SuperintendentLineupScreenState
     if (widget.readOnly) return;
     if (assignmentId.isEmpty) return;
 
-    await supabase
-        .from('show_judging_assignments')
-        .update({'table_number': tableNumber, 'sort_order': sortOrder})
-        .eq('id', assignmentId);
+    if (_isLinked) {
+      if (!await _tryWorkspaceChange('move', {
+        'id': assignmentId,
+        'table_number': tableNumber,
+        'sort_order': sortOrder,
+      })) {
+        return;
+      }
+    } else {
+      await supabase
+          .from('show_judging_assignments')
+          .update({'table_number': tableNumber, 'sort_order': sortOrder})
+          .eq('id', assignmentId);
+    }
 
-    await _syncLineupToEntries();
+    if (!_isLinked) await _syncLineupToEntries();
     await _refresh();
   }
 
@@ -1062,6 +1200,7 @@ class _SuperintendentLineupScreenState
       grouped.putIfAbsent(
         key,
         () => <String, dynamic>{
+          'show_id': row['show_id'],
           'section_id': row['section_id'],
           'show_letter': showLetter,
           'scope': scope,
@@ -1165,7 +1304,13 @@ class _SuperintendentLineupScreenState
     setState(() => _isAutoFilling = true);
     if (data.judges.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Add judges to the show first.')),
+        SnackBar(
+          content: Text(
+            _isLinked
+                ? 'Enable judges in both shows first. Only judges enabled in both are available for shared tables.'
+                : 'Add judges to the show first.',
+          ),
+        ),
       );
       setState(() => _isAutoFilling = false);
       return;
@@ -1183,8 +1328,10 @@ class _SuperintendentLineupScreenState
         context: context,
         builder: (context) => AlertDialog(
           title: const Text('Replace current line-up?'),
-          content: const Text(
-            'Auto Fill will clear the current superintendent line-up for this show and rebuild it from the current breed counts and selected judges.',
+          content: Text(
+            _isLinked
+                ? 'Auto Fill will replace the line-up for BOTH linked shows, using all six sections and the shared judges.'
+                : 'Auto Fill will clear the current superintendent line-up for this show and rebuild it from the current breed counts and selected judges.',
           ),
           actions: [
             TextButton(
@@ -1217,10 +1364,14 @@ class _SuperintendentLineupScreenState
     }
 
     try {
-      await supabase
-          .from('show_judging_assignments')
-          .delete()
-          .eq('show_id', widget.showId);
+      if (_isLinked) {
+        _autoFillRows = [];
+      } else {
+        await supabase
+            .from('show_judging_assignments')
+            .delete()
+            .eq('show_id', widget.showId);
+      }
 
       // --- BEGIN: Load judge preferences ---
       // Prefer show-level aggregate superintendent preference weights when the
@@ -1379,23 +1530,20 @@ class _SuperintendentLineupScreenState
         judgeBreedScopes[judgeId] = <String>{};
         sortOrderByTable[tableNumber] = 1;
 
-        await supabase.rpc(
-          'upsert_show_judging_assignment',
-          params: {
-            'p_show_id': widget.showId,
-            'p_section_id': null,
-            'p_breed_id': '__judge_change__',
-            'p_variety_key': null,
-            'p_judge_id': judgeId,
-            'p_table_number': tableNumber,
-            'p_sort_order': 0,
-            'p_status': 'draft',
-            'p_scope': 'combined',
-            'p_is_judge_change': true,
-            'p_entry_count_actual': 0,
-            'p_notes': 'Auto Fill judge start',
-          },
-        );
+        await _writeAssignment({
+          'p_show_id': widget.showId,
+          'p_section_id': null,
+          'p_breed_id': '__judge_change__',
+          'p_variety_key': null,
+          'p_judge_id': judgeId,
+          'p_table_number': tableNumber,
+          'p_sort_order': 0,
+          'p_status': 'draft',
+          'p_scope': 'combined',
+          'p_is_judge_change': true,
+          'p_entry_count_actual': 0,
+          'p_notes': 'Auto Fill judge start',
+        });
       }
 
       // Process rows in show-letter order. This makes the line-up favor
@@ -1466,26 +1614,23 @@ class _SuperintendentLineupScreenState
         final requiresOverride =
             judgeBreedScopes[judgeId]?.contains(breedScopeKey) == true;
 
-        await supabase.rpc(
-          'upsert_show_judging_assignment',
-          params: {
-            'p_show_id': widget.showId,
-            'p_section_id': breed['section_id'],
-            'p_breed_id': breed['breed'],
-            'p_variety_key': breed['variety'],
-            'p_judge_id': null,
-            'p_table_number': tableNumber,
-            'p_sort_order': sortOrder,
-            'p_status': 'draft',
-            'p_scope': breed['scope'],
-            'p_entry_count_actual': count,
-            'p_notes': requiresOverride
-                ? 'Auto Fill override: same judge assigned same breed/Open-Youth because no clean judge was available.'
-                : judgePreferencesByJudgeId.containsKey(judgeId)
-                ? 'Auto Fill used superintendent judge preferences including judging pace when available.'
-                : null,
-          },
-        );
+        await _writeAssignment({
+          'p_show_id': widget.showId,
+          'p_section_id': breed['section_id'],
+          'p_breed_id': breed['breed'],
+          'p_variety_key': breed['variety'],
+          'p_judge_id': null,
+          'p_table_number': tableNumber,
+          'p_sort_order': sortOrder,
+          'p_status': 'draft',
+          'p_scope': breed['scope'],
+          'p_entry_count_actual': count,
+          'p_notes': requiresOverride
+              ? 'Auto Fill override: same judge assigned same breed/Open-Youth because no clean judge was available.'
+              : judgePreferencesByJudgeId.containsKey(judgeId)
+              ? 'Auto Fill used superintendent judge preferences including judging pace when available.'
+              : null,
+        });
 
         sortOrderByTable[tableNumber] = sortOrder + 1;
         judgeLoads[judgeId] = (judgeLoads[judgeId] ?? 0) + count;
@@ -1494,7 +1639,11 @@ class _SuperintendentLineupScreenState
             .add(breedScopeKey);
       }
 
-      await _syncLineupToEntries();
+      if (_isLinked) {
+        await _mutateWorkspace('replace', {'rows': _autoFillRows});
+        _autoFillRows = null;
+      }
+      if (!_isLinked) await _syncLineupToEntries();
 
       if (!mounted) return;
       setState(() => _isAutoFilling = false);
@@ -1510,6 +1659,7 @@ class _SuperintendentLineupScreenState
         ),
       );
     } catch (error) {
+      _autoFillRows = null;
       if (!mounted) return;
       setState(() => _isAutoFilling = false);
       ScaffoldMessenger.of(
@@ -1526,6 +1676,7 @@ class _SuperintendentLineupScreenState
 
   @override
   Widget build(BuildContext context) {
+    final busy = _isAutoFilling || _isSyncingEntries || _isSavingPublishedState;
     return RingMasterPageShell(
       title: 'Judging Line-Up',
       subtitle: widget.readOnly
@@ -1533,7 +1684,7 @@ class _SuperintendentLineupScreenState
           : widget.showName,
       actions: [
         TextButton.icon(
-          onPressed: _refresh,
+          onPressed: busy ? null : _refresh,
           icon: const Icon(Icons.refresh),
           label: const Text('Refresh'),
           style: TextButton.styleFrom(
@@ -1545,7 +1696,7 @@ class _SuperintendentLineupScreenState
         ),
         if (!widget.readOnly)
           TextButton.icon(
-            onPressed: _isSyncingEntries ? null : _manualSyncLineupToEntries,
+            onPressed: busy ? null : _manualSyncLineupToEntries,
             icon: _isSyncingEntries
                 ? const SizedBox(
                     width: 16,
@@ -1563,7 +1714,7 @@ class _SuperintendentLineupScreenState
           ),
         if (!widget.readOnly)
           TextButton.icon(
-            onPressed: _isAutoFilling
+            onPressed: busy
                 ? null
                 : () async {
                     final data = await _future;
@@ -1587,7 +1738,7 @@ class _SuperintendentLineupScreenState
           ),
         if (!widget.readOnly)
           TextButton.icon(
-            onPressed: _addTable,
+            onPressed: busy ? null : _addTable,
             icon: const Icon(Icons.table_chart),
             label: const Text('Add Table'),
             style: TextButton.styleFrom(
@@ -1622,7 +1773,9 @@ class _SuperintendentLineupScreenState
                 const LinearProgressIndicator(minHeight: 3),
               Expanded(
                 child: RefreshIndicator(
-                  onRefresh: _refresh,
+                  onRefresh: () async {
+                    if (!busy) await _refresh();
+                  },
                   child: ListView(
                     padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
                     children: [
@@ -1647,7 +1800,7 @@ class _SuperintendentLineupScreenState
                       _SummaryCards(
                         data: data,
                         isSavingPublishedState: _isSavingPublishedState,
-                        onPublishChanged: widget.readOnly
+                        onPublishChanged: widget.readOnly || busy
                             ? null
                             : (value) => _setJudgeOrderPublished(data, value),
                       ),
@@ -1704,7 +1857,7 @@ class _SuperintendentLineupScreenState
                               tableNumber,
                               _nextSortOrderForTable(tableNumber, grouped),
                             ),
-                        readOnly: widget.readOnly,
+                        readOnly: widget.readOnly || busy,
                       ),
                     ],
                   ),
@@ -2673,12 +2826,14 @@ class _LineupRow extends StatelessWidget {
 class _AddJudgeChangeSheet extends StatefulWidget {
   const _AddJudgeChangeSheet({
     required this.showId,
+    this.saveAssignment,
     required this.judges,
     required this.tableNumber,
     required this.sortOrder,
   });
 
   final String showId;
+  final Future<void> Function(Map<String, dynamic>)? saveAssignment;
   final List<Map<String, dynamic>> judges;
   final String tableNumber;
   final int sortOrder;
@@ -2688,6 +2843,14 @@ class _AddJudgeChangeSheet extends StatefulWidget {
 }
 
 class _AddJudgeChangeSheetState extends State<_AddJudgeChangeSheet> {
+  Future<void> _saveAssignment(Map<String, dynamic> params) async {
+    if (widget.saveAssignment != null) {
+      await widget.saveAssignment!(params);
+      return;
+    }
+    await supabase.rpc('upsert_show_judging_assignment', params: params);
+  }
+
   String? _judgeId;
   bool _saving = false;
 
@@ -2708,23 +2871,20 @@ class _AddJudgeChangeSheetState extends State<_AddJudgeChangeSheet> {
     setState(() => _saving = true);
 
     try {
-      await supabase.rpc(
-        'upsert_show_judging_assignment',
-        params: {
-          'p_show_id': widget.showId,
-          'p_section_id': null,
-          'p_breed_id': '__judge_change__',
-          'p_variety_key': null,
-          'p_judge_id': _judgeId,
-          'p_table_number': widget.tableNumber,
-          'p_sort_order': widget.sortOrder,
-          'p_status': 'draft',
-          'p_scope': 'combined',
-          'p_is_judge_change': true,
-          'p_entry_count_actual': 0,
-          'p_notes': 'Judge change',
-        },
-      );
+      await _saveAssignment({
+        'p_show_id': widget.showId,
+        'p_section_id': null,
+        'p_breed_id': '__judge_change__',
+        'p_variety_key': null,
+        'p_judge_id': _judgeId,
+        'p_table_number': widget.tableNumber,
+        'p_sort_order': widget.sortOrder,
+        'p_status': 'draft',
+        'p_scope': 'combined',
+        'p_is_judge_change': true,
+        'p_entry_count_actual': 0,
+        'p_notes': 'Judge change',
+      });
 
       if (!mounted) return;
       Navigator.pop(context, true);
@@ -2779,6 +2939,7 @@ class _AddJudgeChangeSheetState extends State<_AddJudgeChangeSheet> {
 class _AddAssignmentSheet extends StatefulWidget {
   const _AddAssignmentSheet({
     required this.showId,
+    this.saveAssignment,
     required this.judges,
     required this.breedCounts,
     required this.assignedRows,
@@ -2792,6 +2953,7 @@ class _AddAssignmentSheet extends StatefulWidget {
   });
 
   final String showId;
+  final Future<void> Function(Map<String, dynamic>)? saveAssignment;
   final List<Map<String, dynamic>> judges;
   final List<Map<String, dynamic>> breedCounts;
   final List<Map<String, dynamic>> assignedRows;
@@ -2808,6 +2970,14 @@ class _AddAssignmentSheet extends StatefulWidget {
 }
 
 class _AddAssignmentSheetState extends State<_AddAssignmentSheet> {
+  Future<void> _saveAssignment(Map<String, dynamic> params) async {
+    if (widget.saveAssignment != null) {
+      await widget.saveAssignment!(params);
+      return;
+    }
+    await supabase.rpc('upsert_show_judging_assignment', params: params);
+  }
+
   bool _alreadyAssignedExactBreedRow(Map<String, dynamic> breed) {
     final targetBreed = (breed['breed'] ?? '').toString().trim().toLowerCase();
     final targetVariety = (breed['variety'] ?? '').toString().trim();
@@ -3000,6 +3170,7 @@ class _AddAssignmentSheetState extends State<_AddAssignmentSheet> {
         () => <String, dynamic>{
           'dropdown_key': key,
           'assigned_key': assignedKey,
+          'show_id': row['show_id'],
           'section_id': row['section_id'],
           'section_ids': <String>{row['section_id']?.toString() ?? ''},
           'show_letter': showLetter,
@@ -3349,26 +3520,23 @@ class _AddAssignmentSheetState extends State<_AddAssignmentSheet> {
       }
     }
 
-    await supabase.rpc(
-      'upsert_show_judging_assignment',
-      params: {
-        'p_show_id': widget.showId,
-        'p_section_id': sectionId,
-        'p_breed_id': breed['breed'],
-        'p_variety_key': breed['variety'],
-        'p_judge_id': null,
-        'p_table_number': widget.tableNumber,
-        'p_sort_order': widget.sortOrder + _newlyAssignedBreedKeys.length,
-        'p_status': 'draft',
-        'p_scope': (breed['scope'] ?? '').toString().isEmpty
-            ? 'combined'
-            : breed['scope'],
-        'p_entry_count_actual': breed['entry_count'],
-        'p_notes': overrideReason == null
-            ? null
-            : 'Duplicate judge/breed override: $overrideReason',
-      },
-    );
+    await _saveAssignment({
+      'p_show_id': breed['show_id'] ?? widget.showId,
+      'p_section_id': sectionId,
+      'p_breed_id': breed['breed'],
+      'p_variety_key': breed['variety'],
+      'p_judge_id': null,
+      'p_table_number': widget.tableNumber,
+      'p_sort_order': widget.sortOrder + _newlyAssignedBreedKeys.length,
+      'p_status': 'draft',
+      'p_scope': (breed['scope'] ?? '').toString().isEmpty
+          ? 'combined'
+          : breed['scope'],
+      'p_entry_count_actual': breed['entry_count'],
+      'p_notes': overrideReason == null
+          ? null
+          : 'Duplicate judge/breed override: $overrideReason',
+    });
 
     if (!mounted) return false;
     setState(() {
@@ -3391,7 +3559,7 @@ class _AddAssignmentSheetState extends State<_AddAssignmentSheet> {
       final result = await supabase.rpc(
         'validate_show_judge_breed_conflict',
         params: {
-          'p_show_id': widget.showId,
+          'p_show_id': breed['show_id'] ?? widget.showId,
           'p_section_id': sectionId,
           'p_judge_id': judgeId,
           'p_breed': breed['breed'],

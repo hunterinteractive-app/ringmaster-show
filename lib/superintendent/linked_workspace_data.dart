@@ -40,3 +40,57 @@ Map<String, Map<String, int>> workspaceBreedTotals(
     totals.entries.toList()..sort((a, b) => a.key.compareTo(b.key)),
   );
 }
+
+/// Give duplicate show letters different labels without changing stored IDs.
+Map<String, dynamic> labelWorkspaceRow(
+  Map<String, dynamic> row,
+  String showName,
+) {
+  final label = showName
+      .split(' (')
+      .first
+      .replaceFirst(RegExp(r'\s+(Rabbit\s+)?Show$', caseSensitive: false), '')
+      .trim();
+  final result = Map<String, dynamic>.from(row);
+  for (final key in ['show_letter', 'letter', 'section_letter']) {
+    final value = row[key] ?? row['show_letter'] ?? row['letter'];
+    if (value != null && value.toString().isNotEmpty) {
+      result[key] = '$label · $value';
+    }
+  }
+  return result;
+}
+
+List<Map<String, dynamic>> collapseWorkspaceMarkers(
+  List<Map<String, dynamic>> rows,
+  List<Map<String, dynamic>> versions,
+) {
+  final markers = {
+    for (final version in versions)
+      version['id']: version['workspace_marker_id'],
+  };
+  final seen = <String>{};
+  return rows.where((row) {
+    final marker = markers[row['id']]?.toString();
+    return marker == null || seen.add(marker);
+  }).toList();
+}
+
+/// A shared table judge must be enabled in every source show.
+List<Map<String, dynamic>> commonWorkspaceJudges(
+  List<List<Map<String, dynamic>>> lists,
+) {
+  if (lists.isEmpty) return [];
+  final byId = <String, Map<String, dynamic>>{};
+  for (final judge in lists.first) {
+    final id = judge['judge_id']?.toString();
+    if (id == null || judge['is_enabled'] == false) continue;
+    if (lists.every(
+      (list) =>
+          list.any((j) => j['judge_id'] == id && j['is_enabled'] != false),
+    )) {
+      byId[id] = judge;
+    }
+  }
+  return byId.values.toList();
+}

@@ -87,4 +87,48 @@ void main() {
     ];
     expect(workspaceBreedTotals(rows).length, 4);
   });
+  test('shared judges are deduplicated and must be enabled in both shows', () {
+    expect(
+      commonWorkspaceJudges([
+        [
+          {'judge_id': 'a'},
+          {'judge_id': 'a'},
+          {'judge_id': 'b'},
+          {'judge_id': 'c'},
+        ],
+        [
+          {'judge_id': 'a'},
+          {'judge_id': 'b', 'is_enabled': false},
+        ],
+      ]).map((j) => j['judge_id']).toList(),
+      ['a'],
+    );
+  });
+  test('mirrored judge markers show once without hiding breed assignments', () {
+    expect(
+      collapseWorkspaceMarkers(
+        [
+          {'id': 'm1'},
+          {'id': 'm2'},
+          {'id': 'breed1'},
+          {'id': 'breed2'},
+        ],
+        [
+          {'id': 'm1', 'workspace_marker_id': 'shared'},
+          {'id': 'm2', 'workspace_marker_id': 'shared'},
+        ],
+      ).map((r) => r['id']).toList(),
+      ['m1', 'breed1', 'breed2'],
+    );
+  });
+  test('same letters use readable source names and preserve IDs', () {
+    final row = labelWorkspaceRow({
+      'section_id': 's1',
+      'show_id': 'one',
+      'show_letter': 'A',
+    }, 'Fall Duneabash Show (in conjunction with another show)');
+    expect(row['show_letter'], 'Fall Duneabash · A');
+    expect(row['show_id'], 'one');
+    expect(row['section_id'], 's1');
+  });
 }

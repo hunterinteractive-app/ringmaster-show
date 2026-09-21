@@ -131,14 +131,19 @@ class _LinkedSuperintendentScreenState
     _ => 'Planned',
   };
 
-  Future<void> _openShow(Map<String, dynamic> show) async {
+  Future<void> _openLineup() async {
     _editing = true;
     await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => SuperintendentLineupScreen(
-          showId: show['id'].toString(),
-          showName: show['name'].toString(),
+          showId: widget.shows.first['id'].toString(),
+          showName: widget.name,
+          workspaceId: widget.workspaceId,
+          linkedShows: {
+            for (final show in widget.shows)
+              show['id'].toString(): show['name'].toString(),
+          },
           readOnly: AppSession.isSupportMode,
         ),
       ),
@@ -377,18 +382,14 @@ class _LinkedSuperintendentScreenState
                                     ),
                                 ],
                               ),
-                              OutlinedButton.icon(
-                                onPressed: _error != null
-                                    ? null
-                                    : () => _openShow(show),
-                                icon: const Icon(Icons.edit_note),
-                                label: const Text(
-                                  'Judges, breed assignments & publishing',
-                                ),
-                              ),
                             ],
                           ),
                         ),
+                      FilledButton.icon(
+                        onPressed: _error != null ? null : _openLineup,
+                        icon: const Icon(Icons.table_chart),
+                        label: const Text('Open shared Judging Line-Up'),
+                      ),
                     ],
                   ),
                 ),
@@ -429,7 +430,7 @@ class _LinkedSuperintendentScreenState
                         style: Theme.of(context).textTheme.titleLarge,
                       ),
                       const Text(
-                        'Each judge is listed once. The show names indicate where they are enabled; use that show’s tools to change their breed assignments.',
+                        'Each judge is listed once. Judges enabled in both shows are available in the shared Judging Line-Up.',
                       ),
                       for (final rows in judges.values)
                         ListTile(
@@ -458,7 +459,7 @@ class _LinkedSuperintendentScreenState
                         style: Theme.of(context).textTheme.titleLarge,
                       ),
                       const Text(
-                        'The same table number groups work from both shows. Use Order to arrange the shared queue. Judge and breed changes use the show tools above; publish and sync each show there.',
+                        'Use the shared Judging Line-Up to assign judges and breeds, arrange tables, Auto Fill, sync, and publish both shows together.',
                       ),
                       Text(
                         '${_assignments.where((r) => r['status'] == 'completed' && r['is_judge_change'] != true).length} of ${_assignments.where((r) => r['is_judge_change'] != true).length} breed assignments complete',
@@ -486,7 +487,10 @@ class _LinkedSuperintendentScreenState
                             subtitle: Text(
                               '${_showName(row['show_id'])}\n${_sectionName(row)} · Order ${row['sort_order'] ?? 0} · ${_status(row['status'])}${row['judge_name'] == null ? '' : '\nJudge: ${row['judge_name']}'}',
                             ),
-                            trailing: AppSession.isSupportMode || _error != null
+                            trailing:
+                                row['is_judge_change'] == true ||
+                                    AppSession.isSupportMode ||
+                                    _error != null
                                 ? null
                                 : IconButton(
                                     icon: const Icon(Icons.edit),
@@ -500,7 +504,7 @@ class _LinkedSuperintendentScreenState
                 if (tables.isEmpty)
                   _card(
                     const Text(
-                      'No assignments yet. Use the show tools above to add judges and breeds; both line-ups will appear here.',
+                      'No assignments yet. Open the shared Judging Line-Up above to add judges and breeds.',
                     ),
                   ),
               ],
