@@ -381,10 +381,15 @@ void main() {
                   as RenderRepaintBoundary)
               .toImage();
       final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-      await File(
-        '/private/tmp/ringmaster-assistant-preview.png',
-      ).writeAsBytes(bytes!.buffer.asUint8List());
-      image.dispose();
+      final directory = await Directory.systemTemp.createTemp('chester-preview-');
+      try {
+        final preview = File('${directory.path}/assistant.png');
+        await preview.writeAsBytes(bytes!.buffer.asUint8List());
+        expect(await preview.length(), greaterThan(0));
+      } finally {
+        image.dispose();
+        await directory.delete(recursive: true);
+      }
     });
   });
 }
