@@ -1,3 +1,4 @@
+import 'specialty_lineup_dialog.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -79,6 +80,10 @@ class _LinkedSuperintendentScreenState
               .toList();
         }),
       );
+      final specialties = await _client
+          .from('workspace_specialties')
+          .select()
+          .eq('workspace_id', widget.workspaceId);
       if (!mounted) return;
       setState(() {
         _sections = data.expand((d) => d[0]).toList();
@@ -89,7 +94,10 @@ class _LinkedSuperintendentScreenState
               if (judge['is_enabled'] != false)
                 {...judge, 'show_id': widget.shows[i]['id']},
         ];
-        _assignments = data.expand((d) => d[2]).toList();
+        _assignments = [
+          ...data.expand((d) => d[2]),
+          ...specialties.map(specialtyLineupRow),
+        ];
         _assignments.sort((a, b) {
           final order = ((a['sort_order'] ?? 0) as num).compareTo(
             (b['sort_order'] ?? 0) as num,
@@ -485,7 +493,11 @@ class _LinkedSuperintendentScreenState
                                   : '${row['breed_id']}${row['variety_key'] == null ? '' : ' · ${row['variety_key']}'}',
                             ),
                             subtitle: Text(
-                              '${_showName(row['show_id'])}\n${_sectionName(row)} · Order ${row['sort_order'] ?? 0} · ${_status(row['status'])}${row['judge_name'] == null ? '' : '\nJudge: ${row['judge_name']}'}',
+                              '${row['is_award_plan'] == true
+                                  ? '${row['name']} · Private award plan'
+                                  : row['is_external_specialty'] == true
+                                  ? '${row['entry_count']} entries · Outside specialty'
+                                  : _showName(row['show_id'])}\n${row['is_external_specialty'] == true ? 'Manual count' : _sectionName(row)} · Order ${row['sort_order'] ?? 0} · ${_status(row['status'])}${row['judge_name'] == null ? '' : '\nJudge: ${row['judge_name']}'}',
                             ),
                             trailing:
                                 row['is_judge_change'] == true ||
@@ -495,7 +507,11 @@ class _LinkedSuperintendentScreenState
                                 : IconButton(
                                     icon: const Icon(Icons.edit),
                                     tooltip: 'Edit table, order and progress',
-                                    onPressed: () => _edit(row),
+                                    onPressed: () =>
+                                        (row['is_external_specialty'] == true ||
+                                            row['is_award_plan'] == true)
+                                        ? _openLineup()
+                                        : _edit(row),
                                   ),
                           ),
                       ],

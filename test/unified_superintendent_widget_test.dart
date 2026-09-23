@@ -10,6 +10,8 @@ import 'package:ringmaster_show/theme/app_theme.dart';
 
 void main() {
   final mutations = <Map<String, dynamic>>[];
+  var withSpecialty = false;
+  var withAwards = false;
   setUpAll(() async {
     SharedPreferences.setMockInitialValues({});
     await Supabase.initialize(
@@ -32,6 +34,7 @@ void main() {
         final names = show == 'sala'
             ? ['Open A', 'Open B', 'Youth A', 'Youth B']
             : ['Open A', 'Youth A'];
+        if (path.endsWith('/ensure_show_lineup_workspace')) result = 'shared';
         if (path.endsWith('/superintendent_workspaces')) {
           result = {'id': 'shared'};
         }
@@ -47,6 +50,43 @@ void main() {
                 'kind': name.startsWith('Open') ? 'open' : 'youth',
                 'letter': name.split(' ').last,
               },
+          ];
+        }
+        if (path.endsWith('/show_sections') &&
+            request.url.queryParameters['show_id']?.startsWith('in.') == true) {
+          result = withAwards
+              ? [
+                  for (final source in ['sala', 'dune'])
+                    for (final kind in ['open', 'youth'])
+                      {
+                        'id': '$source-$kind-A',
+                        'show_id': source,
+                        'kind': kind,
+                        'letter': 'A',
+                        'is_enabled': true,
+                        'shows': {
+                          'final_award_mode': source == 'sala'
+                              ? 'four_six_bis'
+                              : 'bis_1ris_2ris',
+                        },
+                      },
+                ]
+              : [];
+        }
+        if (withAwards &&
+            path.endsWith('/get_show_judging_lineup') &&
+            show == 'sala') {
+          result = [
+            {
+              'id': 'marker',
+              'show_id': 'sala',
+              'breed_id': '__judge_change__',
+              'is_judge_change': true,
+              'judge_id': 'judge1',
+              'judge_name': 'Shared Judge',
+              'table_number': '1',
+              'sort_order': 0,
+            },
           ];
         }
         if (path.endsWith('/get_show_lineup_breed_counts')) {
@@ -72,6 +112,20 @@ void main() {
             },
           ];
         }
+        if (path.endsWith('/workspace_specialties') && withSpecialty) {
+          result = [
+            {
+              'id': 'specialty',
+              'name': 'IDDRC',
+              'breed': 'Dutch',
+              'entry_count': 45,
+              'table_number': '3',
+              'sort_order': 0,
+              'judge_name': 'Guest Judge',
+              'status': 'draft',
+            },
+          ];
+        }
         if (path.endsWith('/mutate_workspace_lineup')) mutations.add(body);
         return http.Response(
           jsonEncode(result),
@@ -82,7 +136,7 @@ void main() {
       }),
     );
   });
-  Future<void> open(WidgetTester tester) async {
+  Future<void> open(WidgetTester tester, {bool single = false}) async {
     mutations.clear();
     tester.view.physicalSize = const Size(1400, 1000);
     tester.view.devicePixelRatio = 1;
@@ -91,17 +145,54 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: AppTheme.lightTheme,
-        home: const SuperintendentLineupScreen(
+        home: SuperintendentLineupScreen(
           showId: 'sala',
           showName: 'Both shows',
-          workspaceId: 'shared',
-          linkedShows: {'sala': 'Sala', 'dune': 'Dune'},
+          workspaceId: single ? null : 'shared',
+          linkedShows: single ? const {} : {'sala': 'Sala', 'dune': 'Dune'},
         ),
       ),
     );
     await tester.pumpAndSettle();
   }
 
+  testWidgets(
+    'specialty appears in order without inflating host entry totals',
+    (tester) async {
+      withSpecialty = true;
+      addTearDown(() => withSpecialty = false);
+      await open(tester);
+      expect(find.text('0/12'), findsOneWidget);
+      expect(find.textContaining('IDDRC • Dutch'), findsOneWidget);
+      expect(find.textContaining('Guest Judge'), findsNothing);
+      await tester.tap(find.text('Specialty'));
+      await tester.pumpAndSettle();
+      expect(find.text('Outside specialties'), findsOneWidget);
+      expect(find.textContaining('45 entries'), findsOneWidget);
+      await tester.tap(find.text('Close'));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('single club show exposes Specialty after Auto Fill', (
+    tester,
+  ) async {
+    await open(tester, single: true);
+    final auto = find.text('Auto Fill');
+    final specialty = find.text('Specialty');
+    expect(specialty, findsOneWidget);
+    expect(
+      tester.getCenter(specialty).dx,
+      greaterThan(tester.getCenter(auto).dx),
+    );
+    await tester.tap(specialty);
+    await tester.pumpAndSettle();
+    expect(find.text('Outside specialties'), findsOneWidget);
+    await tester.tap(find.text('Close'));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+  });
   testWidgets(
     'one table pool and Auto Fill includes all six separate sections',
     (tester) async {
@@ -132,6 +223,30 @@ void main() {
           'dune-Youth A',
         },
       );
+      expect(tester.takeException(), isNull);
+    },
+  );
+  testWidgets(
+    'Breed picker adds one private combined finals plan without counts',
+    (tester) async {
+      withAwards = true;
+      addTearDown(() => withAwards = false);
+      await open(tester);
+      await tester.tap(find.text('Breed').first);
+      await tester.pumpAndSettle();
+      final award = find.text('Dune · A • Open • BIS / RIS / 2RIS');
+      expect(award, findsOneWidget);
+      final tile = find.ancestor(of: award, matching: find.byType(ListTile));
+      expect(
+        find.descendant(of: tile, matching: find.text('0 entered')),
+        findsNothing,
+      );
+      await tester.tap(award);
+      await tester.pumpAndSettle();
+      final call = mutations.singleWhere((m) => m['p_action'] == 'award_add');
+      expect(call['p_payload']['p_award_code'], 'FINALS');
+      expect(call['p_payload']['p_section_id'], 'dune-open-A');
+      expect(call['p_payload'].containsKey('p_entry_count_actual'), isFalse);
       expect(tester.takeException(), isNull);
     },
   );
