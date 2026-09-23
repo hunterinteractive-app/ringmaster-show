@@ -1,4 +1,13 @@
+import 'screens/admin/admin_resources_screen.dart';
+import 'screens/my_animals_screen.dart';
+import 'screens/account_settings_screen.dart';
+import 'screens/household_access_screen.dart';
+import 'screens/admin/edit_show_settings_screen.dart';
 import 'services/household_session.dart';
+import 'services/show_assistant_service.dart';
+import 'widgets/show_assistant.dart';
+import 'screens/my_entries_screen.dart';
+import 'screens/exhibitor_past_reports_screen.dart';
 // lib/main.dart
 import 'dart:async';
 
@@ -131,14 +140,42 @@ class MyApp extends StatelessWidget {
       child: MaterialApp(
         title: 'RingMaster Show',
         theme: AppTheme.lightTheme,
+        navigatorKey: ShowAssistantController.instance.navigatorKey,
+        navigatorObservers: [ShowAssistantController.instance.navigation],
         builder: (context, child) => Column(
           children: [
-            Expanded(child: child ?? const SizedBox.shrink()),
+            Expanded(
+              child: ShowAssistantOverlay(
+                child: child ?? const SizedBox.shrink(),
+              ),
+            ),
             const _BuildGenerationFooter(),
           ],
         ),
         home: const Root(),
         onGenerateRoute: (settings) {
+          if (settings.name == '/assistant/entries') {
+            return MaterialPageRoute(builder: (_) => const MyEntriesScreen());
+          }
+          if (settings.name == '/assistant/reports') {
+            return MaterialPageRoute(
+              builder: (_) => const ExhibitorPastReportsScreen(),
+            );
+          }
+          final assistantDestinations = <String, WidgetBuilder>{
+            '/assistant/resources': (_) => const AdminResourcesScreen(),
+            '/assistant/animals': (_) => const MyAnimalsScreen(),
+            '/assistant/account': (_) => const AccountSettingsScreen(),
+            '/assistant/household': (_) => const HouseholdAccessScreen(),
+            '/assistant/shows': (_) => const ShowListScreen(),
+            '/assistant/manage': (_) => settings.arguments is String
+                ? EditShowSettingsScreen(showId: settings.arguments as String)
+                : const ShowListScreen(),
+          };
+          final destination = assistantDestinations[settings.name];
+          if (destination != null) {
+            return MaterialPageRoute(builder: destination);
+          }
           final routeUri = Uri.parse(settings.name ?? '');
           Uri uri = routeUri;
 

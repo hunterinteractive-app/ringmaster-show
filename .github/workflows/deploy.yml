@@ -29,8 +29,8 @@ jobs:
       - name: Analyze
         run: flutter analyze
 
-      - name: Run accessibility regression tests
-        run: flutter test test/accessibility_widget_test.dart test/accessibility_color_contrast_test.dart
+      - name: Run accessibility and Chester regression tests
+        run: flutter test test/accessibility_widget_test.dart test/accessibility_color_contrast_test.dart test/show_assistant_test.dart test/assistant_answer_editor_test.dart test/assistant_conversations_test.dart test/assistant_guide_links_test.dart test/assistant_support_test.dart
 
       - name: Build Flutter Web
         run: flutter build web --release --pwa-strategy=none

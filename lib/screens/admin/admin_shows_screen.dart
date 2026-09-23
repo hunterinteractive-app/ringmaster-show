@@ -1,3 +1,4 @@
+import '../../services/show_assistant_service.dart';
 // lib/screens/admin/admin_shows_screen.dart
 
 import 'package:flutter/material.dart';
@@ -736,6 +737,7 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    ShowAssistantController.instance.register(context, 'Manage Shows', null);
     return FutureBuilder<_AdminShowsPageData>(
       future: _pageFuture,
       builder: (context, snap) {

@@ -41,3 +41,6 @@ verify_jwt = false
 
 [functions.household-send-invitation]
 verify_jwt = true
+
+[functions.show-assistant]
+verify_jwt = true

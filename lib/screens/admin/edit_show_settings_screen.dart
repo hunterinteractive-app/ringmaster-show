@@ -1,3 +1,4 @@
+import '../../services/show_assistant_service.dart';
 // lib/screens/admin/edit_show_settings_screen.dart
 // ignore_for_file: avoid_web_libraries_in_flutter, deprecated_member_use, use_build_context_synchronously
 
@@ -1438,6 +1439,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    ShowAssistantController.instance.register(context, 'Show Settings', widget.showId);
     final canManageShow =
         _permissions.canManageShow || AppSession.isSupportMode;
     final canManageShowSettings =

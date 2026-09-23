@@ -1,3 +1,5 @@
+import 'assistant_answers_screen.dart';
+import 'assistant_conversations_screen.dart';
 // lib/screens/superadmin/super_admin_home_screen.dart
 
 import 'package:flutter/material.dart';
@@ -11,6 +13,7 @@ import 'package:ringmaster_show/screens/super_admin/club_payment_provider_migrat
 
 import '../show_list_screen.dart';
 import 'breed_catalog_screen.dart';
+import 'assistant_usage_screen.dart';
 
 final supabase = Supabase.instance.client;
 
@@ -179,6 +182,42 @@ class _SuperadminHomeScreenState extends State<SuperadminHomeScreen> {
                   subtitle:
                       'Open support mode and view RingMaster as another user',
                   onTap: _openImpersonateUser,
+                ),
+                const SizedBox(height: 12),
+                _SuperadminToolCard(
+                  icon: Icons.forum_outlined,
+                  title: 'Chester Conversations',
+                  subtitle:
+                      'Read saved chats, prepared answers, and FAQ activity.',
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => const AssistantConversationsScreen(),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                _SuperadminToolCard(
+                  icon: Icons.library_books_outlined,
+                  title: 'Chester Reviewed Answers',
+                  subtitle:
+                      'Review FAQ drafts, publish reusable answers, and manage matching questions.',
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => const AssistantAnswersScreen(),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                _SuperadminToolCard(
+                  icon: Icons.smart_toy_outlined,
+                  title: 'AI Assistant Usage',
+                  subtitle:
+                      'Review costs, set the monthly allowance, and pause AI answers.',
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => const AssistantUsageScreen(),
+                    ),
+                  ),
                 ),
                 const SizedBox(height: 12),
                 _SuperadminToolCard(

@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:ringmaster_show/theme/app_theme.dart';
 import 'package:ringmaster_show/services/app_session.dart';
 import 'package:ringmaster_show/screens/show_list_screen.dart';
-import 'package:url_launcher/url_launcher.dart';
+import '../services/show_assistant_service.dart';
 
 class RingMasterPageShell extends StatelessWidget {
   final String title;
@@ -54,24 +54,13 @@ class RingMasterPageShell extends StatelessWidget {
     return Navigator.of(context).canPop();
   }
 
-  Future<void> _emailSupport(BuildContext context) async {
-    final opened = await launchUrl(
-      Uri(
-        scheme: 'mailto',
-        path: 'support@ringmasterone.com',
-        queryParameters: {'subject': 'RingMaster Show help: $title'},
-      ),
-      mode: LaunchMode.externalApplication,
-    );
-    if (!opened && context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Unable to open your email app.')),
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
+    ShowAssistantController.instance.register(
+      context,
+      subtitle == null ? title : "$title — $subtitle",
+      showId,
+    );
     final isSupportMode = AppSession.isSupportMode;
     final impersonatedLabel =
         AppSession.impersonatedUserName ??
@@ -152,9 +141,12 @@ class RingMasterPageShell extends StatelessWidget {
         ),
       if (showHelpButton)
         IconButton(
-          tooltip: 'Report an issue',
+          tooltip: 'Ask Chester',
           icon: const Icon(Icons.help_outline),
-          onPressed: () => _emailSupport(context),
+          onPressed: () => ShowAssistantController.instance.open(
+            title: subtitle == null ? title : "$title — $subtitle",
+            showId: showId,
+          ),
         ),
     ];
 

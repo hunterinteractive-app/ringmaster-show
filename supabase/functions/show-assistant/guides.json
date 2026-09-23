@@ -1,0 +1,197 @@
+{
+  "verified": "2026-09-19",
+  "guides": [
+    {
+      "id": "account",
+      "title": "Creating Your RingMaster Show Account and Entering Your First Show",
+      "url": "https://scribehow.com/o/vr7q0-IrTfO8a62Y0VO4Wg/viewer/Creating_Your_RingMaster_Show_Account_and_Entering_Your_First_Show__CnLLYjeMQBuMcB7lxzsI8Q",
+      "start": 1,
+      "end": 15,
+      "summary": "Create an account and sign in"
+    },
+    {
+      "id": "animals",
+      "title": "Creating Your RingMaster Show Account and Entering Your First Show",
+      "url": "https://scribehow.com/o/vr7q0-IrTfO8a62Y0VO4Wg/viewer/Creating_Your_RingMaster_Show_Account_and_Entering_Your_First_Show__CnLLYjeMQBuMcB7lxzsI8Q",
+      "start": 16,
+      "end": 25,
+      "summary": "Add animals"
+    },
+    {
+      "id": "entry",
+      "title": "Creating Your RingMaster Show Account and Entering Your First Show",
+      "url": "https://scribehow.com/o/vr7q0-IrTfO8a62Y0VO4Wg/viewer/Creating_Your_RingMaster_Show_Account_and_Entering_Your_First_Show__CnLLYjeMQBuMcB7lxzsI8Q",
+      "start": 26,
+      "end": 33,
+      "summary": "Enter a show, choose sections and animals, review cart, submit and confirm"
+    },
+    {
+      "id": "create-show",
+      "title": "How to Create a New Show in RingMaster Show",
+      "url": "https://scribehow.com/o/vr7q0-IrTfO8a62Y0VO4Wg/viewer/How_to_Create_a_New_Show_in_RingMaster_Show__fr5D5Jg_TfOftdRZg_TojQ",
+      "start": 2,
+      "end": 8,
+      "summary": "Create a show, name, location and dates"
+    },
+    {
+      "id": "publish",
+      "title": "How to Create a New Show in RingMaster Show",
+      "url": "https://scribehow.com/o/vr7q0-IrTfO8a62Y0VO4Wg/viewer/How_to_Create_a_New_Show_in_RingMaster_Show__fr5D5Jg_TfOftdRZg_TojQ",
+      "start": 9,
+      "end": 9,
+      "summary": "Publish a show when ready"
+    },
+    {
+      "id": "deadline",
+      "title": "How to Create a New Show in RingMaster Show",
+      "url": "https://scribehow.com/o/vr7q0-IrTfO8a62Y0VO4Wg/viewer/How_to_Create_a_New_Show_in_RingMaster_Show__fr5D5Jg_TfOftdRZg_TojQ",
+      "start": 10,
+      "end": 16,
+      "summary": "Set entry closing date and time"
+    },
+    {
+      "id": "divisions",
+      "title": "How to Create a New Show in RingMaster Show",
+      "url": "https://scribehow.com/o/vr7q0-IrTfO8a62Y0VO4Wg/viewer/How_to_Create_a_New_Show_in_RingMaster_Show__fr5D5Jg_TfOftdRZg_TojQ",
+      "start": 18,
+      "end": 22,
+      "summary": "Create Open and Youth shows"
+    },
+    {
+      "id": "setup",
+      "title": "Preparing a Show for Entries: Settings, Fees, and Payments",
+      "url": "https://scribehow.com/o/vr7q0-IrTfO8a62Y0VO4Wg/viewer/Preparing_a_Show_for_Entries_Settings_Fees_and_Payments__aivMCQC2Sd-C9ZwNf6hZ5Q",
+      "start": 3,
+      "end": 9,
+      "summary": "Show names, final award format, breed restrictions and settings"
+    },
+    {
+      "id": "sanctions",
+      "title": "Preparing a Show for Entries: Settings, Fees, and Payments",
+      "url": "https://scribehow.com/o/vr7q0-IrTfO8a62Y0VO4Wg/viewer/Preparing_a_Show_for_Entries_Settings_Fees_and_Payments__aivMCQC2Sd-C9ZwNf6hZ5Q",
+      "start": 10,
+      "end": 14,
+      "summary": "Enter sanction numbers"
+    },
+    {
+      "id": "fees",
+      "title": "Preparing a Show for Entries: Settings, Fees, and Payments",
+      "url": "https://scribehow.com/o/vr7q0-IrTfO8a62Y0VO4Wg/viewer/Preparing_a_Show_for_Entries_Settings_Fees_and_Payments__aivMCQC2Sd-C9ZwNf6hZ5Q",
+      "start": 15,
+      "end": 18,
+      "summary": "Set entry and fur fees and processing fees"
+    },
+    {
+      "id": "stripe",
+      "title": "Preparing a Show for Entries: Settings, Fees, and Payments",
+      "url": "https://scribehow.com/o/vr7q0-IrTfO8a62Y0VO4Wg/viewer/Preparing_a_Show_for_Entries_Settings_Fees_and_Payments__aivMCQC2Sd-C9ZwNf6hZ5Q",
+      "start": 19,
+      "end": 36,
+      "summary": "Connect Stripe payments; use provider screens for sensitive information"
+    },
+    {
+      "id": "staff",
+      "title": "Preparing a Show for Entries: Settings, Fees, and Payments",
+      "url": "https://scribehow.com/o/vr7q0-IrTfO8a62Y0VO4Wg/viewer/Preparing_a_Show_for_Entries_Settings_Fees_and_Payments__aivMCQC2Sd-C9ZwNf6hZ5Q",
+      "start": 37,
+      "end": 41,
+      "summary": "Assign staff roles"
+    },
+    {
+      "id": "judges",
+      "title": "Preparing a Show for Entries: Settings, Fees, and Payments",
+      "url": "https://scribehow.com/o/vr7q0-IrTfO8a62Y0VO4Wg/viewer/Preparing_a_Show_for_Entries_Settings_Fees_and_Payments__aivMCQC2Sd-C9ZwNf6hZ5Q",
+      "start": 42,
+      "end": 47,
+      "summary": "Assign judges"
+    },
+    {
+      "id": "manual-entries",
+      "title": "Reviewing Entries and Preparing Show Materials",
+      "url": "https://scribehow.com/o/vr7q0-IrTfO8a62Y0VO4Wg/viewer/Reviewing_Entries_and_Preparing_Show_Materials__2mobhQgrSZySm1eqrNKq2g",
+      "start": 3,
+      "end": 9,
+      "summary": "Review entries and add manual entries"
+    },
+    {
+      "id": "counts",
+      "title": "Reviewing Entries and Preparing Show Materials",
+      "url": "https://scribehow.com/o/vr7q0-IrTfO8a62Y0VO4Wg/viewer/Reviewing_Entries_and_Preparing_Show_Materials__2mobhQgrSZySm1eqrNKq2g",
+      "start": 10,
+      "end": 10,
+      "summary": "View breed counts"
+    },
+    {
+      "id": "coops",
+      "title": "Reviewing Entries and Preparing Show Materials",
+      "url": "https://scribehow.com/o/vr7q0-IrTfO8a62Y0VO4Wg/viewer/Reviewing_Entries_and_Preparing_Show_Materials__2mobhQgrSZySm1eqrNKq2g",
+      "start": 11,
+      "end": 12,
+      "summary": "Assign coop numbers"
+    },
+    {
+      "id": "print",
+      "title": "Reviewing Entries and Preparing Show Materials",
+      "url": "https://scribehow.com/o/vr7q0-IrTfO8a62Y0VO4Wg/viewer/Reviewing_Entries_and_Preparing_Show_Materials__2mobhQgrSZySm1eqrNKq2g",
+      "start": 13,
+      "end": 26,
+      "summary": "Prepare print packs, control sheets, check-in sheets and coop cards"
+    },
+    {
+      "id": "results",
+      "title": "Closeout / After Show Guide",
+      "url": "https://scribehow.com/o/vr7q0-IrTfO8a62Y0VO4Wg/viewer/Closeout__After_Show_Guide__8SEf6HRcSvi70sUQdAhfNg",
+      "start": 3,
+      "end": 17,
+      "summary": "Enter results and validate before closeout"
+    },
+    {
+      "id": "closeout",
+      "title": "Closeout / After Show Guide",
+      "url": "https://scribehow.com/o/vr7q0-IrTfO8a62Y0VO4Wg/viewer/Closeout__After_Show_Guide__8SEf6HRcSvi70sUQdAhfNg",
+      "start": 18,
+      "end": 29,
+      "summary": "Prepare closeout information and review readiness"
+    },
+    {
+      "id": "generate",
+      "title": "Closeout / After Show Guide",
+      "url": "https://scribehow.com/o/vr7q0-IrTfO8a62Y0VO4Wg/viewer/Closeout__After_Show_Guide__8SEf6HRcSvi70sUQdAhfNg",
+      "start": 30,
+      "end": 30,
+      "summary": "Queue final report generation"
+    },
+    {
+      "id": "email",
+      "title": "Closeout / After Show Guide",
+      "url": "https://scribehow.com/o/vr7q0-IrTfO8a62Y0VO4Wg/viewer/Closeout__After_Show_Guide__8SEf6HRcSvi70sUQdAhfNg",
+      "start": 31,
+      "end": 33,
+      "summary": "Send exhibitor reports, legs and club reports"
+    },
+    {
+      "id": "arba",
+      "title": "Closeout / After Show Guide",
+      "url": "https://scribehow.com/o/vr7q0-IrTfO8a62Y0VO4Wg/viewer/Closeout__After_Show_Guide__8SEf6HRcSvi70sUQdAhfNg",
+      "start": 35,
+      "end": 38,
+      "summary": "Generate, review and send ARBA reports"
+    },
+    {
+      "id": "lock",
+      "title": "Closeout / After Show Guide",
+      "url": "https://scribehow.com/o/vr7q0-IrTfO8a62Y0VO4Wg/viewer/Closeout__After_Show_Guide__8SEf6HRcSvi70sUQdAhfNg",
+      "start": 39,
+      "end": 41,
+      "summary": "Lock show and download show data"
+    },
+    {
+      "id": "varieties",
+      "title": "How to Add Custom Varieties to Your Show",
+      "url": "https://scribehow.com/o/vr7q0-IrTfO8a62Y0VO4Wg/viewer/How_to_Add_Custom_Varieties_to_Your_Show__kZ5VXAAlRvStkL533gyJoA",
+      "start": 4,
+      "end": 10,
+      "summary": "Add a show-only custom variety"
+    }
+  ]
+}

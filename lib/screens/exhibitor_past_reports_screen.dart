@@ -1,3 +1,4 @@
+import '../services/show_assistant_service.dart';
 // lib/screens/exhibitor_past_reports_screen.dart
 
 import 'package:flutter/material.dart';
@@ -151,6 +152,7 @@ class _ExhibitorPastReportsScreenState
 
   @override
   Widget build(BuildContext context) {
+    ShowAssistantController.instance.register(context, 'Past Show Reports', null);
     return Scaffold(
       backgroundColor: AppColors.pageBackground,
       appBar: AppBar(
