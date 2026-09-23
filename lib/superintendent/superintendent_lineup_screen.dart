@@ -1,3 +1,5 @@
+import 'final_award_lineup.dart';
+import 'specialty_lineup_dialog.dart';
 // lib/superintendent/superintendent_lineup_screen.dart
 // ignore_for_file: use_build_context_synchronously
 
@@ -68,8 +70,14 @@ class _SuperintendentLineupScreenState
   String? _addBreedShowLetter;
 
   List<Map<String, dynamic>> _workspaceVersions = [];
+  List<Map<String, dynamic>> _awardOptions = [];
   List<Map<String, dynamic>>? _autoFillRows;
-  bool get _isLinked => widget.workspaceId != null;
+  String? _singleWorkspaceId;
+  String? get _workspaceId => widget.workspaceId ?? _singleWorkspaceId;
+  bool get _usesWorkspace => _workspaceId != null;
+  Map<String, String> get _workspaceShows => widget.linkedShows.isEmpty
+      ? {widget.showId: widget.showName}
+      : widget.linkedShows;
   Future<void> _mutateWorkspace(
     String action,
     Map<String, dynamic> payload,
@@ -77,7 +85,7 @@ class _SuperintendentLineupScreenState
     final result = await supabase.rpc(
       'mutate_workspace_lineup',
       params: {
-        'p_workspace_id': widget.workspaceId,
+        'p_workspace_id': _workspaceId,
         'p_expected': _workspaceVersions,
         'p_action': action,
         'p_payload': payload,
@@ -109,8 +117,11 @@ class _SuperintendentLineupScreenState
       _autoFillRows!.add(params);
       return;
     }
-    if (_isLinked) {
-      await _mutateWorkspace('add', params);
+    if (_usesWorkspace) {
+      await _mutateWorkspace(
+        params['p_award_code'] == null ? 'add' : 'award_add',
+        params,
+      );
       return;
     }
     await supabase.rpc('upsert_show_judging_assignment', params: params);
@@ -132,7 +143,7 @@ class _SuperintendentLineupScreenState
   Future<bool> _syncLineupToEntries() async {
     if (widget.readOnly) return false;
     try {
-      if (_isLinked) {
+      if (_usesWorkspace) {
         await _mutateWorkspace('sync', {});
         return true;
       }
@@ -287,10 +298,15 @@ class _SuperintendentLineupScreenState
                 data: (grouped[tableNumber] ?? const <Map<String, dynamic>>[])
                     .map(
                       (row) => [
-                        _isJudgeAssignment(row) ? 'Judge' : 'Breed',
+                        _isJudgeAssignment(row)
+                            ? 'Judge'
+                            : row['is_award_plan'] == true
+                            ? 'Award plan'
+                            : 'Breed',
                         _lineupPdfItem(row),
                         _isJudgeAssignment(row) ? '' : _lineupPdfScope(row),
-                        _isJudgeAssignment(row)
+                        (_isJudgeAssignment(row) ||
+                                row['is_award_plan'] == true)
                             ? ''
                             : _lineupPdfHeadCount(row).toString(),
                       ],
@@ -369,7 +385,7 @@ class _SuperintendentLineupScreenState
       final isJudgeChange =
           row['is_judge_change'] == true ||
           (row['breed_id'] ?? '').toString() == '__judge_change__';
-      if (isJudgeChange) continue;
+      if (isJudgeChange || row['is_award_plan'] == true) continue;
 
       final hasDuplicate = row['duplicate_judge_breed'] == true;
       final hasOverride = (row['override_reason'] ?? row['notes'] ?? '')
@@ -394,7 +410,7 @@ class _SuperintendentLineupScreenState
     setState(() => _isSavingPublishedState = true);
 
     try {
-      if (_isLinked) {
+      if (_usesWorkspace) {
         await _mutateWorkspace('publish', {'published': value});
       } else {
         await supabase
@@ -438,27 +454,145 @@ class _SuperintendentLineupScreenState
     }
   }
 
+  Future<void> _manageSpecialties() async {
+    final data = await _future;
+    if (!mounted) return;
+    final rows = data.assignments
+        .where(
+          (r) => r['is_external_specialty'] == true && r['award_code'] == null,
+        )
+        .toList();
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Outside specialties'),
+        content: SizedBox(
+          width: 440,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Keep outside clubs in your table order. Counts are entered manually and stay separate from host-show totals.',
+                ),
+                for (final row in rows)
+                  ListTile(
+                    title: Text('${row['name']} • ${row['breed']}'),
+                    subtitle: Text(
+                      '${row['scope'] == 'youth'
+                          ? 'Youth'
+                          : row['scope'] == 'open'
+                          ? 'Open'
+                          : 'Open/Youth not set'} • ${row['entry_count']} entries • Table ${row['table_number']} • ${specialtyStatus(row['status'].toString())}',
+                    ),
+                    trailing: const Icon(Icons.edit),
+                    onTap: () async {
+                      final saved = await editSpecialtyLineup(
+                        context,
+                        row: row,
+                        save: (payload) =>
+                            _mutateWorkspace('specialty_save', payload),
+                      );
+                      if (saved == true && dialogContext.mounted) {
+                        Navigator.pop(dialogContext);
+                      }
+                    },
+                  ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Close'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              final saved = await editSpecialtyLineup(
+                context,
+                save: (payload) => _mutateWorkspace('specialty_save', payload),
+              );
+              if (saved == true && dialogContext.mounted) {
+                Navigator.pop(dialogContext);
+              }
+            },
+            child: const Text('Add specialty'),
+          ),
+        ],
+      ),
+    );
+    if (mounted) await _refresh();
+  }
+
   Future<_LineupData> _loadData() async {
-    if (!_isLinked) return _loadShowData(widget.showId);
+    if (!_usesWorkspace && !widget.readOnly) {
+      _singleWorkspaceId =
+          await supabase.rpc(
+                'ensure_show_lineup_workspace',
+                params: {'p_show_id': widget.showId},
+              )
+              as String;
+      if (mounted) setState(() {});
+    }
+    if (!_usesWorkspace) return _loadShowData(widget.showId);
     await supabase
         .from('superintendent_workspaces')
         .select('id')
-        .eq('id', widget.workspaceId!)
+        .eq('id', _workspaceId!)
         .single();
     final versions = List<Map<String, dynamic>>.from(
       await supabase.rpc(
             'workspace_lineup_versions',
-            params: {'p_workspace_id': widget.workspaceId},
+            params: {'p_workspace_id': _workspaceId},
           )
           as List,
     );
-    final ids = widget.linkedShows.keys.toList();
+    final ids = _workspaceShows.keys.toList();
     final data = await Future.wait(ids.map(_loadShowData));
+    final specialties = await supabase
+        .from('workspace_specialties')
+        .select()
+        .eq('workspace_id', _workspaceId!);
+    final sections = await supabase
+        .from('show_sections')
+        .select(
+          'id,show_id,kind,letter,is_enabled,shows!show_sections_show_id_fkey(name,final_award_mode)',
+        )
+        .inFilter('show_id', ids);
+    _awardOptions = [
+      for (final section in sections)
+        if (section['is_enabled'] != false)
+          for (final award in finalAwardPlanningOptions(
+            ((section['shows'] as Map?)?['final_award_mode'] ?? 'four_six_bis')
+                .toString(),
+          ).entries)
+            labelWorkspaceRow({
+              'show_id': section['show_id'],
+              'section_id': section['id'],
+              'show_letter': section['letter'],
+              'scope': section['kind'],
+              'breed': award.value,
+              'award_code': award.key,
+              'entry_count': 0,
+            }, _workspaceShows[section['show_id']] ?? ''),
+    ];
+    for (final row in specialties) {
+      if (row['award_code'] == null) continue;
+      final section = sections
+          .where((s) => s['id'] == row['award_section_id'])
+          .firstOrNull;
+      if (section != null) {
+        row['show_letter'] = labelWorkspaceRow({
+          'show_letter': section['letter'],
+        }, _workspaceShows[section['show_id']] ?? '')['show_letter'];
+      }
+    }
     _workspaceVersions = versions;
     final assignments = <Map<String, dynamic>>[];
     final breeds = <Map<String, dynamic>>[];
     for (var i = 0; i < data.length; i++) {
-      final name = widget.linkedShows[ids[i]]!;
+      final name = _workspaceShows[ids[i]]!;
       assignments.addAll(
         data[i].assignments.map((r) => labelWorkspaceRow(r, name)),
       );
@@ -469,7 +603,10 @@ class _SuperintendentLineupScreenState
       );
     }
     return _LineupData(
-      assignments: collapseWorkspaceMarkers(assignments, versions),
+      assignments: [
+        ...collapseWorkspaceMarkers(assignments, versions),
+        ...specialties.map(specialtyLineupRow),
+      ],
       judges: commonWorkspaceJudges(data.map((d) => d.judges).toList()),
       breedCounts: breeds,
       workloads: data.expand((d) => d.workloads).toList(),
@@ -614,7 +751,7 @@ class _SuperintendentLineupScreenState
     }
 
     for (final backfill
-        in widget.readOnly || _isLinked
+        in widget.readOnly || _usesWorkspace
             ? <Map<String, String>>[]
             : sectionBackfills) {
       try {
@@ -774,6 +911,14 @@ class _SuperintendentLineupScreenState
           continue;
         }
 
+        if (row['is_external_specialty'] == true) {
+          row['effective_judge_name'] =
+              (row['judge_name'] ?? '').toString().isEmpty
+              ? 'Judge not set'
+              : row['judge_name'];
+          row['effective_judge_id'] = null;
+          continue;
+        }
         row['effective_judge_name'] =
             currentJudgeName ??
             (row['judge_name'] ?? 'Judge not set').toString();
@@ -803,7 +948,7 @@ class _SuperintendentLineupScreenState
         final isJudgeChange =
             row['is_judge_change'] == true ||
             (row['breed_id'] ?? '').toString() == '__judge_change__';
-        if (isJudgeChange) continue;
+        if (isJudgeChange || row['is_award_plan'] == true) continue;
 
         final judgeId = (row['effective_judge_id'] ?? row['judge_id'] ?? '')
             .toString();
@@ -864,7 +1009,7 @@ class _SuperintendentLineupScreenState
         final isJudgeChange =
             row['is_judge_change'] == true ||
             (row['breed_id'] ?? '').toString() == '__judge_change__';
-        if (isJudgeChange) continue;
+        if (isJudgeChange || row['is_award_plan'] == true) continue;
 
         final judgeId = (row['effective_judge_id'] ?? row['judge_id'] ?? '')
             .toString();
@@ -895,7 +1040,7 @@ class _SuperintendentLineupScreenState
         final isJudgeChange =
             row['is_judge_change'] == true ||
             (row['breed_id'] ?? '').toString() == '__judge_change__';
-        if (isJudgeChange) continue;
+        if (isJudgeChange || row['is_award_plan'] == true) continue;
 
         final judgeId = (row['effective_judge_id'] ?? row['judge_id'] ?? '')
             .toString();
@@ -954,7 +1099,7 @@ class _SuperintendentLineupScreenState
             constraints: const BoxConstraints(maxWidth: 520),
             child: _AddJudgeChangeSheet(
               showId: widget.showId,
-              saveAssignment: _isLinked ? _writeAssignment : null,
+              saveAssignment: _usesWorkspace ? _writeAssignment : null,
               judges: data.judges,
               tableNumber: tableNumber,
               sortOrder: sortOrder,
@@ -965,7 +1110,7 @@ class _SuperintendentLineupScreenState
     );
 
     if (saved == true) {
-      if (!_isLinked) await _syncLineupToEntries();
+      if (!_usesWorkspace) await _syncLineupToEntries();
       await _refresh();
     }
   }
@@ -1019,9 +1164,18 @@ class _SuperintendentLineupScreenState
             constraints: const BoxConstraints(maxWidth: 620),
             child: _AddAssignmentSheet(
               showId: widget.showId,
-              saveAssignment: _isLinked ? _writeAssignment : null,
+              saveAssignment: _usesWorkspace ? _writeAssignment : null,
               judges: data.judges,
-              breedCounts: data.breedCounts,
+              breedCounts: [
+                ...data.breedCounts,
+                ..._awardOptions.where(
+                  (option) => !data.assignments.any(
+                    (row) =>
+                        row['award_section_id'] == option['section_id'] &&
+                        row['award_code'] == option['award_code'],
+                  ),
+                ),
+              ],
               assignedRows: data.assignments,
               userPreferences: data.userPreferences,
               tableNumber: tableNumber,
@@ -1041,7 +1195,7 @@ class _SuperintendentLineupScreenState
     );
 
     if (saved == true) {
-      if (!_isLinked) await _syncLineupToEntries();
+      if (!_usesWorkspace) await _syncLineupToEntries();
       await _refresh();
     }
   }
@@ -1070,7 +1224,7 @@ class _SuperintendentLineupScreenState
 
     if (confirmed != true) return;
 
-    if (_isLinked) {
+    if (_usesWorkspace) {
       if (!await _tryWorkspaceChange('delete', {'id': assignmentId})) return;
     } else {
       await supabase
@@ -1079,7 +1233,7 @@ class _SuperintendentLineupScreenState
           .eq('id', assignmentId);
     }
 
-    if (!_isLinked) await _syncLineupToEntries();
+    if (!_usesWorkspace) await _syncLineupToEntries();
     await _refresh();
   }
 
@@ -1095,7 +1249,7 @@ class _SuperintendentLineupScreenState
     final moved = reordered.removeAt(oldIndex);
     reordered.insert(newIndex, moved);
 
-    if (_isLinked) {
+    if (_usesWorkspace) {
       if (!await _tryWorkspaceChange('reorder', {
         'rows': [
           for (var i = 0; i < reordered.length; i++)
@@ -1116,7 +1270,7 @@ class _SuperintendentLineupScreenState
       }
     }
 
-    if (!_isLinked) await _syncLineupToEntries();
+    if (!_usesWorkspace) await _syncLineupToEntries();
     await _refresh();
   }
 
@@ -1128,7 +1282,7 @@ class _SuperintendentLineupScreenState
     if (widget.readOnly) return;
     if (assignmentId.isEmpty) return;
 
-    if (_isLinked) {
+    if (_usesWorkspace) {
       if (!await _tryWorkspaceChange('move', {
         'id': assignmentId,
         'table_number': tableNumber,
@@ -1143,7 +1297,7 @@ class _SuperintendentLineupScreenState
           .eq('id', assignmentId);
     }
 
-    if (!_isLinked) await _syncLineupToEntries();
+    if (!_usesWorkspace) await _syncLineupToEntries();
     await _refresh();
   }
 
@@ -1306,7 +1460,7 @@ class _SuperintendentLineupScreenState
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            _isLinked
+            _usesWorkspace
                 ? 'Enable judges in both shows first. Only judges enabled in both are available for shared tables.'
                 : 'Add judges to the show first.',
           ),
@@ -1329,9 +1483,9 @@ class _SuperintendentLineupScreenState
         builder: (context) => AlertDialog(
           title: const Text('Replace current line-up?'),
           content: Text(
-            _isLinked
-                ? 'Auto Fill will replace the line-up for BOTH linked shows, using all six sections and the shared judges.'
-                : 'Auto Fill will clear the current superintendent line-up for this show and rebuild it from the current breed counts and selected judges.',
+            _workspaceShows.length > 1
+                ? 'Auto Fill will replace the line-up for the linked shows, using their sections and shared judges. Outside specialties and award plans are preserved.'
+                : 'Auto Fill will rebuild the breed line-up from the current counts and selected judges. Outside specialties and award plans are preserved.',
           ),
           actions: [
             TextButton(
@@ -1364,7 +1518,7 @@ class _SuperintendentLineupScreenState
     }
 
     try {
-      if (_isLinked) {
+      if (_usesWorkspace) {
         _autoFillRows = [];
       } else {
         await supabase
@@ -1639,11 +1793,11 @@ class _SuperintendentLineupScreenState
             .add(breedScopeKey);
       }
 
-      if (_isLinked) {
+      if (_usesWorkspace) {
         await _mutateWorkspace('replace', {'rows': _autoFillRows});
         _autoFillRows = null;
       }
-      if (!_isLinked) await _syncLineupToEntries();
+      if (!_usesWorkspace) await _syncLineupToEntries();
 
       if (!mounted) return;
       setState(() => _isAutoFilling = false);
@@ -1713,28 +1867,45 @@ class _SuperintendentLineupScreenState
             ),
           ),
         if (!widget.readOnly)
-          TextButton.icon(
-            onPressed: busy
-                ? null
-                : () async {
-                    final data = await _future;
-                    if (!mounted) return;
-                    await _autoFillLineup(data);
-                  },
-            icon: _isAutoFilling
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.auto_fix_high),
-            label: Text(_isAutoFilling ? 'Auto Filling...' : 'Auto Fill'),
-            style: TextButton.styleFrom(
-              foregroundColor: AppColors.headerText,
-              disabledForegroundColor: AppColors.headerText.withValues(
-                alpha: .45,
+          Wrap(
+            spacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              TextButton.icon(
+                onPressed: busy
+                    ? null
+                    : () async {
+                        final data = await _future;
+                        if (!mounted) return;
+                        await _autoFillLineup(data);
+                      },
+                icon: _isAutoFilling
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.auto_fix_high),
+                label: Text(_isAutoFilling ? 'Auto Filling...' : 'Auto Fill'),
+                style: TextButton.styleFrom(
+                  foregroundColor: AppColors.headerText,
+                  disabledForegroundColor: AppColors.headerText.withValues(
+                    alpha: .45,
+                  ),
+                ),
               ),
-            ),
+              TextButton.icon(
+                onPressed: busy || !_usesWorkspace ? null : _manageSpecialties,
+                icon: const Icon(Icons.add_business),
+                label: const Text('Specialty'),
+                style: TextButton.styleFrom(
+                  foregroundColor: AppColors.headerText,
+                  disabledForegroundColor: AppColors.headerText.withValues(
+                    alpha: .45,
+                  ),
+                ),
+              ),
+            ],
           ),
         if (!widget.readOnly)
           TextButton.icon(
@@ -1963,7 +2134,12 @@ class _SummaryCards extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final assignedBreedRows = data.assignments
-        .where((row) => !_isJudgeRow(row))
+        .where(
+          (row) =>
+              !_isJudgeRow(row) &&
+              row['is_external_specialty'] != true &&
+              row['is_award_plan'] != true,
+        )
         .toList();
     final judgeRows = data.assignments.where(_isJudgeRow).toList();
 
@@ -2712,6 +2888,12 @@ class _LineupRow extends StatelessWidget {
                     letterSpacing: 0.4,
                   ),
                 ),
+                if (row['is_award_plan'] == true)
+                  const Text('Planning only • Not published'),
+                if (row['is_external_specialty'] == true)
+                  Text(
+                    'Outside specialty • ${specialtyStatus((row['status'] ?? 'draft').toString())}',
+                  ),
                 if (!isJudgeChange && isDuplicateJudgeBreed) ...[
                   const SizedBox(height: 2),
                   Text(
@@ -2765,8 +2947,9 @@ class _LineupRow extends StatelessWidget {
               ),
               onPressed: onDelete,
             ),
-          if (!(isJudgeChange &&
-              ((row['block_head_count'] as num?)?.toInt() ?? 0) == 0)) ...[
+          if (row['is_award_plan'] != true &&
+              !(isJudgeChange &&
+                  ((row['block_head_count'] as num?)?.toInt() ?? 0) == 0)) ...[
             const SizedBox(width: 4),
             Text(
               isJudgeChange
@@ -2999,7 +3182,7 @@ class _AddAssignmentSheetState extends State<_AddAssignmentSheet> {
       final isJudgeChange =
           row['is_judge_change'] == true ||
           (row['breed_id'] ?? '').toString() == '__judge_change__';
-      if (isJudgeChange) continue;
+      if (isJudgeChange || row['is_award_plan'] == true) continue;
 
       final rowBreed = (row['breed_id'] ?? '').toString().trim().toLowerCase();
       final rowVariety = (row['variety_key'] ?? '').toString().trim();
@@ -3072,7 +3255,7 @@ class _AddAssignmentSheetState extends State<_AddAssignmentSheet> {
       final isJudgeChange =
           row['is_judge_change'] == true ||
           (row['breed_id'] ?? '').toString() == '__judge_change__';
-      if (isJudgeChange) continue;
+      if (isJudgeChange || row['is_award_plan'] == true) continue;
 
       final showLetter = _showLetterForRow(row);
       final breed = (row['breed_id'] ?? '').toString();
@@ -3172,6 +3355,7 @@ class _AddAssignmentSheetState extends State<_AddAssignmentSheet> {
           'assigned_key': assignedKey,
           'show_id': row['show_id'],
           'section_id': row['section_id'],
+          'award_code': row['award_code'],
           'section_ids': <String>{row['section_id']?.toString() ?? ''},
           'show_letter': showLetter,
           'breed': breed,
@@ -3464,6 +3648,30 @@ class _AddAssignmentSheetState extends State<_AddAssignmentSheet> {
       return false;
     }
 
+    if (breed['award_code'] != null) {
+      if (_currentJudgeId == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Add a judge to this table before assigning final awards.',
+            ),
+          ),
+        );
+        return false;
+      }
+      await _saveAssignment({
+        'p_award_code': breed['award_code'],
+        'p_section_id': breed['section_id'],
+        'p_table_number': widget.tableNumber,
+        'p_sort_order': widget.sortOrder + _newlyAssignedBreedKeys.length,
+      });
+      if (!mounted) return false;
+      setState(() {
+        _addedAny = true;
+        _newlyAssignedBreedKeys.add((breed['assigned_key'] ?? '').toString());
+      });
+      return true;
+    }
     // --- BEGIN: Determine usable section_id for breed row ---
     String? sectionIdForBreed(Map<String, dynamic> row) {
       final directSectionId = (row['section_id'] ?? '').toString().trim();
@@ -3837,7 +4045,11 @@ class _AddAssignmentSheetState extends State<_AddAssignmentSheet> {
                         label,
                         style: const TextStyle(fontWeight: FontWeight.w800),
                       ),
-                      subtitle: Text('$count entered'),
+                      subtitle: Text(
+                        breed['award_code'] != null
+                            ? 'Planning only • Not published'
+                            : '$count entered',
+                      ),
                       trailing: Wrap(
                         spacing: 4,
                         children: [
