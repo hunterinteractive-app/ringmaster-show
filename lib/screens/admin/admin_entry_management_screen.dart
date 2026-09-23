@@ -16,6 +16,7 @@ import 'package:ringmaster_show/utils/species_sex.dart';
 import 'package:ringmaster_show/utils/entry_class_options.dart';
 import 'package:ringmaster_show/services/entry_refund_service.dart';
 import 'entry_refund_dialog.dart';
+import '../../services/manual_animal_lookup.dart';
 
 final supabase = Supabase.instance.client;
 
@@ -4901,32 +4902,16 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
         final normalizedTattoo = _tattoo.text.trim().toUpperCase();
         final now = DateTime.now().toUtc().toIso8601String();
 
-        var existingAnimalQuery = supabase
-            .from('animals')
-            .select('id')
-            .eq('tattoo', normalizedTattoo)
-            .eq('breed', animalBreed)
-            .eq('species', entrySpecies)
-            // A tattoo is not an animal identifier by itself. In particular,
-            // a buck and doe may legitimately share one. Keep their saved
-            // animal IDs distinct so the entry-level duplicate check remains
-            // based on animal_id, not tattoo text.
-            .eq('sex', _sexValue!.trim())
-            .isFilter('deleted_at', null);
-
-        if (exhibitorOwnerUserId.isNotEmpty) {
-          existingAnimalQuery = existingAnimalQuery.eq(
-            'owner_user_id',
-            exhibitorOwnerUserId,
-          );
-        } else {
-          existingAnimalQuery = existingAnimalQuery.eq(
-            'exhibitor_id',
-            resolvedExhibitorId,
-          );
-        }
-
-        final existingAnimal = await existingAnimalQuery.maybeSingle();
+        final existingAnimal = await findManualEntryAnimal(
+          supabase,
+          tattoo: normalizedTattoo,
+          breed: animalBreed,
+          variety: animalVariety,
+          species: entrySpecies,
+          sex: _sexValue!.trim(),
+          ownerUserId: exhibitorOwnerUserId,
+          exhibitorId: resolvedExhibitorId,
+        );
 
         if (existingAnimal != null) {
           animalId = (existingAnimal['id'] ?? '').toString();
