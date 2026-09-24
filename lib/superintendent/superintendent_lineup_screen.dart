@@ -911,14 +911,6 @@ class _SuperintendentLineupScreenState
           continue;
         }
 
-        if (row['is_external_specialty'] == true) {
-          row['effective_judge_name'] =
-              (row['judge_name'] ?? '').toString().isEmpty
-              ? 'Judge not set'
-              : row['judge_name'];
-          row['effective_judge_id'] = null;
-          continue;
-        }
         row['effective_judge_name'] =
             currentJudgeName ??
             (row['judge_name'] ?? 'Judge not set').toString();
@@ -977,6 +969,7 @@ class _SuperintendentLineupScreenState
         if (judgeId.isEmpty) continue;
 
         row['block_head_count'] = 0;
+        row['is_active_judge_marker'] = false;
 
         final existing = activeJudgeRowByJudgeId[judgeId];
         if (existing == null) {
@@ -999,6 +992,7 @@ class _SuperintendentLineupScreenState
 
     for (final entry in activeJudgeRowByJudgeId.entries) {
       entry.value['block_head_count'] = runningHeadByJudgeId[entry.key] ?? 0;
+      entry.value['is_active_judge_marker'] = true;
     }
 
     // --- BEGIN: Duplicate judge/breed/scope detection across show letters ---
@@ -2163,6 +2157,18 @@ class _SummaryCards extends StatelessWidget {
       availableHead += _headCountForRow(row);
     }
 
+    // Outside specialties count toward planning workload, not host entries.
+    var specialtyHead = 0;
+    for (final row in data.assignments) {
+      if (row['is_external_specialty'] != true) continue;
+      final count = _headCountForRow(row);
+      specialtyHead += count;
+      if ((row['effective_judge_id'] ?? '').toString().isNotEmpty) {
+        assignedHead += count;
+      }
+    }
+    availableHead += specialtyHead;
+
     final remainingHead = (availableHead - assignedHead).clamp(
       0,
       availableHead,
@@ -2201,7 +2207,7 @@ class _SummaryCards extends StatelessWidget {
           value: assignedHeadLabel,
           helper: availableHead == 0
               ? 'No entries'
-              : '${((assignedHead / availableHead) * 100).toStringAsFixed(0)}% complete • $remainingHead remaining',
+              : '${((assignedHead / availableHead) * 100).toStringAsFixed(0)}% complete • $remainingHead remaining${specialtyHead > 0 ? ' • Includes $specialtyHead outside specialty entries' : ''}',
           isWarning: remainingHead > 0,
         ),
         _MetricCard(
@@ -2510,8 +2516,7 @@ class _TableCard extends StatelessWidget {
           (row['breed_id'] ?? '').toString() == '__judge_change__';
       if (!isJudgeChange) return false;
 
-      final blockHeadCount = (row['block_head_count'] as num?)?.toInt() ?? 0;
-      return blockHeadCount > 0;
+      return row['is_active_judge_marker'] == true;
     });
 
     return DragTarget<String>(

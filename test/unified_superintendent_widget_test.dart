@@ -12,6 +12,8 @@ void main() {
   final mutations = <Map<String, dynamic>>[];
   var withSpecialty = false;
   var withAwards = false;
+  var specialtyHasJudge = true;
+  var specialtyCount = 45;
   setUpAll(() async {
     SharedPreferences.setMockInitialValues({});
     await Supabase.initialize(
@@ -73,7 +75,7 @@ void main() {
                 ]
               : [];
         }
-        if (withAwards &&
+        if ((withAwards || (withSpecialty && specialtyHasJudge)) &&
             path.endsWith('/get_show_judging_lineup') &&
             show == 'sala') {
           result = [
@@ -118,9 +120,9 @@ void main() {
               'id': 'specialty',
               'name': 'IDDRC',
               'breed': 'Dutch',
-              'entry_count': 45,
-              'table_number': '3',
-              'sort_order': 0,
+              'entry_count': specialtyCount,
+              'table_number': '1',
+              'sort_order': 1,
               'judge_name': 'Guest Judge',
               'status': 'draft',
             },
@@ -157,12 +159,18 @@ void main() {
   }
 
   testWidgets(
-    'specialty appears in order without inflating host entry totals',
+    'specialty counts toward assigned judge workload and planning totals',
     (tester) async {
       withSpecialty = true;
       addTearDown(() => withSpecialty = false);
       await open(tester);
-      expect(find.text('0/12'), findsOneWidget);
+      expect(find.text('45/57'), findsOneWidget);
+      expect(
+        find.textContaining('Includes 45 outside specialty entries'),
+        findsOneWidget,
+      );
+      expect(find.textContaining('Judge moved'), findsNothing);
+      expect(find.text('45'), findsWidgets);
       expect(find.textContaining('IDDRC • Dutch'), findsOneWidget);
       expect(find.textContaining('Guest Judge'), findsNothing);
       await tester.tap(find.text('Specialty'));
@@ -174,6 +182,29 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets('specialty without a judge stays unassigned', (tester) async {
+    withSpecialty = true;
+    specialtyHasJudge = false;
+    addTearDown(() {
+      withSpecialty = false;
+      specialtyHasJudge = true;
+    });
+    await open(tester);
+    expect(find.text('0/57'), findsOneWidget);
+    expect(find.text('Table has breeds — fill with judge.'), findsOneWidget);
+    expect(find.textContaining('Judge moved'), findsNothing);
+  });
+
+  testWidgets('zero-head assignment does not imply judge moved', (tester) async {
+    withSpecialty = true;
+    specialtyCount = 0;
+    addTearDown(() { withSpecialty = false; specialtyCount = 45; });
+    await open(tester);
+    expect(find.text('0/12'), findsOneWidget);
+    expect(find.textContaining('Judge moved'), findsNothing);
+    expect(find.text('Table has breeds — fill with judge.'), findsNothing);
+  });
 
   testWidgets('single club show exposes Specialty after Auto Fill', (
     tester,
