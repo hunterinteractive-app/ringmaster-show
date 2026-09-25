@@ -385,7 +385,7 @@ class _SuperintendentLineupScreenState
       final isJudgeChange =
           row['is_judge_change'] == true ||
           (row['breed_id'] ?? '').toString() == '__judge_change__';
-      if (isJudgeChange || row['is_award_plan'] == true) continue;
+      if (isJudgeChange) continue;
 
       final hasDuplicate = row['duplicate_judge_breed'] == true;
       final hasOverride = (row['override_reason'] ?? row['notes'] ?? '')
@@ -393,7 +393,10 @@ class _SuperintendentLineupScreenState
           .trim()
           .isNotEmpty;
 
-      if (hasDuplicate && !hasOverride) count += 1;
+      if ((hasDuplicate && !hasOverride) ||
+          (row['entry_conflicts'] as List?)?.isNotEmpty == true) {
+        count += 1;
+      }
     }
     return count;
   }
@@ -403,6 +406,22 @@ class _SuperintendentLineupScreenState
     if (_isSavingPublishedState) return;
 
     if (value) {
+      try {
+        _entryConflicts = await _fetchEntryConflicts();
+        _groupByTable(data.assignments);
+      } catch (_) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Unable to check judge entry conflicts. Please retry before publishing.',
+              ),
+            ),
+          );
+        }
+        return;
+      }
+      if (!mounted) return;
       final confirmed = await _confirmPublishWithIssues(data);
       if (!confirmed) return;
     }
@@ -525,7 +544,58 @@ class _SuperintendentLineupScreenState
     if (mounted) await _refresh();
   }
 
+  List<Map<String, dynamic>> _entryConflicts = [];
+  String? _conflictCheckError;
+
+  Future<List<Map<String, dynamic>>> _fetchEntryConflicts() async {
+    final results = await Future.wait(
+      _workspaceShows.keys.map((id) async {
+        final result = await supabase.rpc(
+          'get_show_lineup_entry_conflicts',
+          params: {'p_show_id': id},
+        );
+        if (result is! List) {
+          throw StateError('Invalid conflict check response');
+        }
+        return List<Map<String, dynamic>>.from(result);
+      }),
+    );
+    return results.expand((rows) => rows).toList();
+  }
+
+  List<String> _conflictsFor(Map<String, dynamic> row, String? judgeId) {
+    if (judgeId == null) return [];
+    final breed = (row['breed_id'] ?? row['breed'] ?? '')
+        .toString()
+        .trim()
+        .toLowerCase();
+    return _entryConflicts
+        .where(
+          (c) =>
+              c['judge_id'] == judgeId &&
+              c['section_id'] == row['section_id'] &&
+              (row['is_award_plan'] == true ||
+                  (c['breed'] ?? '').toString().trim().toLowerCase() == breed),
+        )
+        .map((c) => '${c['exhibitor_name']} • ${c['relationship']}')
+        .toSet()
+        .toList();
+  }
+
   Future<_LineupData> _loadData() async {
+    final data = await _loadLineupData();
+    try {
+      _entryConflicts = await _fetchEntryConflicts();
+      _conflictCheckError = null;
+    } catch (_) {
+      _entryConflicts = [];
+      _conflictCheckError =
+          'Judge entry conflicts could not be checked. Auto Fill is blocked until the check succeeds.';
+    }
+    return data;
+  }
+
+  Future<_LineupData> _loadLineupData() async {
     if (!_usesWorkspace && !widget.readOnly) {
       _singleWorkspaceId =
           await supabase.rpc(
@@ -943,6 +1013,11 @@ class _SuperintendentLineupScreenState
             (row['judge_name'] ?? 'Judge not set').toString();
         row['effective_judge_id'] =
             currentJudgeId ?? row['judge_id']?.toString();
+
+        row['entry_conflicts'] = _conflictsFor(
+          row,
+          row['effective_judge_id']?.toString(),
+        );
 
         if (currentJudgeRowIndex != null) {
           final actual = (row['entry_count_actual'] as num?)?.toInt();
@@ -1539,6 +1614,10 @@ class _SuperintendentLineupScreenState
     }
 
     try {
+      // Verify all candidates before changing or deleting any current assignments.
+      _entryConflicts = await _fetchEntryConflicts();
+      _conflictCheckError = null;
+      final skipped = <String>[];
       if (_usesWorkspace) {
         _autoFillRows = [];
       } else {
@@ -1754,10 +1833,25 @@ class _SuperintendentLineupScreenState
         Map<String, dynamic>? selectedJudge = pairScopes
             ? pairedJudges[pairKey(breed)]
             : null;
+        final eligibleJudges = data.judges
+            .where(
+              (j) => pair.every(
+                (r) => _conflictsFor(r, j['judge_id']?.toString()).isEmpty,
+              ),
+            )
+            .toList();
+        if (eligibleJudges.isEmpty) {
+          skipped.add(
+            '${breed['show_letter']} • ${breed['scope']} • ${breed['breed']}',
+          );
+          continue;
+        }
         var selectedScore = double.infinity;
 
         for (final judge
-            in selectedJudge == null ? data.judges : <Map<String, dynamic>>[]) {
+            in selectedJudge == null
+                ? eligibleJudges
+                : <Map<String, dynamic>>[]) {
           final judgeId = judge['judge_id']?.toString();
           if (judgeId == null || judgeId.isEmpty) continue;
 
@@ -1774,7 +1868,7 @@ class _SuperintendentLineupScreenState
 
         // If every judge already has this breed/scope somewhere, place it with
         // the lowest scored judge and record an override note.
-        selectedJudge ??= data.judges.fold<Map<String, dynamic>?>(null, (
+        selectedJudge ??= eligibleJudges.fold<Map<String, dynamic>?>(null, (
           best,
           judge,
         ) {
@@ -1851,11 +1945,31 @@ class _SuperintendentLineupScreenState
       await _future;
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Auto Fill completed. Review before finalizing.'),
-        ),
-      );
+      if (skipped.isNotEmpty) {
+        await showDialog<void>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Breeds left unassigned'),
+            content: SingleChildScrollView(
+              child: Text(
+                'No conflict-free judge was available for these assignments. Youth/Open pairs stay together.\n\n${skipped.join('\n')}',
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Auto Fill completed. Review before finalizing.'),
+          ),
+        );
+      }
     } catch (error) {
       _autoFillRows = null;
       if (!mounted) return;
@@ -1984,6 +2098,14 @@ class _SuperintendentLineupScreenState
 
           return Column(
             children: [
+              if (_conflictCheckError != null)
+                Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Text(
+                    _conflictCheckError!,
+                    style: const TextStyle(color: Colors.red),
+                  ),
+                ),
               if (_isAutoFilling || _isSyncingEntries)
                 const LinearProgressIndicator(minHeight: 3),
               Expanded(
@@ -2189,13 +2311,19 @@ class _SummaryCards extends StatelessWidget {
 
     final assignedBreedKeys = <String>{};
     var assignedHead = 0;
-    var conflictCount = 0;
+    final conflictCount = data.assignments
+        .where(
+          (row) =>
+              !_isJudgeRow(row) &&
+              (row['duplicate_judge_breed'] == true ||
+                  (row['entry_conflicts'] as List?)?.isNotEmpty == true),
+        )
+        .length;
 
     for (final row in assignedBreedRows) {
       final key = _breedKeyFromAssignment(row);
       if (key.isNotEmpty) assignedBreedKeys.add(key);
       assignedHead += _headCountForRow(row);
-      if (row['duplicate_judge_breed'] == true) conflictCount += 1;
     }
 
     final availableBreedKeys = <String>{};
@@ -2265,8 +2393,8 @@ class _SummaryCards extends StatelessWidget {
           label: 'Needs Attention',
           value: conflictCount.toString(),
           helper: conflictCount == 0
-              ? 'No duplicate judge/breed flags'
-              : 'Duplicate judge/breed flags',
+              ? 'No detected judge conflicts'
+              : 'Judge or duplicate breed conflicts',
           isWarning: conflictCount > 0,
         ),
         _PublishJudgeOrderCard(
@@ -2948,6 +3076,15 @@ class _LineupRow extends StatelessWidget {
                 if (row['is_external_specialty'] == true)
                   Text(
                     'Outside specialty • ${specialtyStatus((row['status'] ?? 'draft').toString())}',
+                  ),
+                if (!isJudgeChange &&
+                    (row['entry_conflicts'] as List?)?.isNotEmpty == true)
+                  Text(
+                    'Judge / family entry conflict: ${(row['entry_conflicts'] as List).join('; ')}',
+                    style: textTheme.bodySmall?.copyWith(
+                      color: colorScheme.error,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 if (!isJudgeChange && isDuplicateJudgeBreed) ...[
                   const SizedBox(height: 2),
@@ -3829,7 +3966,7 @@ class _AddAssignmentSheetState extends State<_AddAssignmentSheet> {
         },
       );
 
-      if (result is! List) return const <String>[];
+      if (result is! List) throw StateError('Invalid conflict check response');
 
       return result.map<String>((item) {
         if (item is Map) {
@@ -3853,7 +3990,7 @@ class _AddAssignmentSheetState extends State<_AddAssignmentSheet> {
         return item.toString();
       }).toList();
     } catch (_) {
-      return const <String>[];
+      return const ['Conflict check unavailable — refresh and try again.'];
     }
   }
   // --- END: Open & Youth Pair helpers ---
@@ -3899,10 +4036,11 @@ class _AddAssignmentSheetState extends State<_AddAssignmentSheet> {
             onPressed: () => Navigator.pop(context, false),
             child: const Text('Cancel'),
           ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Add Anyway'),
-          ),
+          if (!conflicts.any((c) => c.startsWith('Conflict check unavailable')))
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Add Anyway'),
+            ),
         ],
       ),
     );

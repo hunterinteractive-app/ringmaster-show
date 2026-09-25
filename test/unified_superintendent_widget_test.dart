@@ -12,6 +12,9 @@ void main() {
   final mutations = <Map<String, dynamic>>[];
   var withSpecialty = false;
   var judgeCount = 1;
+  var conflictJudges = <String>[];
+  var conflictFails = false;
+  var withAssignedBreed = false;
   var withAwards = false;
   var specialtyHasJudge = true;
   var specialtyCount = 45;
@@ -37,6 +40,22 @@ void main() {
         final names = show == 'sala'
             ? ['Open A', 'Open B', 'Youth A', 'Youth B']
             : ['Open A', 'Youth A'];
+        if (path.endsWith('/get_show_lineup_entry_conflicts')) {
+          if (conflictFails) {
+            return http.Response('{"message":"unavailable"}', 500);
+          }
+          result = [
+            for (final judge in conflictJudges)
+              {
+                'show_id': show,
+                'section_id': '$show-Youth A',
+                'judge_id': judge,
+                'breed': 'Havana',
+                'exhibitor_name': 'Family Exhibitor',
+                'relationship': 'Shared household',
+              },
+          ];
+        }
         if (path.endsWith('/ensure_show_lineup_workspace')) result = 'shared';
         if (path.endsWith('/superintendent_workspaces')) {
           result = {'id': 'shared'};
@@ -76,7 +95,9 @@ void main() {
                 ]
               : [];
         }
-        if ((withAwards || (withSpecialty && specialtyHasJudge)) &&
+        if ((withAssignedBreed ||
+                withAwards ||
+                (withSpecialty && specialtyHasJudge)) &&
             path.endsWith('/get_show_judging_lineup') &&
             show == 'sala') {
           result = [
@@ -91,6 +112,20 @@ void main() {
               'sort_order': 0,
             },
           ];
+        }
+        if (withAssignedBreed &&
+            path.endsWith('/get_show_judging_lineup') &&
+            show == 'sala') {
+          (result as List).add({
+            'id': 'assigned',
+            'show_id': 'sala',
+            'section_id': 'sala-Youth A',
+            'breed_id': 'Havana',
+            'table_number': '1',
+            'sort_order': 1,
+            'entry_count_actual': 2,
+            'notes': 'Auto Fill preference note',
+          });
         }
         if (path.endsWith('/get_show_lineup_breed_counts')) {
           result = [
@@ -293,6 +328,89 @@ void main() {
     expect(rows.map((r) => r['p_table_number']).toSet().length, 3);
     expect(tester.takeException(), isNull);
   });
+  testWidgets('Auto Fill excludes family conflict from both halves of pair', (
+    tester,
+  ) async {
+    judgeCount = 3;
+    conflictJudges = ['judge1'];
+    addTearDown(() {
+      judgeCount = 1;
+      conflictJudges = [];
+    });
+    await open(tester);
+    await tester.tap(find.text('Auto Fill').first);
+    await tester.pumpAndSettle();
+    final payload = mutations.singleWhere(
+      (m) => m['p_action'] == 'replace',
+    )['p_payload'];
+    final rows = List<Map<String, dynamic>>.from(payload['rows']);
+    final pair = rows
+        .where(
+          (r) => ['sala-Youth A', 'sala-Open A'].contains(r['p_section_id']),
+        )
+        .toList();
+    expect(pair.length, 2);
+    expect(pair[0]['p_table_number'], pair[1]['p_table_number']);
+    expect(pair[0]['p_table_number'], isNot('1'));
+  });
+  testWidgets('Auto Fill leaves pair unassigned when every judge conflicts', (
+    tester,
+  ) async {
+    conflictJudges = ['judge1'];
+    addTearDown(() => conflictJudges = []);
+    await open(tester);
+    await tester.tap(find.text('Auto Fill').first);
+    await tester.pumpAndSettle();
+    expect(find.text('Breeds left unassigned'), findsOneWidget);
+    final rows = List<Map<String, dynamic>>.from(
+      mutations.singleWhere(
+        (m) => m['p_action'] == 'replace',
+      )['p_payload']['rows'],
+    );
+    expect(
+      rows.where(
+        (r) => [
+          'sala-Youth A',
+          'sala-Open A',
+          'dune-Youth A',
+          'dune-Open A',
+        ].contains(r['p_section_id']),
+      ),
+      isEmpty,
+    );
+    expect(rows.where((r) => r['p_section_id'] != null).length, 2);
+  });
+  testWidgets('Unavailable conflict check blocks Auto Fill before mutation', (
+    tester,
+  ) async {
+    conflictFails = true;
+    addTearDown(() => conflictFails = false);
+    await open(tester);
+    expect(
+      find.textContaining('Judge entry conflicts could not be checked'),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('Auto Fill').first);
+    await tester.pumpAndSettle();
+    expect(mutations, isEmpty);
+  });
+  testWidgets(
+    'Existing assignment flags family conflict despite unrelated notes',
+    (tester) async {
+      withAssignedBreed = true;
+      conflictJudges = ['judge1'];
+      addTearDown(() {
+        withAssignedBreed = false;
+        conflictJudges = [];
+      });
+      await open(tester);
+      expect(
+        find.textContaining('Judge / family entry conflict: Family Exhibitor'),
+        findsOneWidget,
+      );
+      expect(find.text('Judge or duplicate breed conflicts'), findsOneWidget);
+    },
+  );
   testWidgets(
     'Breed picker adds one private combined finals plan without counts',
     (tester) async {
