@@ -560,6 +560,30 @@ class _SuperintendentLineupScreenState
           'id,show_id,kind,letter,is_enabled,shows!show_sections_show_id_fkey(name,final_award_mode)',
         )
         .inFilter('show_id', ids);
+    // Allocate consecutive letters in workspace order, retaining source IDs.
+    final displayLetters = <String, String>{};
+    var nextLetter = 0;
+    for (var i = 0; i < ids.length; i++) {
+      final letters = <String>{
+        for (final section in sections)
+          if (section['show_id'] == ids[i]) section['letter'].toString(),
+        for (final row in data[i].breedCounts)
+          if (row['show_letter'] != null) row['show_letter'].toString(),
+      }.toList()..sort();
+      for (final letter in letters) {
+        displayLetters['${ids[i]}/$letter'] = String.fromCharCode(
+          65 + nextLetter++,
+        );
+      }
+    }
+    Map<String, dynamic> labelRow(Map<String, dynamic> row, String showId) =>
+        labelWorkspaceRow(
+          row,
+          _workspaceShows[showId] ?? '',
+          displayLetter: (_workspaceShows.length > 1)
+              ? displayLetters['$showId/${row['show_letter'] ?? row['letter']}']
+              : null,
+        );
     _awardOptions = [
       for (final section in sections)
         if (section['is_enabled'] != false)
@@ -567,7 +591,7 @@ class _SuperintendentLineupScreenState
             ((section['shows'] as Map?)?['final_award_mode'] ?? 'four_six_bis')
                 .toString(),
           ).entries)
-            labelWorkspaceRow({
+            labelRow({
               'show_id': section['show_id'],
               'section_id': section['id'],
               'show_letter': section['letter'],
@@ -575,7 +599,7 @@ class _SuperintendentLineupScreenState
               'breed': award.value,
               'award_code': award.key,
               'entry_count': 0,
-            }, _workspaceShows[section['show_id']] ?? ''),
+            }, section['show_id'].toString()),
     ];
     for (final row in specialties) {
       if (row['award_code'] == null) continue;
@@ -583,22 +607,19 @@ class _SuperintendentLineupScreenState
           .where((s) => s['id'] == row['award_section_id'])
           .firstOrNull;
       if (section != null) {
-        row['show_letter'] = labelWorkspaceRow({
+        row['show_letter'] = labelRow({
           'show_letter': section['letter'],
-        }, _workspaceShows[section['show_id']] ?? '')['show_letter'];
+        }, section['show_id'].toString())['show_letter'];
       }
     }
     _workspaceVersions = versions;
     final assignments = <Map<String, dynamic>>[];
     final breeds = <Map<String, dynamic>>[];
     for (var i = 0; i < data.length; i++) {
-      final name = _workspaceShows[ids[i]]!;
-      assignments.addAll(
-        data[i].assignments.map((r) => labelWorkspaceRow(r, name)),
-      );
+      assignments.addAll(data[i].assignments.map((r) => labelRow(r, ids[i])));
       breeds.addAll(
         data[i].breedCounts.map(
-          (r) => labelWorkspaceRow({...r, 'show_id': ids[i]}, name),
+          (r) => labelRow({...r, 'show_id': ids[i]}, ids[i]),
         ),
       );
     }
@@ -610,7 +631,13 @@ class _SuperintendentLineupScreenState
       judges: commonWorkspaceJudges(data.map((d) => d.judges).toList()),
       breedCounts: breeds,
       workloads: data.expand((d) => d.workloads).toList(),
-      userPreferences: data.first.userPreferences,
+      userPreferences: {
+        ...data.first.userPreferences,
+        if ((_workspaceShows.length > 1)) ...{
+          'open_youth_mode': 'together',
+          'show_order': 'youth_first',
+        },
+      },
       judgeOrderPublished: data.every((d) => d.judgeOrderPublished),
       judgeOrderPublishedAt: null,
       judgeOrderPublishedBy: null,
@@ -1667,6 +1694,10 @@ class _SuperintendentLineupScreenState
       final judgeLoads = <String, int>{};
       final judgeBreedScopes = <String, Set<String>>{};
       final sortOrderByTable = <String, int>{};
+      final pairScopes = data.userPreferences['open_youth_mode'] != 'separate';
+      String pairKey(Map<String, dynamic> row) =>
+          '${row['show_letter']}|${row['species']}|${_lineupBreedIdentity((row['breed'] ?? '').toString(), row['variety']?.toString())}';
+      final pairedJudges = <String, Map<String, dynamic>>{};
 
       for (var i = 0; i < data.judges.length; i++) {
         final judge = data.judges[i];
@@ -1707,18 +1738,34 @@ class _SuperintendentLineupScreenState
         final count = (breed['entry_count'] as num?)?.toInt() ?? 0;
         final breedScopeKey = '$breedName|$scope';
 
-        Map<String, dynamic>? selectedJudge;
+        final pair = pairScopes
+            ? breedRows.where((r) => pairKey(r) == pairKey(breed)).toList()
+            : [breed];
+        final pairCount = pair.fold<int>(
+          0,
+          (sum, r) => sum + ((r['entry_count'] as num?)?.toInt() ?? 0),
+        );
+        final pairScopeKeys = pair
+            .map(
+              (r) =>
+                  '$breedName|${(r['scope'] ?? '').toString().toLowerCase()}',
+            )
+            .toSet();
+        Map<String, dynamic>? selectedJudge = pairScopes
+            ? pairedJudges[pairKey(breed)]
+            : null;
         var selectedScore = double.infinity;
 
-        for (final judge in data.judges) {
+        for (final judge
+            in selectedJudge == null ? data.judges : <Map<String, dynamic>>[]) {
           final judgeId = judge['judge_id']?.toString();
           if (judgeId == null || judgeId.isEmpty) continue;
 
           final usedBreedScopes = judgeBreedScopes[judgeId] ?? <String>{};
-          if (usedBreedScopes.contains(breedScopeKey)) continue;
+          if (pairScopeKeys.any(usedBreedScopes.contains)) continue;
 
           final load = judgeLoads[judgeId] ?? 0;
-          final score = judgePreferenceScore(judgeId, breed, load, count);
+          final score = judgePreferenceScore(judgeId, breed, load, pairCount);
           if (score < selectedScore) {
             selectedJudge = judge;
             selectedScore = score;
@@ -1753,6 +1800,9 @@ class _SuperintendentLineupScreenState
           return score < bestScore ? judge : best;
         });
 
+        if (pairScopes && selectedJudge != null) {
+          pairedJudges[pairKey(breed)] = selectedJudge;
+        }
         final judgeId = selectedJudge?['judge_id']?.toString();
         if (judgeId == null || judgeId.isEmpty) continue;
 

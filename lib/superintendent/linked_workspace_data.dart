@@ -44,8 +44,9 @@ Map<String, Map<String, int>> workspaceBreedTotals(
 /// Give duplicate show letters different labels without changing stored IDs.
 Map<String, dynamic> labelWorkspaceRow(
   Map<String, dynamic> row,
-  String showName,
-) {
+  String showName, {
+  String? displayLetter,
+}) {
   final label = showName
       .split(' (')
       .first
@@ -55,7 +56,9 @@ Map<String, dynamic> labelWorkspaceRow(
   for (final key in ['show_letter', 'letter', 'section_letter']) {
     final value = row[key] ?? row['show_letter'] ?? row['letter'];
     if (value != null && value.toString().isNotEmpty) {
-      result[key] = '$label · $value';
+      result[key] = displayLetter == null
+          ? '$label · $value'
+          : '$displayLetter · $label';
     }
   }
   return result;

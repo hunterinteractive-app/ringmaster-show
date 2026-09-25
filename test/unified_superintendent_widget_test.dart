@@ -11,6 +11,7 @@ import 'package:ringmaster_show/theme/app_theme.dart';
 void main() {
   final mutations = <Map<String, dynamic>>[];
   var withSpecialty = false;
+  var judgeCount = 1;
   var withAwards = false;
   var specialtyHasJudge = true;
   var specialtyCount = 45;
@@ -107,11 +108,12 @@ void main() {
         }
         if (path.endsWith('/get_show_lineup_judges')) {
           result = [
-            {
-              'judge_id': 'judge1',
-              'judge_name': 'Shared Judge',
-              'is_enabled': true,
-            },
+            for (var j = 1; j <= judgeCount; j++)
+              {
+                'judge_id': 'judge$j',
+                'judge_name': 'Shared Judge $j',
+                'is_enabled': true,
+              },
           ];
         }
         if (path.endsWith('/workspace_specialties') && withSpecialty) {
@@ -196,10 +198,15 @@ void main() {
     expect(find.textContaining('Judge moved'), findsNothing);
   });
 
-  testWidgets('zero-head assignment does not imply judge moved', (tester) async {
+  testWidgets('zero-head assignment does not imply judge moved', (
+    tester,
+  ) async {
     withSpecialty = true;
     specialtyCount = 0;
-    addTearDown(() { withSpecialty = false; specialtyCount = 45; });
+    addTearDown(() {
+      withSpecialty = false;
+      specialtyCount = 45;
+    });
     await open(tester);
     expect(find.text('0/12'), findsOneWidget);
     expect(find.textContaining('Judge moved'), findsNothing);
@@ -257,6 +264,35 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+  testWidgets('Auto Fill pairs Youth then Open and puts linked C last', (
+    tester,
+  ) async {
+    judgeCount = 3;
+    addTearDown(() => judgeCount = 1);
+    await open(tester);
+    await tester.tap(find.text('Auto Fill').first);
+    await tester.pumpAndSettle();
+    final replacement = mutations.singleWhere(
+      (m) => m['p_action'] == 'replace',
+    );
+    final rows = List<Map<String, dynamic>>.from(
+      replacement['p_payload']['rows'],
+    ).where((r) => r['p_section_id'] != null).toList();
+    expect(rows.map((r) => r['p_section_id']).toList(), [
+      'sala-Youth A',
+      'sala-Open A',
+      'sala-Youth B',
+      'sala-Open B',
+      'dune-Youth A',
+      'dune-Open A',
+    ]);
+    for (var i = 0; i < rows.length; i += 2) {
+      expect(rows[i]['p_table_number'], rows[i + 1]['p_table_number']);
+      expect(rows[i + 1]['p_sort_order'], rows[i]['p_sort_order'] + 1);
+    }
+    expect(rows.map((r) => r['p_table_number']).toSet().length, 3);
+    expect(tester.takeException(), isNull);
+  });
   testWidgets(
     'Breed picker adds one private combined finals plan without counts',
     (tester) async {
@@ -265,7 +301,12 @@ void main() {
       await open(tester);
       await tester.tap(find.text('Breed').first);
       await tester.pumpAndSettle();
-      final award = find.text('Dune · A • Open • BIS / RIS / 2RIS');
+      final award = find.text('C · Dune • Open • BIS / RIS / 2RIS');
+      await tester.scrollUntilVisible(
+        award,
+        250,
+        scrollable: find.byType(Scrollable).last,
+      );
       expect(award, findsOneWidget);
       final tile = find.ancestor(of: award, matching: find.byType(ListTile));
       expect(
