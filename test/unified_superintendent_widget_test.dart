@@ -15,9 +15,11 @@ void main() {
   var conflictJudges = <String>[];
   var conflictFails = false;
   var withAssignedBreed = false;
+  var withTimingOverlap = false;
   var withAwards = false;
   var specialtyHasJudge = true;
   var specialtyCount = 45;
+  var specialtyTable = '1';
   setUpAll(() async {
     SharedPreferences.setMockInitialValues({});
     await Supabase.initialize(
@@ -108,7 +110,7 @@ void main() {
               'is_judge_change': true,
               'judge_id': 'judge1',
               'judge_name': 'Shared Judge',
-              'table_number': '1',
+              'table_number': specialtyTable,
               'sort_order': 0,
             },
           ];
@@ -126,6 +128,32 @@ void main() {
             'entry_count_actual': 2,
             'notes': 'Auto Fill preference note',
           });
+        }
+        if (withTimingOverlap &&
+            path.endsWith('/get_show_judging_lineup') &&
+            show == 'sala') {
+          result = <dynamic>[
+            ...(result as List),
+            {
+              'id': 'second-marker',
+              'show_id': 'sala',
+              'breed_id': '__judge_change__',
+              'is_judge_change': true,
+              'judge_id': 'judge2',
+              'judge_name': 'Second Judge',
+              'table_number': '2',
+              'sort_order': 0,
+            },
+            {
+              'id': 'second-breed',
+              'show_id': 'sala',
+              'section_id': 'sala-Open B',
+              'breed_id': 'Havana',
+              'table_number': '2',
+              'sort_order': 1,
+              'entry_count_actual': 2,
+            },
+          ];
         }
         if (path.endsWith('/get_show_lineup_breed_counts')) {
           result = [
@@ -158,7 +186,7 @@ void main() {
               'name': 'IDDRC',
               'breed': 'Dutch',
               'entry_count': specialtyCount,
-              'table_number': '1',
+              'table_number': specialtyTable,
               'sort_order': 1,
               'judge_name': 'Guest Judge',
               'status': 'draft',
@@ -408,9 +436,105 @@ void main() {
         find.textContaining('Judge / family entry conflict: Family Exhibitor'),
         findsOneWidget,
       );
-      expect(find.text('Judge or duplicate breed conflicts'), findsOneWidget);
+      expect(
+        find.text('Judge, breed, or estimated timing conflicts'),
+        findsOneWidget,
+      );
     },
   );
+  for (final count in [0, 28]) {
+    testWidgets(
+      'Auto Fill reserves $count specialty entries and preserves its judge/table',
+      (tester) async {
+        withSpecialty = true;
+        specialtyCount = count;
+        specialtyTable = '2';
+        judgeCount = 2;
+        addTearDown(() {
+          withSpecialty = false;
+          specialtyCount = 45;
+          specialtyTable = '1';
+          judgeCount = 1;
+        });
+        await open(tester);
+        await tester.tap(find.text('Auto Fill').first);
+        await tester.pump(const Duration(milliseconds: 300));
+        await tester.tap(find.widgetWithText(FilledButton, 'Auto Fill'));
+        await tester.pumpAndSettle();
+        final rows = List<Map<String, dynamic>>.from(
+          mutations.singleWhere(
+            (m) => m['p_action'] == 'replace',
+          )['p_payload']['rows'],
+        );
+        final marker = rows.singleWhere(
+          (r) => r['p_is_judge_change'] == true && r['p_judge_id'] == 'judge1',
+        );
+        expect(marker['p_table_number'], '2');
+        final firstPair = rows
+            .where(
+              (r) =>
+                  ['sala-Youth A', 'sala-Open A'].contains(r['p_section_id']),
+            )
+            .toList();
+        expect(firstPair.map((r) => r['p_table_number']).toSet(), {
+          count == 0 ? '2' : '1',
+        });
+        expect(
+          rows
+              .where(
+                (r) => r['p_section_id'] != null && r['p_table_number'] == '2',
+              )
+              .every((r) => r['p_sort_order'] > 1),
+          isTrue,
+        );
+        expect(rows.where((r) => r['p_breed_id'] == 'Dutch'), isEmpty);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+  testWidgets(
+    'Auto Fill stops before mutation if a specialty has no table judge',
+    (tester) async {
+      withSpecialty = true;
+      specialtyHasJudge = false;
+      addTearDown(() {
+        withSpecialty = false;
+        specialtyHasJudge = true;
+      });
+      await open(tester);
+      await tester.tap(find.text('Auto Fill').first);
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.tap(find.widgetWithText(FilledButton, 'Auto Fill'));
+      await tester.pumpAndSettle();
+      expect(mutations, isEmpty);
+      expect(
+        find.textContaining('Assign an enabled table judge'),
+        findsOneWidget,
+      );
+    },
+  );
+  testWidgets('Estimated overlap flags both tables and Needs Attention', (
+    tester,
+  ) async {
+    withAssignedBreed = true;
+    withTimingOverlap = true;
+    judgeCount = 2;
+    addTearDown(() {
+      withAssignedBreed = false;
+      withTimingOverlap = false;
+      judgeCount = 1;
+    });
+    await open(tester);
+    expect(
+      find.text('Possible breed overlap at another table (10-minute buffer)'),
+      findsNWidgets(2),
+    );
+    expect(find.text('Estimated 0–2 min after start'), findsNWidgets(2));
+    expect(
+      find.text('Judge, breed, or estimated timing conflicts'),
+      findsOneWidget,
+    );
+  });
   testWidgets(
     'Breed picker adds one private combined finals plan without counts',
     (tester) async {

@@ -1,4 +1,5 @@
 import 'final_award_lineup.dart';
+import 'lineup_timing.dart';
 import 'specialty_lineup_dialog.dart';
 // lib/superintendent/superintendent_lineup_screen.dart
 // ignore_for_file: use_build_context_synchronously
@@ -394,7 +395,8 @@ class _SuperintendentLineupScreenState
           .isNotEmpty;
 
       if ((hasDuplicate && !hasOverride) ||
-          (row['entry_conflicts'] as List?)?.isNotEmpty == true) {
+          (row['entry_conflicts'] as List?)?.isNotEmpty == true ||
+          row['timing_overlap'] == true) {
         count += 1;
       }
     }
@@ -592,6 +594,31 @@ class _SuperintendentLineupScreenState
       _conflictCheckError =
           'Judge entry conflicts could not be checked. Auto Fill is blocked until the check succeeds.';
     }
+    final grouped = _groupByTable(data.assignments);
+    final timing = LineupTiming();
+    for (final table in grouped.entries) {
+      for (final row in table.value) {
+        if (row['is_judge_change'] == true ||
+            row['breed_id'] == '__judge_change__') {
+          continue;
+        }
+        final judge = data.judges
+            .where((j) => j['judge_id'] == row['effective_judge_id'])
+            .firstOrNull;
+        timing.add(
+          table.key,
+          timingBreedKey(row),
+          row['is_award_plan'] == true
+              ? 0
+              : ((row['entry_count_actual'] ?? row['entry_count_estimated'])
+                            as num?)
+                        ?.toInt() ??
+                    0,
+          judgingRate(judge),
+          row: row,
+        );
+      }
+    }
     return data;
   }
 
@@ -763,6 +790,21 @@ class _SuperintendentLineupScreenState
 
     final assignmentRows = List<Map<String, dynamic>>.from(assignments as List);
     final judgeRows = List<Map<String, dynamic>>.from(judges as List);
+    if (judgeRows.isNotEmpty) {
+      final rates = await supabase
+          .from('judges')
+          .select('id,average_entries_per_hour')
+          .inFilter(
+            'id',
+            judgeRows.map((j) => j['judge_id'].toString()).toList(),
+          );
+      for (final judge in judgeRows) {
+        final rate = rates
+            .where((r) => r['id'] == judge['judge_id'])
+            .firstOrNull;
+        judge['average_entries_per_hour'] = rate?['average_entries_per_hour'];
+      }
+    }
     final breedRows = List<Map<String, dynamic>>.from(breedCounts as List);
     final workloadRows = List<Map<String, dynamic>>.from(workloads as List);
 
@@ -1618,6 +1660,64 @@ class _SuperintendentLineupScreenState
       _entryConflicts = await _fetchEntryConflicts();
       _conflictCheckError = null;
       final skipped = <String>[];
+      // Preserved specialties/finals keep their judge and table. Their workload
+      // must be reserved before distributing the regular breed assignments.
+      _groupByTable(data.assignments);
+      final reservedLoads = <String, int>{};
+      final tableByJudge = <String, String>{};
+      final judgeByTable = <String, String>{};
+      final nextOrderByTable = <String, int>{};
+      final availableJudgeIds = data.judges
+          .map((j) => j['judge_id']?.toString())
+          .toSet();
+      for (final row in data.assignments) {
+        if (row['is_external_specialty'] != true &&
+            row['is_award_plan'] != true) {
+          continue;
+        }
+        final judgeId = row['effective_judge_id']?.toString();
+        final table = row['table_number']?.toString();
+        if (judgeId == null ||
+            table == null ||
+            !availableJudgeIds.contains(judgeId)) {
+          throw StateError(
+            'Assign an enabled table judge to each specialty or finals plan before Auto Fill.',
+          );
+        }
+        if ((tableByJudge.containsKey(judgeId) &&
+                tableByJudge[judgeId] != table) ||
+            (judgeByTable.containsKey(table) &&
+                judgeByTable[table] != judgeId)) {
+          throw StateError(
+            'Auto Fill cannot preserve multiple specialty judge blocks at one table or across tables. Review those assignments first.',
+          );
+        }
+        tableByJudge[judgeId] = table;
+        judgeByTable[table] = judgeId;
+        final count = row['is_award_plan'] == true
+            ? 0
+            : ((row['entry_count_actual'] ??
+                              row['entry_count_estimated'] ??
+                              row['entry_count'])
+                          as num?)
+                      ?.toInt() ??
+                  0;
+        reservedLoads[judgeId] = (reservedLoads[judgeId] ?? 0) + count;
+        final next = ((row['sort_order'] as num?)?.toInt() ?? 0) + 1;
+        if (next > (nextOrderByTable[table] ?? 1)) {
+          nextOrderByTable[table] = next;
+        }
+      }
+      for (final judge in data.judges) {
+        final id = judge['judge_id']?.toString();
+        if (id == null || tableByJudge.containsKey(id)) continue;
+        var number = 1;
+        while (judgeByTable.containsKey('$number')) {
+          number++;
+        }
+        tableByJudge[id] = '$number';
+        judgeByTable['$number'] = id;
+      }
       if (_usesWorkspace) {
         _autoFillRows = [];
       } else {
@@ -1770,6 +1870,33 @@ class _SuperintendentLineupScreenState
       }
       // --- END: Load judge preferences ---
 
+      final timing = LineupTiming();
+      double rateFor(String id) => judgingRate(
+        data.judges.where((j) => j['judge_id'] == id).firstOrNull,
+      );
+      final preservedRows =
+          data.assignments
+              .where(
+                (r) =>
+                    r['is_external_specialty'] == true ||
+                    r['is_award_plan'] == true,
+              )
+              .toList()
+            ..sort(
+              (a, b) => ((a['sort_order'] as num?)?.toInt() ?? 0).compareTo(
+                (b['sort_order'] as num?)?.toInt() ?? 0,
+              ),
+            );
+      for (final row in preservedRows) {
+        timing.add(
+          row['table_number'].toString(),
+          timingBreedKey(row),
+          row['is_award_plan'] == true
+              ? 0
+              : ((row['entry_count_actual'] as num?)?.toInt() ?? 0),
+          rateFor(row['effective_judge_id'].toString()),
+        );
+      }
       final judgeLoads = <String, int>{};
       final judgeBreedScopes = <String, Set<String>>{};
       final sortOrderByTable = <String, int>{};
@@ -1783,10 +1910,10 @@ class _SuperintendentLineupScreenState
         final judgeId = judge['judge_id']?.toString();
         if (judgeId == null || judgeId.isEmpty) continue;
 
-        final tableNumber = '${i + 1}';
-        judgeLoads[judgeId] = 0;
+        final tableNumber = tableByJudge[judgeId]!;
+        judgeLoads[judgeId] = reservedLoads[judgeId] ?? 0;
         judgeBreedScopes[judgeId] = <String>{};
-        sortOrderByTable[tableNumber] = 1;
+        sortOrderByTable[tableNumber] = nextOrderByTable[tableNumber] ?? 1;
 
         await _writeAssignment({
           'p_show_id': widget.showId,
@@ -1808,7 +1935,80 @@ class _SuperintendentLineupScreenState
       // completing Show A before moving to Show B, then C, etc. Judge selection
       // inside each show letter still uses workload, duplicate rules, and saved
       // superintendent judge preferences.
-      for (final breed in breedRows) {
+      for (var position = 0; position < breedRows.length; position++) {
+        // Keep letter order, but fill another breed first when that avoids
+        // calling the same breed at two tables. Never split a Youth/Open pair.
+        if (!pairScopes ||
+            !pairedJudges.containsKey(pairKey(breedRows[position]))) {
+          final letter = breedRows[position]['show_letter'];
+          Map<String, dynamic>? nextBreed;
+          var leastOverlap = double.infinity;
+          final seen = <String>{};
+          for (final candidate
+              in breedRows
+                  .skip(position)
+                  .where((r) => r['show_letter'] == letter)) {
+            final key = pairScopes
+                ? pairKey(candidate)
+                : '${pairKey(candidate)}|${candidate['scope']}';
+            if (!seen.add(key)) continue;
+            final group = pairScopes
+                ? breedRows
+                      .skip(position)
+                      .where((r) => pairKey(r) == pairKey(candidate))
+                      .toList()
+                : [candidate];
+            final count = group.fold<int>(
+              0,
+              (n, r) => n + ((r['entry_count'] as num?)?.toInt() ?? 0),
+            );
+            final scopes = group
+                .map(
+                  (r) =>
+                      '${_lineupBreedIdentity(r['breed'].toString(), r['variety']?.toString())}|${r['scope'].toString().toLowerCase()}',
+                )
+                .toSet();
+            final eligible = data.judges
+                .where(
+                  (j) => group.every(
+                    (r) => _conflictsFor(r, j['judge_id']?.toString()).isEmpty,
+                  ),
+                )
+                .toList();
+            final clean = eligible
+                .where(
+                  (j) => !scopes.any(
+                    (judgeBreedScopes[j['judge_id']] ?? {}).contains,
+                  ),
+                )
+                .toList();
+            for (final judge in clean.isEmpty ? eligible : clean) {
+              final id = judge['judge_id'].toString();
+              final overlap = timing.overlap(
+                tableByJudge[id]!,
+                timingBreedKey(candidate),
+                count,
+                rateFor(id),
+              );
+              if (overlap < leastOverlap) {
+                leastOverlap = overlap;
+                nextBreed = candidate;
+              }
+            }
+            if (leastOverlap == 0) break;
+          }
+          if (nextBreed != null && !identical(nextBreed, breedRows[position])) {
+            final group = pairScopes
+                ? breedRows
+                      .skip(position)
+                      .where((r) => pairKey(r) == pairKey(nextBreed!))
+                      .toList()
+                : [nextBreed];
+            breedRows.removeWhere(group.contains);
+            breedRows.insertAll(position, group);
+          }
+        }
+        final breed = breedRows[position];
         final breedName = _lineupBreedIdentity(
           (breed['breed'] ?? '').toString(),
           breed['variety']?.toString(),
@@ -1847,6 +2047,13 @@ class _SuperintendentLineupScreenState
           continue;
         }
         var selectedScore = double.infinity;
+        var selectedOverlap = double.infinity;
+        double overlapFor(String id) => timing.overlap(
+          tableByJudge[id]!,
+          timingBreedKey(breed),
+          pairCount,
+          rateFor(id),
+        );
 
         for (final judge
             in selectedJudge == null
@@ -1860,9 +2067,12 @@ class _SuperintendentLineupScreenState
 
           final load = judgeLoads[judgeId] ?? 0;
           final score = judgePreferenceScore(judgeId, breed, load, pairCount);
-          if (score < selectedScore) {
+          final overlap = overlapFor(judgeId);
+          if (overlap < selectedOverlap ||
+              (overlap == selectedOverlap && score < selectedScore)) {
             selectedJudge = judge;
             selectedScore = score;
+            selectedOverlap = overlap;
           }
         }
 
@@ -1883,25 +2093,41 @@ class _SuperintendentLineupScreenState
                   bestId,
                   breed,
                   judgeLoads[bestId] ?? 0,
-                  count,
+                  pairCount,
                 );
           final score = judgePreferenceScore(
             judgeId,
             breed,
             judgeLoads[judgeId] ?? 0,
-            count,
+            pairCount,
           );
-          return score < bestScore ? judge : best;
+          final overlap = overlapFor(judgeId);
+          final bestOverlap = bestId == null
+              ? double.infinity
+              : overlapFor(bestId);
+          return overlap < bestOverlap ||
+                  (overlap == bestOverlap && score < bestScore)
+              ? judge
+              : best;
         });
 
+        final firstInPair =
+            !pairScopes || !pairedJudges.containsKey(pairKey(breed));
         if (pairScopes && selectedJudge != null) {
           pairedJudges[pairKey(breed)] = selectedJudge;
         }
         final judgeId = selectedJudge?['judge_id']?.toString();
         if (judgeId == null || judgeId.isEmpty) continue;
 
-        final judgeIndex = data.judges.indexOf(selectedJudge!);
-        final tableNumber = '${judgeIndex + 1}';
+        final tableNumber = tableByJudge[judgeId]!;
+        if (firstInPair) {
+          timing.add(
+            tableNumber,
+            timingBreedKey(breed),
+            pairCount,
+            rateFor(judgeId),
+          );
+        }
         final sortOrder = sortOrderByTable[tableNumber] ?? 1;
         final requiresOverride =
             judgeBreedScopes[judgeId]?.contains(breedScopeKey) == true;
@@ -2098,6 +2324,12 @@ class _SuperintendentLineupScreenState
 
           return Column(
             children: [
+              const Padding(
+                padding: EdgeInsets.all(12),
+                child: Text(
+                  'Timing is estimated from a shared start, using recorded judge pace or 60 head/hour when unknown. A 10-minute buffer flags close breed calls. Check actual progress before calling the next show.',
+                ),
+              ),
               if (_conflictCheckError != null)
                 Padding(
                   padding: const EdgeInsets.all(12),
@@ -2316,7 +2548,8 @@ class _SummaryCards extends StatelessWidget {
           (row) =>
               !_isJudgeRow(row) &&
               (row['duplicate_judge_breed'] == true ||
-                  (row['entry_conflicts'] as List?)?.isNotEmpty == true),
+                  (row['entry_conflicts'] as List?)?.isNotEmpty == true ||
+                  row['timing_overlap'] == true),
         )
         .length;
 
@@ -2394,7 +2627,7 @@ class _SummaryCards extends StatelessWidget {
           value: conflictCount.toString(),
           helper: conflictCount == 0
               ? 'No detected judge conflicts'
-              : 'Judge or duplicate breed conflicts',
+              : 'Judge, breed, or estimated timing conflicts',
           isWarning: conflictCount > 0,
         ),
         _PublishJudgeOrderCard(
@@ -3071,6 +3304,21 @@ class _LineupRow extends StatelessWidget {
                     letterSpacing: 0.4,
                   ),
                 ),
+                if (!isJudgeChange &&
+                    row['estimated_start_minutes'] != null &&
+                    row['is_award_plan'] != true)
+                  Text(
+                    'Estimated ${row['estimated_start_minutes']}–${row['estimated_end_minutes']} min after start',
+                    style: textTheme.bodySmall,
+                  ),
+                if (row['timing_overlap'] == true)
+                  Text(
+                    'Possible breed overlap at another table (10-minute buffer)',
+                    style: textTheme.bodySmall?.copyWith(
+                      color: colorScheme.error,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                 if (row['is_award_plan'] == true)
                   const Text('Planning only • Not published'),
                 if (row['is_external_specialty'] == true)
