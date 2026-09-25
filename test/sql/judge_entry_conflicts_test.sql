@@ -9,15 +9,18 @@ create function public.user_can_manage_show_lineup(uuid) returns boolean languag
 create table auth.users(id uuid,email text);
 create table public.judges(id uuid,email text,first_name text,last_name text,display_name text,name text);
 create table public.show_judges(show_id uuid,judge_id uuid);
+create table public.judge_assignments(show_id uuid,judge_id uuid);
+create table public.show_judging_assignments(show_id uuid,judge_id uuid);
 create table public.exhibitors(id uuid,owner_user_id uuid,email text,first_name text,last_name text,display_name text,showing_name text);
 create table public.entries(show_id uuid,section_id uuid,exhibitor_id uuid,breed text,status text,scratched_at timestamptz);
 create table public.role_assignments(user_id uuid,show_id uuid,role text);
 create table public.show_judge_conflict_profiles(user_id uuid,judge_id uuid,exhibitor_id uuid,related_name text,relationship_label text);
 create table household_private.invitations(owner_user_id uuid,member_user_id uuid,accepted_at timestamptz,revoked_at timestamptz);
 \ir ../../supabase/migrations/20260925020010_judge_entry_conflicts.sql
+\ir ../../supabase/migrations/20260925022138_judge_conflict_roster_lookup.sql
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000001',false);
 insert into judges values ('00000000-0000-0000-0000-000000000002','judge@example.test','Pat','Judge',null,null);
-insert into show_judges values ('00000000-0000-0000-0000-000000000003','00000000-0000-0000-0000-000000000002');
+insert into judge_assignments values ('00000000-0000-0000-0000-000000000003','00000000-0000-0000-0000-000000000002');
 insert into exhibitors values
 ('00000000-0000-0000-0000-000000000010','00000000-0000-0000-0000-000000000020','judge@example.test','Pat','Judge','Pat Judge',null),
 ('00000000-0000-0000-0000-000000000011','00000000-0000-0000-0000-000000000020',null,'Child','Different','Child Different',null),
