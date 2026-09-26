@@ -1,7 +1,50 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ringmaster_show/superintendent/lineup_timing.dart';
+import 'package:ringmaster_show/superintendent/specialty_lineup_dialog.dart';
 
 void main() {
+  test('workload takes priority over avoiding timing conflicts', () {
+    expect(preferLineupJudge(246, 354, 30, 0, 246, 354), true);
+    expect(preferLineupJudge(354, 246, 0, 30, 354, 246), false);
+    expect(preferLineupJudge(246, 246, 0, 30, 246, 246), true);
+  });
+  test('actual specialty display rows flag overlap with regular Dutch', () {
+    final specialty = specialtyLineupRow({
+      'name': 'IDDRC',
+      'breed': 'Dutch',
+      'entry_count': 8,
+      'scope': 'open',
+    });
+    final regular = <String, dynamic>{'breed_id': 'Dutch', 'species': 'rabbit'};
+    final timing = LineupTiming();
+    timing.add('1', timingBreedKey(specialty), 8, 60, row: specialty);
+    timing.add('2', timingBreedKey(regular), 28, 60, row: regular);
+    expect(specialty['timing_overlap'], true);
+    expect(regular['timing_overlap'], true);
+  });
+  test('refresh counts sums varieties and removes stale scratched counts', () {
+    final rows = <Map<String, dynamic>>[
+      {'section_id': 'a', 'breed_id': 'Dutch', 'entry_count_actual': 10},
+      {'section_id': 'b', 'breed_id': 'Dutch', 'entry_count_actual': 1},
+      {'is_external_specialty': true, 'entry_count_actual': 28},
+    ];
+    refreshLineupCounts(rows, [
+      {
+        'section_id': 'a',
+        'breed': 'Dutch',
+        'variety': 'Black',
+        'entry_count': 5,
+      },
+      {
+        'section_id': 'a',
+        'breed': 'Dutch',
+        'variety': 'Blue',
+        'entry_count': 4,
+      },
+    ]);
+    expect(rows.map((r) => r['entry_count_actual']), [9, 0, 28]);
+  });
+
   test(
     'specialty workload delays following breeds and reduces cross-table overlap',
     () {

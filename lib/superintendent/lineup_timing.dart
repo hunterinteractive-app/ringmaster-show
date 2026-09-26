@@ -6,10 +6,13 @@ const lineupTransferMinutes = 10.0;
 const defaultJudgingRate = 60.0;
 
 String timingBreedKey(Map<String, dynamic> row) {
-  final breed = (row['breed_id'] ?? row['breed'] ?? '')
-      .toString()
-      .trim()
-      .toLowerCase();
+  final breed =
+      (row['is_external_specialty'] == true
+              ? (row['breed'] ?? '')
+              : (row['breed_id'] ?? row['breed'] ?? ''))
+          .toString()
+          .trim()
+          .toLowerCase();
   final variety = breed == 'commercial'
       ? (row['variety_key'] ?? row['variety'] ?? '')
             .toString()
@@ -86,4 +89,42 @@ class LineupTiming {
     }
     windows.add(window);
   }
+}
+
+/// Use current entries, not the snapshot saved when the lineup was assigned.
+void refreshLineupCounts(
+  List<Map<String, dynamic>> assignments,
+  List<Map<String, dynamic>> counts,
+) {
+  for (final row in assignments) {
+    if (row['is_judge_change'] == true ||
+        row['breed_id'] == '__judge_change__' ||
+        row['is_external_specialty'] == true ||
+        row['is_award_plan'] == true) {
+      continue;
+    }
+    final matches = counts.where(
+      (count) =>
+          count['section_id'] == row['section_id'] &&
+          timingBreedKey(count) == timingBreedKey(row),
+    );
+    row['entry_count_actual'] = matches.fold<int>(
+      0,
+      (total, count) => total + ((count['entry_count'] as num?)?.toInt() ?? 0),
+    );
+  }
+}
+
+/// Timing is a tie-breaker; it must not overload one judge to avoid a call.
+bool preferLineupJudge(
+  int load,
+  int bestLoad,
+  double overlap,
+  double bestOverlap,
+  double preference,
+  double bestPreference,
+) {
+  if (load != bestLoad) return load < bestLoad;
+  if (overlap != bestOverlap) return overlap < bestOverlap;
+  return preference < bestPreference;
 }

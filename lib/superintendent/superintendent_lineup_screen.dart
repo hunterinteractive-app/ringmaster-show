@@ -594,6 +594,7 @@ class _SuperintendentLineupScreenState
       _conflictCheckError =
           'Judge entry conflicts could not be checked. Auto Fill is blocked until the check succeeds.';
     }
+    refreshLineupCounts(data.assignments, data.breedCounts);
     final grouped = _groupByTable(data.assignments);
     final timing = LineupTiming();
     for (final table in grouped.entries) {
@@ -2048,6 +2049,7 @@ class _SuperintendentLineupScreenState
         }
         var selectedScore = double.infinity;
         var selectedOverlap = double.infinity;
+        var selectedLoad = 1 << 30;
         double overlapFor(String id) => timing.overlap(
           tableByJudge[id]!,
           timingBreedKey(breed),
@@ -2068,8 +2070,15 @@ class _SuperintendentLineupScreenState
           final load = judgeLoads[judgeId] ?? 0;
           final score = judgePreferenceScore(judgeId, breed, load, pairCount);
           final overlap = overlapFor(judgeId);
-          if (overlap < selectedOverlap ||
-              (overlap == selectedOverlap && score < selectedScore)) {
+          if (preferLineupJudge(
+            load + pairCount,
+            selectedLoad,
+            overlap,
+            selectedOverlap,
+            score,
+            selectedScore,
+          )) {
+            selectedLoad = load + pairCount;
             selectedJudge = judge;
             selectedScore = score;
             selectedOverlap = overlap;
@@ -2105,8 +2114,14 @@ class _SuperintendentLineupScreenState
           final bestOverlap = bestId == null
               ? double.infinity
               : overlapFor(bestId);
-          return overlap < bestOverlap ||
-                  (overlap == bestOverlap && score < bestScore)
+          return preferLineupJudge(
+                (judgeLoads[judgeId] ?? 0) + pairCount,
+                (judgeLoads[bestId] ?? 0) + pairCount,
+                overlap,
+                bestOverlap,
+                score,
+                bestScore,
+              )
               ? judge
               : best;
         });
