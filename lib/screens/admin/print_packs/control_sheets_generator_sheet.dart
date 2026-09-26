@@ -13,6 +13,7 @@ import 'package:pdf/widgets.dart' as pw;
 
 import '../closeout/utils/breed_results_detail_order.dart';
 import 'print_pack_pdf_helpers.dart';
+import 'control_sheet_labels.dart';
 import '../closeout/data/report_data_reader.dart';
 
 final supabase = Supabase.instance.client;
@@ -498,7 +499,8 @@ class _ControlSheetsGeneratorSheetState
     final entryFlagRows = await loadReportRowsByIds(
       supabase,
       table: 'entries',
-      columns: 'id,is_fur,animal_id,judged_by_show_judge_id',
+      columns:
+          'id,is_fur,fur_variety,variety,animal_id,judged_by_show_judge_id',
       ids: rpcEntryIds,
     );
 
@@ -515,6 +517,8 @@ class _ControlSheetsGeneratorSheetState
       final flags = flagsByEntryId[entryId];
       if (flags == null) continue;
       row['is_fur'] = flags['is_fur'];
+      row['fur_variety'] = flags['fur_variety'];
+      if (flags['is_fur'] == true) row['variety'] = flags['variety'];
       row['is_wool'] = false;
       row['animal_id'] = flags['animal_id'];
       row['judged_by_show_judge_id'] = flags['judged_by_show_judge_id'];
@@ -538,6 +542,7 @@ class _ControlSheetsGeneratorSheetState
             class_name,
             species,
             is_fur,
+            fur_variety,
             judged_by_show_judge_id,
             scratched_at,
             exhibitors:entries_exhibitor_id_fkey (
@@ -640,6 +645,7 @@ class _ControlSheetsGeneratorSheetState
           ),
           'species': row['species'],
           'is_fur': row['is_fur'],
+          'fur_variety': row['fur_variety'],
           'is_wool': false,
           'judged_by_show_judge_id': row['judged_by_show_judge_id'],
           'group_sort_order': 9999,
@@ -886,7 +892,9 @@ class _ControlSheetsGeneratorSheetState
 
         final isFurOrWool = _isFurOrWoolRow(row);
 
-        final color = isFurOrWool ? '' : _colorLabel(row);
+        final color = isFurOrWool
+            ? controlSheetFurColor(row)
+            : _colorLabel(row);
         final cls = isFurOrWool
             ? _furWoolLabel(row)
             : _ageOnly(_safe(row, 'class_name'));
@@ -1003,13 +1011,9 @@ class _ControlSheetsGeneratorSheetState
         }
 
         final isFurOrWool = _isFurOrWoolRow(first);
-        final judgeNames =
-            groupRows
-                .map((row) => _safe(row, 'judge_name'))
-                .where((name) => name.isNotEmpty)
-                .toSet()
-                .toList()
-              ..sort();
+        final judgeName = controlSheetJudgeLabel(
+          groupRows.map((row) => _safe(row, 'judge_name')),
+        );
 
         allPages.add({
           'sectionId': _safe(first, 'section_id'),
@@ -1020,7 +1024,9 @@ class _ControlSheetsGeneratorSheetState
           'sectionLetter': _safe(first, 'section_letter').toUpperCase(),
           'sectionSortOrder': _toInt(first['section_sort_order']),
           'breed': _safe(first, 'breed'),
-          'color': isFurOrWool ? '' : _colorLabel(first),
+          'color': isFurOrWool
+              ? controlSheetFurColor(first)
+              : _colorLabel(first),
           'class': isFurOrWool
               ? _furWoolLabel(first)
               : _ageOnly(_safe(first, 'class_name')),
@@ -1031,7 +1037,7 @@ class _ControlSheetsGeneratorSheetState
           'specials': _specialsForRow(first),
           'ageSpecial': _ageSpecialForRow(first),
           'isFurOrWool': isFurOrWool,
-          'judgeName': judgeNames.join(' / '),
+          'judgeName': judgeName,
           'groupSortOrder': _sortValue(first, 'group_sort_order'),
           'varietySortOrder': _sortValue(first, 'variety_sort_order'),
           'classSortRank': _classSortRankForPrint(
@@ -1386,9 +1392,9 @@ class _ControlSheetsGeneratorSheetState
     }) {
       final hasSex = sex.trim().isNotEmpty;
       final classTotalText =
-          'No. In Class: $classCount   No. Exhibitors: $classExhibitorCount';
+          '${hasSex ? 'Age Group Total' : 'Class Total'}: $classCount   Exhibitors: $classExhibitorCount';
       final sexTotalText =
-          'No. In Sex: $sexCount   No. Exhibitors: $sexExhibitorCount';
+          'Class Total: $sexCount   Exhibitors: $sexExhibitorCount';
       final totalStyle = pw.TextStyle(
         fontSize: _scaled(10),
         fontWeight: pw.FontWeight.bold,
@@ -1727,18 +1733,9 @@ class _ControlSheetsGeneratorSheetState
     for (final sectionGroup in sortedSectionGroups) {
       final sectionTitle = sectionGroup.key;
       final pages = sectionGroup.value;
-      final sectionJudgeNames =
-          pages
-              .map((page) => (page['judgeName'] ?? '').toString().trim())
-              .where((name) => name.isNotEmpty)
-              .toSet()
-              .toList()
-            ..sort();
-      final headerJudgeName = sectionJudgeNames.length == 1
-          ? sectionJudgeNames.single
-          : sectionJudgeNames.length > 1
-          ? 'See class below'
-          : '';
+      final headerJudgeName = controlSheetJudgeLabel(
+        pages.map((page) => (page['judgeName'] ?? '').toString()),
+      );
 
       doc.addPage(
         pw.MultiPage(
@@ -1815,10 +1812,10 @@ class _ControlSheetsGeneratorSheetState
               for (final p in breedPagesForStats) {
                 final groupLabel =
                     ((p['color'] ?? '').toString().trim().isEmpty)
-                    ? 'Standard'
-                    : (p['color'] ?? '').toString().trim();
-                final classLabel = (p['class'] ?? '').toString().trim();
-                final sexLabel = (p['sex'] ?? '').toString().trim();
+                    ? 'standard'
+                    : controlSheetCountLabel(p['color']);
+                final classLabel = controlSheetCountLabel(p['class']);
+                final sexLabel = controlSheetCountLabel(p['sex']);
                 final classKey = '$groupLabel|$classLabel';
                 final sexKey = '$groupLabel|$classLabel|$sexLabel';
                 final rowsForStats = (p['rows'] as List)
@@ -1926,10 +1923,10 @@ class _ControlSheetsGeneratorSheetState
                 final isFurOrWool = p['isFurOrWool'] == true;
                 final groupLabel =
                     ((p['color'] ?? '').toString().trim().isEmpty)
-                    ? 'Standard'
-                    : (p['color'] ?? '').toString().trim();
-                final classLabel = (p['class'] ?? '').toString().trim();
-                final sexLabel = (p['sex'] ?? '').toString().trim();
+                    ? 'standard'
+                    : controlSheetCountLabel(p['color']);
+                final classLabel = controlSheetCountLabel(p['class']);
+                final sexLabel = controlSheetCountLabel(p['sex']);
                 final groupStatsKey = '$breed|$groupLabel';
                 final classStatsKey = '$breed|$groupLabel|$classLabel';
                 final sexStatsKey = '$breed|$groupLabel|$classLabel|$sexLabel';
