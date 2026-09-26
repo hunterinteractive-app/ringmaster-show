@@ -3,6 +3,32 @@ import 'package:ringmaster_show/superintendent/lineup_timing.dart';
 import 'package:ringmaster_show/superintendent/specialty_lineup_dialog.dart';
 
 void main() {
+  test('planned judge start delays estimates and overlap checks', () {
+    final timing = LineupTiming();
+    final row = <String, dynamic>{};
+    expect(
+      plannedStartMinutes({
+        'notes': 'Planned start: 90 minutes after show start.',
+      }),
+      90,
+    );
+    expect(plannedStartMinutes({'notes': 'Auto Fill judge start'}), 0);
+    timing.add('1', 'rabbit|polish|', 25, 25);
+    timing.startAt('9', 90);
+    expect(timing.overlap('9', 'rabbit|polish|', 141, 25), 0);
+    timing.add('9', 'rabbit|polish|', 141, 25, row: row);
+    expect(row['estimated_start_minutes'], 90);
+    expect(row['estimated_end_minutes'], 428);
+    timing.startAt('9', 90);
+    expect(timing.clocks['9'], 428.4);
+  });
+  test('conservative fallback estimates 141 head at 25 per hour', () {
+    final timing = LineupTiming();
+    final row = <String, dynamic>{};
+    timing.add('9', 'rabbit|polish|', 141, judgingRate(null), row: row);
+    expect(row['estimated_start_minutes'], 0);
+    expect(row['estimated_end_minutes'], 338);
+  });
   test('workload takes priority over avoiding timing conflicts', () {
     expect(preferLineupJudge(246, 354, 30, 0, 246, 354), true);
     expect(preferLineupJudge(354, 246, 0, 30, 354, 246), false);
@@ -92,9 +118,9 @@ void main() {
   test(
     'missing or invalid pace uses declared fallback and identities separate species',
     () {
-      expect(judgingRate(null), 60);
-      expect(judgingRate({'average_entries_per_hour': 0}), 60);
-      expect(judgingRate({'average_entries_per_hour': double.nan}), 60);
+      expect(judgingRate(null), 25);
+      expect(judgingRate({'average_entries_per_hour': 0}), 25);
+      expect(judgingRate({'average_entries_per_hour': double.nan}), 25);
       expect(judgingRate({'average_entries_per_hour': 80}), 80);
       expect(
         timingBreedKey({'breed': 'Dutch'}),

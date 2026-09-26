@@ -529,7 +529,7 @@ void main() {
       find.text('Possible breed overlap at another table (10-minute buffer)'),
       findsNWidgets(2),
     );
-    expect(find.text('Estimated 0–2 min after start'), findsNWidgets(2));
+    expect(find.text('Estimated 0–5 min after start'), findsNWidgets(2));
     expect(
       find.text('Judge, breed, or estimated timing conflicts'),
       findsOneWidget,

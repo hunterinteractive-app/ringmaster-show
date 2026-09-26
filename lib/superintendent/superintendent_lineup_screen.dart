@@ -601,6 +601,7 @@ class _SuperintendentLineupScreenState
       for (final row in table.value) {
         if (row['is_judge_change'] == true ||
             row['breed_id'] == '__judge_change__') {
+          timing.startAt(table.key, plannedStartMinutes(row));
           continue;
         }
         final judge = data.judges
@@ -1872,6 +1873,18 @@ class _SuperintendentLineupScreenState
       // --- END: Load judge preferences ---
 
       final timing = LineupTiming();
+      final plannedStarts = <String, int>{};
+      for (final row in data.assignments) {
+        if (row['is_judge_change'] != true) continue;
+        final id = row['judge_id']?.toString();
+        if (id == null) continue;
+        final minutes = plannedStartMinutes(row);
+        if (minutes > (plannedStarts[id] ?? 0)) plannedStarts[id] = minutes;
+      }
+      for (final entry in plannedStarts.entries) {
+        final table = tableByJudge[entry.key];
+        if (table != null) timing.startAt(table, entry.value);
+      }
       double rateFor(String id) => judgingRate(
         data.judges.where((j) => j['judge_id'] == id).firstOrNull,
       );
@@ -1928,7 +1941,9 @@ class _SuperintendentLineupScreenState
           'p_scope': 'combined',
           'p_is_judge_change': true,
           'p_entry_count_actual': 0,
-          'p_notes': 'Auto Fill judge start',
+          'p_notes': (plannedStarts[judgeId] ?? 0) > 0
+              ? 'Planned start: ${plannedStarts[judgeId]} minutes after show start.'
+              : 'Auto Fill judge start',
         });
       }
 
@@ -2342,7 +2357,7 @@ class _SuperintendentLineupScreenState
               const Padding(
                 padding: EdgeInsets.all(12),
                 child: Text(
-                  'Timing is estimated from a shared start, using recorded judge pace or 60 head/hour when unknown. A 10-minute buffer flags close breed calls. Check actual progress before calling the next show.',
+                  'Timing honors planned judge starts; otherwise tables start together, using recorded judge pace or 25 head/hour when unknown. A 10-minute buffer flags close breed calls. Check actual progress before calling the next show.',
                 ),
               ),
               if (_conflictCheckError != null)
@@ -3319,6 +3334,11 @@ class _LineupRow extends StatelessWidget {
                     letterSpacing: 0.4,
                   ),
                 ),
+                if (isJudgeChange && plannedStartMinutes(row) > 0)
+                  Text(
+                    'Planned start: ${plannedStartMinutes(row)} min after show start',
+                    style: textTheme.bodySmall,
+                  ),
                 if (!isJudgeChange &&
                     row['estimated_start_minutes'] != null &&
                     row['is_award_plan'] != true)

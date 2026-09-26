@@ -1,9 +1,9 @@
 import 'dart:math' as math;
 
-/// Relative estimates: tables start together, with no invented waiting periods.
+/// Relative estimates honor explicit planned starts without inventing waits.
 /// A ten-minute gap allows for transfers and modest variations in judging pace.
 const lineupTransferMinutes = 10.0;
-const defaultJudgingRate = 60.0;
+const defaultJudgingRate = 25.0;
 
 String timingBreedKey(Map<String, dynamic> row) {
   final breed =
@@ -27,6 +27,15 @@ double judgingRate(Map<String, dynamic>? row) {
   return n != null && n.isFinite && n > 0 ? n : defaultJudgingRate;
 }
 
+/// Stored in the existing judge marker notes so it follows the judge block.
+int plannedStartMinutes(Map<String, dynamic> row) {
+  final match = RegExp(
+    r'^Planned start: (\d+) minutes after show start\.$',
+    multiLine: true,
+  ).firstMatch((row['notes'] ?? '').toString());
+  return int.tryParse(match?.group(1) ?? '') ?? 0;
+}
+
 class BreedWindow {
   BreedWindow(this.table, this.breed, this.start, this.end, {this.row});
   final String table, breed;
@@ -37,6 +46,10 @@ class BreedWindow {
 class LineupTiming {
   final clocks = <String, double>{};
   final windows = <BreedWindow>[];
+
+  void startAt(String table, int minutes) {
+    clocks[table] = math.max(clocks[table] ?? 0, minutes.toDouble());
+  }
 
   double duration(int count, double rate) => math.max(0, count) * 60 / rate;
 
