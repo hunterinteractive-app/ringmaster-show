@@ -60,6 +60,7 @@ class AssistantChatSession {
   String? showId;
   String? showLabel;
   String? pendingQuestion;
+  String? originalQuestion;
   String draft = '';
 }
 

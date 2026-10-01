@@ -1,3 +1,5 @@
+import '../services/assistant_context.dart';
+export '../services/assistant_context.dart' show assistantTopicForQuestion;
 import '../services/assistant_transcript.dart';
 import '../services/assistant_support.dart';
 import '../services/assistant_guide_links.dart';
@@ -268,36 +270,12 @@ class _RabbitAvatarState extends State<RabbitAvatar>
 const assistantTopics = {
   'help': 'General questions',
   'entries': 'My entries',
+  'animals': 'My animals',
   'reports': 'My reports & legs',
   'household': 'My exhibitors',
   'setup': 'Show setup',
   'closeout': 'Show report status',
 };
-// Route only the subject of the current question. Authorization stays on the server.
-String assistantTopicForQuestion(String message) {
-  final q = message.toLowerCase();
-  if (RegExp(r'\b(how do|how can|how to|where do|where can)\b').hasMatch(q)) {
-    return 'help';
-  }
-  if (RegExp(
-    r'\b(closeout|close out|report status|reports ready|reports generated)\b',
-  ).hasMatch(q)) {
-    return 'closeout';
-  }
-  if (RegExp(r'\b(report|reports|leg|legs)\b').hasMatch(q)) return 'reports';
-  if (RegExp(r'\b(section|sections|setup|set up|judging date)\b').hasMatch(q)) {
-    return 'setup';
-  }
-  if (RegExp(
-    r'\b(entry|entries|entered|registered|registration)\b',
-  ).hasMatch(q)) {
-    return 'entries';
-  }
-  if (RegExp(r'\b(household|exhibitors|linked accounts)\b').hasMatch(q)) {
-    return 'household';
-  }
-  return 'help';
-}
 
 class AssistantPanel extends StatefulWidget {
   const AssistantPanel({
@@ -407,6 +385,7 @@ class _AssistantPanelState extends State<AssistantPanel> {
     _notice = null;
     _pendingQuestion = null;
     _topic = 'help';
+    _chat.originalQuestion = null;
   }
 
   Future<void> _send([String? suggestion, bool resume = false]) async {
@@ -426,13 +405,16 @@ class _AssistantPanelState extends State<AssistantPanel> {
       if (!mounted) return;
       setState(() => _busy = false);
     }
-    final prepared = resume
+    final needsRecords =
+        widget.gateway.canAsk && assistantQuestionNeedsRecords(message);
+    final prepared = resume || needsRecords
         ? null
         : reviewed ?? assistantPreparedAnswer(message);
     if (prepared != null) {
       setState(() {
         _pendingQuestion = null;
-        _topic = 'help';
+        _topic = assistantTopicForQuestion(message, page: widget.page.title);
+        _chat.originalQuestion = message;
         _guide = false;
         _notice = null;
         _input.clear();
@@ -458,8 +440,17 @@ class _AssistantPanelState extends State<AssistantPanel> {
       await _chooseShow(message);
       return;
     }
-    if (!resume) _topic = assistantTopicForQuestion(message);
-    if (!['help', 'household'].contains(_topic) && _showId == null) {
+    if (!resume) {
+      final followUp = _messages.isNotEmpty && assistantIsFollowUp(message);
+      _topic = assistantTopicForQuestion(
+        message,
+        page: widget.page.title,
+        previousTopic: _topic,
+        hasHistory: _messages.isNotEmpty,
+      );
+      if (!followUp) _chat.originalQuestion = message;
+    }
+    if (!['help', 'household', 'animals'].contains(_topic) && _showId == null) {
       setState(() {
         _pendingQuestion = message;
         _guide = false;
@@ -474,18 +465,7 @@ class _AssistantPanelState extends State<AssistantPanel> {
       });
       return;
     }
-    final history = _messages
-        .skip(math.max(0, _messages.length - 6))
-        .map(
-          (m) => {
-            'role': m['role']!,
-            'content': m['content']!.substring(
-              0,
-              math.min(1800, m['content']!.length),
-            ),
-          },
-        )
-        .toList();
+    final history = assistantHistory(_messages, _chat.originalQuestion);
     setState(() {
       _busy = true;
       _notice = null;

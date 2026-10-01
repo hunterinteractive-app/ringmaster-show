@@ -15,10 +15,18 @@ insert into public.entries(show_id,exhibitor_id,exhibitor_user_id,tattoo,breed,s
  ('92000000-0000-0000-0000-000000000001','93000000-0000-0000-0000-000000000002','91000000-0000-0000-0000-000000000003','JIMS-RABBIT','Mini Rex','rabbit');
 insert into household_private.invitations(owner_user_id,email,member_user_id,accepted_at)
  values('91000000-0000-0000-0000-000000000001','assistant-member@example.invalid','91000000-0000-0000-0000-000000000002',now());
+insert into public.animals(owner_user_id,species,name,tattoo,breed,variety,sex,is_dob_unknown) values
+ ('91000000-0000-0000-0000-000000000001','rabbit','My rabbit','MINE','Satin','White','buck',true),
+ ('91000000-0000-0000-0000-000000000003','rabbit','Private rabbit','JIMS-ANIMAL','Satin','White','buck',false);
+insert into public.animals(owner_user_id,species,name,tattoo,breed,variety,sex,deleted_at) values
+ ('91000000-0000-0000-0000-000000000001','rabbit','Deleted rabbit','DELETED-ANIMAL','Satin','White','buck',now());
 create function pg_temp.assert_true(v boolean,message text) returns void language plpgsql as $$
 begin if v is distinct from true then raise exception 'FAILED: %',message; end if; end $$;
 select set_config('request.jwt.claim.sub','91000000-0000-0000-0000-000000000001',true);
 set local role authenticated;
+select pg_temp.assert_true(jsonb_array_length(public.assistant_read_context('animals')->'rows')=1,'Only own animals, no show required');
+select pg_temp.assert_true(public.assistant_read_context('animals')::text not like '%JIMS-ANIMAL%','No stranger animals leaked');
+select pg_temp.assert_true(public.assistant_read_context('animals')->'rows'->0->>'is_dob_unknown'='true','DOB state is available');
 select pg_temp.assert_true(jsonb_array_length(public.assistant_read_context('entries',null,'92000000-0000-0000-0000-000000000001')->'rows')=1,'Only own entries even if show manager can read everyone');
 select pg_temp.assert_true(public.assistant_read_context('entries',null,'92000000-0000-0000-0000-000000000001')::text not like '%JIMS%','No Jim entry leaked');
 select pg_temp.assert_true(public.assistant_read_context('household')::text not like '%Private Jim%','No other exhibitor leaked despite broad legacy exhibitor SELECT policy');
@@ -26,12 +34,15 @@ select pg_temp.assert_true(public.assistant_read_context('entries')->>'needs_sho
 do $$begin
  begin perform public.assistant_read_context('entries','91000000-0000-0000-0000-000000000003','92000000-0000-0000-0000-000000000001');raise exception 'FAILED: stranger lookup';
  exception when raise_exception then if sqlerrm<>'Household unavailable' then raise;end if;end;
+ begin perform public.assistant_read_context('animals','91000000-0000-0000-0000-000000000003');raise exception 'FAILED: stranger animals';
+ exception when raise_exception then if sqlerrm<>'Household unavailable' then raise;end if;end;
  begin perform public.assistant_admin(true,100000000);raise exception 'FAILED: changed budget';
  exception when raise_exception then if sqlerrm<>'Not authorized' then raise;end if;end;
 end $$;
 reset role;
 select set_config('request.jwt.claim.sub','91000000-0000-0000-0000-000000000002',true);
 set local role authenticated;
+select pg_temp.assert_true(jsonb_array_length(public.assistant_read_context('animals','91000000-0000-0000-0000-000000000001')->'rows')=1,'Accepted household can read animals');
 select pg_temp.assert_true(jsonb_array_length(public.assistant_read_context('entries','91000000-0000-0000-0000-000000000001','92000000-0000-0000-0000-000000000001')->'rows')=1,'Accepted household can read entries');
 do $$begin
  begin perform public.assistant_read_context('setup','91000000-0000-0000-0000-000000000001','92000000-0000-0000-0000-000000000001');raise exception 'FAILED: inherited secretary access';
@@ -41,7 +52,7 @@ reset role;
 update household_private.invitations set revoked_at=now() where owner_user_id='91000000-0000-0000-0000-000000000001';
 set local role authenticated;
 do $$begin
- begin perform public.assistant_read_context('household','91000000-0000-0000-0000-000000000001');raise exception 'FAILED: revoked access';
+ begin perform public.assistant_read_context('animals','91000000-0000-0000-0000-000000000001');raise exception 'FAILED: revoked access';
  exception when raise_exception then if sqlerrm<>'Household unavailable' then raise;end if;end;
 end $$;
 reset role;
@@ -52,7 +63,7 @@ select pg_temp.assert_true(not has_table_privilege('authenticated','assistant_pr
 select pg_temp.assert_true(not exists(select 1 from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='assistant_private' and c.relkind='r' and not c.relrowsecurity),'All assistant tables use RLS');
 update assistant_private.settings set enabled=true,monthly_budget_microusd=60000;
 set local role service_role;
-select pg_temp.assert_true((public.assistant_reserve('91000000-0000-0000-0000-000000000001','94000000-0000-0000-0000-000000000001','95000000-0000-0000-0000-000000000001','help')->>'allowed')::boolean,'First reservation fits budget');
+select pg_temp.assert_true((public.assistant_reserve('91000000-0000-0000-0000-000000000001','94000000-0000-0000-0000-000000000001','95000000-0000-0000-0000-000000000001','animals')->>'allowed')::boolean,'First reservation fits budget');
 select pg_temp.assert_true(public.assistant_reserve('91000000-0000-0000-0000-000000000003','94000000-0000-0000-0000-000000000002','95000000-0000-0000-0000-000000000002','help')->>'reason'='budget','Another user cannot spend reserved money');
 select pg_temp.assert_true(public.assistant_reserve('91000000-0000-0000-0000-000000000001','94000000-0000-0000-0000-000000000001','95000000-0000-0000-0000-000000000001','help')->>'reason'='duplicate','Retries not recharged');
 select pg_temp.assert_true(public.assistant_reserve('91000000-0000-0000-0000-000000000001','94000000-0000-0000-0000-000000000003','95000000-0000-0000-0000-000000000001','help')->>'reason'='busy','One active question per actor');

@@ -1233,6 +1233,7 @@ class _CartScreenState extends State<CartScreen> {
         _feeSettings != null && _sectionFeeBySectionId.isNotEmpty;
 
     return RingMasterPageShell(
+      showId: widget.showId,
       title: widget.showName,
       subtitle: 'Entry Cart',
       showBackButton: true,

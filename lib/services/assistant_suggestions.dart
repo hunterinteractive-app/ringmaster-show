@@ -95,11 +95,11 @@ const assistantPreparedAnswers = <String, String>{
   'How do I check which show sections I entered?':
       'Open My Entries, expand the show, and review the sections listed for each entry. Check each intended show letter and Open or Youth section. Adding an animal to one section does not confirm it is entered in the others.',
   'How do I correct an entry?':
-      'Open My Entries and locate the entry under its show. Use the available entry actions to review your options. If changes are unavailable or the show has closed entries, contact the show secretary or support before creating a duplicate entry.',
+      'Open My Entries, expand the show, and choose Edit Entry for the animal, then Save. Editing is available before the entry deadline. Use Scratch to remove an entry from competition; check each section if the animal is in multiple shows. If editing is unavailable, contact the secretary before creating a duplicate entry.',
   'Why is an entry missing from my list?':
       'Check that you are viewing the correct household exhibitor and show. Then check whether the animal is still in your cart. Saving an animal alone does not enter it in a show. If it still looks wrong, tell me which show you mean so we can look into it.',
   'How do I enter shows A, B and C?':
-      'Choose the intended show section, then select the animals for that section. Repeat for the other sections you want to enter. Review your cart before checkout and My Entries afterward to confirm the sections submitted.',
+      'On Enter Show, find “Select show(s) to enter” and select each intended section, such as Open A, Open B and Open C. You can select multiple sections. Then select your animals and choose Add to cart. Review every animal and section in the Entry Cart before checkout, then confirm them in My Entries.',
   'Why is an animal unavailable for this section?':
       'Review the selected section’s breed scope and Open or Youth division, then check the animal and exhibitor information. Section requirements can affect which animals appear. Tell me the show, section and what you see if you need more help.',
   'How do I review my entries before checkout?':
@@ -134,6 +134,10 @@ const assistantPreparedAnswers = <String, String>{
       'Open Account Settings → Household Access to manage invitations and shared access. Invitations must be accepted before sharing becomes active. Household permissions do not include secretary access to a show.',
   'What should I do if my records are linked incorrectly?':
       'Contact support with a description of the mismatch and the affected show or exhibitor. Avoid creating duplicate accounts or entries as a workaround. Chester cannot merge accounts or change record ownership.',
+  'How do I select the 6/8 class?':
+      'For a six-class rabbit breed such as Satin, the class is labeled Intermediate in RingMaster. Select Intermediate in the Class list. If it is missing, tell me which entry screen you are using and which breed is selected; do not change the show setup just because there is no option labeled 6/8.',
+  'How do I edit a birthdate?':
+      'Open My Animals and edit the animal. If Unknown DOB is checked, uncheck it to enable Pick. Choose Pick beside Birth date, select the date, and save. Review any submitted entry separately; changing a saved animal does not necessarily update that entry.',
   'How do I add an animal?':
       'Open My Animals and use the add-animal action. Enter and review the required identification and class information before saving. To enter the animal in a show, continue through that show’s entry and checkout process.',
   'Does saving an animal enter it in a show?':

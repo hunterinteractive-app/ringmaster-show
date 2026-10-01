@@ -59,7 +59,7 @@ Deno.serve(async (request: Request) => {
     }
     // Check scope BEFORE spending. The AI has no service client or actor argument.
     const owner = b.ownerId || user.id;
-    if (["entries", "reports", "household"].includes(b.topic)) {
+    if (["entries", "animals", "reports", "household"].includes(b.topic)) {
       const r = await client.rpc("can_access_household", {
         p_owner_user_id: owner,
       });
@@ -83,7 +83,7 @@ Deno.serve(async (request: Request) => {
         }, 403);
       }
     }
-    if (!["help", "household"].includes(b.topic) && !b.showId) {
+    if (!["help", "animals", "household"].includes(b.topic) && !b.showId) {
       return jsonResponse({
         answer:
           "Select a show so I can check the information relevant to your question.",
@@ -151,6 +151,7 @@ Deno.serve(async (request: Request) => {
           ? { unavailable: true, message: "Could not verify selected records." }
           : facts.data;
       },
+      b.topic !== "help",
     );
     const settled = await meter.rpc("assistant_finish", {
       p_request: requestId,

@@ -14,6 +14,7 @@ class FakeGateway implements AssistantGateway {
   String? lastTopic;
   String? lastShow;
   String? lastMessage;
+  List<Map<String, String>> lastHistory = [];
   @override
   bool canAsk = true;
   @override
@@ -33,6 +34,7 @@ class FakeGateway implements AssistantGateway {
     lastTopic = topic;
     lastShow = showId;
     lastMessage = message;
+    lastHistory = history;
     if (fail) throw Exception('offline');
     return {'answer': 'Your selected entries were checked.', 'checked': true};
   }
@@ -53,6 +55,7 @@ void main() {
     WidgetTester tester,
     FakeGateway gateway, {
     String pageTitle = 'RingMaster Show',
+    String? showId,
     AssistantChatSession? chat,
   }) async {
     await tester.pumpWidget(
@@ -63,7 +66,7 @@ void main() {
             child: AssistantPanel(
               gateway: gateway,
               chat: chat,
-              page: AssistantPage(title: pageTitle),
+              page: AssistantPage(title: pageTitle, showId: showId),
               onClose: () {},
             ),
           ),
@@ -72,6 +75,24 @@ void main() {
     );
   }
 
+  testWidgets('current page show is used for a missing-entry lookup', (
+    tester,
+  ) async {
+    final gateway = FakeGateway();
+    await mount(
+      tester,
+      gateway,
+      pageTitle: 'Enter Show',
+      showId: 'current-show',
+    );
+    await tester.enterText(find.byType(TextField), 'Is my entry in?');
+    await tester.tap(find.byTooltip('Send question'));
+    await tester.pumpAndSettle();
+    expect(gateway.lastShow, 'current-show');
+    expect(gateway.lastTopic, 'entries');
+    expect(gateway.calls, 1);
+    expect(find.textContaining('Which show is this about?'), findsNothing);
+  });
   testWidgets('published answer takes precedence and avoids AI calls', (
     tester,
   ) async {
@@ -269,6 +290,60 @@ void main() {
       expect(gateway.lastTopic, 'help');
     },
   );
+  testWidgets('DOB troubleshooting reads animals without requiring a show', (
+    tester,
+  ) async {
+    final gateway = FakeGateway();
+    await mount(tester, gateway, pageTitle: 'My Animals');
+    await tester.enterText(
+      find.byType(TextField),
+      "I can't pick to edit the birthdate.",
+    );
+    await tester.tap(find.byTooltip('Send question'));
+    await tester.pumpAndSettle();
+    expect(gateway.lastTopic, 'animals');
+    expect(gateway.lastShow, isNull);
+    expect(gateway.calls, 1);
+  });
+  testWidgets(
+    'missing entry prompt requests records instead of generic canned answer',
+    (tester) async {
+      final gateway = FakeGateway();
+      await mount(tester, gateway, pageTitle: 'My Entries');
+      await tester.tap(find.text('Why is an entry missing from my list?'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Which show is this about?'), findsOneWidget);
+      await tester.tap(find.widgetWithText(OutlinedButton, 'Choose a show'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Autumn Show'));
+      await tester.pumpAndSettle();
+      expect(gateway.calls, 1);
+      expect(gateway.lastTopic, 'entries');
+      expect(gateway.lastMessage, 'Why is an entry missing from my list?');
+    },
+  );
+  testWidgets('class follow-up keeps original problem and avoids show lookup', (
+    tester,
+  ) async {
+    final gateway = FakeGateway();
+    final chat = AssistantChatSession()
+      ..originalQuestion = 'Entering a Satin Rabbit how do I get 6/8 class';
+    chat.messages.addAll([
+      {'role': 'user', 'content': chat.originalQuestion!},
+      for (var i = 0; i < 8; i++)
+        {
+          'role': i.isEven ? 'assistant' : 'user',
+          'content': 'Clarification $i',
+        },
+    ]);
+    await mount(tester, gateway, chat: chat);
+    await tester.enterText(find.byType(TextField), 'open show section');
+    await tester.tap(find.byTooltip('Send question'));
+    await tester.pumpAndSettle();
+    expect(gateway.calls, 1);
+    expect(gateway.lastTopic, 'help');
+    expect(gateway.lastHistory.first['content'], contains('6/8'));
+  });
   testWidgets('cancel show follow-up allows a new general question', (
     tester,
   ) async {

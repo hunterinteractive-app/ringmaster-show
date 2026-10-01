@@ -2540,6 +2540,7 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
       future: _loadFuture,
       builder: (context, snap) {
         return RingMasterPageShell(
+          showId: widget.showId,
           title: widget.showName,
           subtitle: 'Enter Show',
           showBackButton: true,

@@ -858,6 +858,7 @@ class _AdminEntryManagementScreenState
     }();
 
     return RingMasterPageShell(
+      showId: widget.showId,
       title: 'RingMaster Show',
       subtitle: 'Entry Mgmt — ${widget.showName}',
       showBackButton: true,

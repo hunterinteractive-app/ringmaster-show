@@ -90,3 +90,13 @@ The reviewed-answer migration was applied to the live project on 2026-09-19; the
 Chester was initially deployed as a local-only bundle, so subsequent superintendent releases omitted the uncommitted assistant source. Version 1.00.03 restores the complete assistant on top of b89d6fa, preserving linked superintendent changes. Assistant source, assets, migrations, and regression tests are now committed; the deployment workflow runs Chester tests with accessibility tests. No backend migration is reapplied by this release. Existing AI enablement and approved reusable answers remain in the live database.
 
 Validation: clean Flutter analysis; 46 native assistant/accessibility/data tests passed; four superintendent widget tests passed in Chrome (these require dart:html); release web build passed.
+
+## Conversation-quality improvements — September 30, 2026
+
+Migration `20261001034049_improve_chester_context.sql` adds a read-only `animals` topic to the existing invoker RPC. It requires accepted household access, explicitly filters `owner_user_id` even when a secretary has broader table permissions, and omits deleted animals, contact details and internal identifiers. Entry lookups retain their household restriction and now include visible show sections for comparison. No payment verification or unrestricted secretary exhibitor search is added.
+
+Chester routes personal record requests to a required single lookup, while ordinary how-to answers remain free where prepared guidance exists. Missing-entry, unavailable-section and missing-report suggested questions use records for signed-in users. The complete transcript is still saved; the model receives the current issue plus the most recent five messages within the existing six-message limit. Short confirmations and Open/Youth answers retain their original scope. The app and database still enforce permissions independently of the prompt.
+
+Reviewed instructions explain Intermediate (6/8), the Unknown DOB checkbox and Pick control, multiple selected A/B/C sections, entry editing and scratching, payment clarification and focused form-error troubleshooting. Oversized lookup lists are shortened with explicit truncation flags before a second model call; limits remain two calls, one lookup, 1,200 output tokens per call and the existing reservation/monthly/user caps.
+
+Validation: Flutter conversation/routing tests; Deno tool-required, no-lookup general guidance, bounds and failure tests; rollback-only SQL owner/member/stranger/revoked-household and budget tests. Release requires this migration, the `show-assistant` Edge Function, and the Flutter app together. Regression tests verify routing and data boundaries; live AI wording still requires a post-deployment smoke check.

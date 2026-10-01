@@ -148,3 +148,50 @@ Deno.test("failed lookup is not marked as checked; huge tool data stops before s
   );
   assert(calls === 1);
 });
+Deno.test("personal record answers require the bounded lookup", async () => {
+  let calls = 0;
+  let reads = 0;
+  const result = await answerQuestion([], true, async (body) => {
+    calls++;
+    assert(
+      (body as { tool_choice: string }).tool_choice ===
+        (calls === 1 ? "required" : "none"),
+    );
+    return calls === 1 ? call : text;
+  }, async () => {
+    reads++;
+    return { rows: [{ tattoo: "A1", is_dob_unknown: true }] };
+  }, true);
+  assert(reads === 1 && result.checked);
+  assert(parseRequest({ ...base, topic: "animals" }).topic === "animals");
+});
+Deno.test("large authorized record lists remain bounded and explicitly partial", async () => {
+  let calls = 0;
+  const result = await answerQuestion(
+    [],
+    true,
+    async (body) => {
+      calls++;
+      if (calls === 2) {
+        const inputs = (body as { input: any[] }).input;
+        const data = JSON.parse(inputs[inputs.length - 1].output);
+        assert(data.possibly_truncated === true && data.rows.length < 31);
+        assert(
+          new TextEncoder().encode(JSON.stringify(body)).length <=
+            MAX_MODEL_BYTES,
+        );
+      }
+      return calls === 1 ? call : text;
+    },
+    async () => ({
+      rows: Array.from({ length: 31 }, () => ({ tattoo: "X".repeat(1000) })),
+    }),
+  );
+  assert(calls === 2 && result.checked);
+});
+
+Deno.test("a personal answer without the required lookup fails closed", async () => {
+  await rejects(() =>
+    answerQuestion([], true, async () => text, async () => ({}), true)
+  );
+});
