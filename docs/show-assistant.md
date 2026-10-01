@@ -93,7 +93,7 @@ Validation: clean Flutter analysis; 46 native assistant/accessibility/data tests
 
 ## Conversation-quality improvements — September 30, 2026
 
-Migration `20261001034049_improve_chester_context.sql` adds a read-only `animals` topic to the existing invoker RPC. It requires accepted household access, explicitly filters `owner_user_id` even when a secretary has broader table permissions, and omits deleted animals, contact details and internal identifiers. Entry lookups retain their household restriction and now include visible show sections for comparison. No payment verification or unrestricted secretary exhibitor search is added.
+Migration `20261001035738_improve_chester_context.sql` adds a read-only `animals` topic to the existing invoker RPC. It requires accepted household access, explicitly filters `owner_user_id` even when a secretary has broader table permissions, and omits deleted animals, contact details and internal identifiers. Entry lookups retain their household restriction and now include visible show sections for comparison. No payment verification or unrestricted secretary exhibitor search is added.
 
 Chester routes personal record requests to a required single lookup, while ordinary how-to answers remain free where prepared guidance exists. Missing-entry, unavailable-section and missing-report suggested questions use records for signed-in users. The complete transcript is still saved; the model receives the current issue plus the most recent five messages within the existing six-message limit. Short confirmations and Open/Youth answers retain their original scope. The app and database still enforce permissions independently of the prompt.
 
