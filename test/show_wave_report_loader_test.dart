@@ -52,11 +52,23 @@ void main() {
                   },
                 ],
               };
-            case 'report_closeout_checkin_entries':
+            case 'report_checkin_entries':
             case 'report_wave_checkin_entries':
               final params = jsonDecode(request.body);
-              expect(params['p_exhibitor_id'], 'exhibitor');
-              expect(params['p_section_ids'], ['open']);
+              expect(
+                request.url.queryParameters['exhibitor_id'],
+                'eq.exhibitor',
+              );
+              expect(
+                request.url.queryParameters['section_id'],
+                contains('open'),
+              );
+              if (endpoint == 'report_wave_checkin_entries') {
+                expect(params['p_exhibitor_id'], 'exhibitor');
+                expect(params['p_section_ids'], ['open']);
+              } else {
+                expect(params.containsKey('p_exhibitor_id'), isFalse);
+              }
               if (mode == 'selected') expect(params['p_wave_id'], 'wave2');
               if (request.url.queryParameters['offset'] == '0') {
                 result = [
@@ -104,7 +116,7 @@ void main() {
       final pending = CheckInSheetReportLoader(client).load(request);
       if (mode == 'invalid') {
         await expectLater(pending, throwsStateError);
-        expect(calls, isNot(contains('report_closeout_checkin_entries')));
+        expect(calls, isNot(contains('report_checkin_entries')));
         return;
       }
       final data = await pending;
@@ -114,7 +126,7 @@ void main() {
         expect(data.sectionLabel, contains('Wave 2'));
         expect(data.waveNote, contains('Entries tab'));
       } else {
-        expect(calls, contains('report_closeout_checkin_entries'));
+        expect(calls, contains('report_checkin_entries'));
         expect(data.entries.length, 2);
         expect(data.waveSheets.length, mode == 'archive' ? 2 : 0);
         if (mode == 'archive') {
