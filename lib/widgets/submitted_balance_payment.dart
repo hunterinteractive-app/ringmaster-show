@@ -8,10 +8,13 @@ class SubmittedBalancePayment extends StatefulWidget {
   const SubmittedBalancePayment({
     super.key,
     required this.showId,
+    this.supportUserId,
     this.loadBalances,
     this.startCheckout,
   });
   final String showId;
+  final String? supportUserId;
+  bool get readOnly => supportUserId != null;
   final Future<List<Map<String, dynamic>>> Function()? loadBalances;
   final Future<String> Function(String cartId)? startCheckout;
   @override
@@ -34,8 +37,13 @@ class _SubmittedBalancePaymentState extends State<SubmittedBalancePayment> {
       final rows = widget.loadBalances != null
           ? await widget.loadBalances!()
           : await Supabase.instance.client.rpc(
-              'list_my_submitted_balances',
-              params: {'p_show_id': widget.showId},
+              widget.readOnly
+                  ? 'support_submitted_balances'
+                  : 'list_my_submitted_balances',
+              params: {
+                'p_show_id': widget.showId,
+                if (widget.readOnly) 'p_target_user_id': widget.supportUserId,
+              },
             );
       if (!mounted) return;
       setState(() {
@@ -50,6 +58,7 @@ class _SubmittedBalancePaymentState extends State<SubmittedBalancePayment> {
   }
 
   Future<void> _pay(Map<String, dynamic> balance) async {
+    if (widget.readOnly) return;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -69,7 +78,7 @@ class _SubmittedBalancePaymentState extends State<SubmittedBalancePayment> {
         ],
       ),
     );
-    if (confirmed != true || !mounted) return;
+    if (confirmed != true || !mounted || widget.readOnly) return;
     setState(() {
       _busy = true;
       _error = null;
@@ -119,7 +128,8 @@ class _SubmittedBalancePaymentState extends State<SubmittedBalancePayment> {
               ),
               FilledButton.icon(
                 onPressed:
-                    _busy ||
+                    widget.readOnly ||
+                        _busy ||
                         balance['review_required'] == true ||
                         balance['online_available'] != true
                     ? null
@@ -129,6 +139,10 @@ class _SubmittedBalancePaymentState extends State<SubmittedBalancePayment> {
                   _busy ? 'Opening payment…' : 'Pay outstanding balance',
                 ),
               ),
+              if (widget.readOnly)
+                const Text(
+                  'Support preview only. The exhibitor must sign in to pay.',
+                ),
               if (balance['review_required'] == true)
                 const Text(
                   'This submission has changes or prior payments. Please contact the show secretary to confirm the balance.',

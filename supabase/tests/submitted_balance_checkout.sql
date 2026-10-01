@@ -144,6 +144,14 @@ select day_show_id,true,'stripe' from payment_test_context
 on conflict(show_id) do update set stripe_enabled=true,default_online_provider='stripe';
 insert into public.show_payment_account_links(show_id,provider,status,account_status,charges_enabled,stripe_account_id,provider_account_id)
 select day_show_id,'stripe','active','ready',true,'acct_test','acct_test' from payment_test_context;
+savepoint support_preview;
+select set_config('request.jwt.claims',jsonb_build_object('role','authenticated','sub',(select other_id from payment_test_context))::text,true);
+select throws_ok($t$select public.support_submitted_balances(day_show_id,owner_id) from payment_test_context$t$,'42501','Only super administrators can inspect support balances.','ordinary user cannot inspect another household balance');
+insert into public.super_admins(user_id) select other_id from payment_test_context;
+select is((select jsonb_array_length(public.support_submitted_balances(day_show_id,owner_id)) from payment_test_context),1,'super admin can preview target balance');
+select is((select jsonb_array_length(public.support_submitted_balances(day_show_id,other_id)) from payment_test_context),0,'support preview scoped to selected account');
+select ok(not has_function_privilege('anon','public.support_submitted_balances(uuid,uuid)','execute'),'anonymous support access denied');
+rollback to savepoint support_preview;
 create temp table original_entries as select e.* from public.entries e join payment_test_context c on e.source_cart_id=c.day_cart_id;
 select set_config('request.jwt.claims',jsonb_build_object('role','authenticated','sub',(select other_id from payment_test_context))::text,true);
 select is((select jsonb_array_length(public.list_my_submitted_balances(day_show_id)) from payment_test_context),0,'unrelated household cannot list balances');

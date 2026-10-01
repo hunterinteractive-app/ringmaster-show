@@ -48,6 +48,51 @@ void main() {
     expect(attempts, 1);
     expect(find.textContaining('test provider unavailable'), findsOneWidget);
   });
+  testWidgets('support mode shows balance but cannot start payment', (
+    tester,
+  ) async {
+    var attempts = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SubmittedBalancePayment(
+          showId: 'show',
+          supportUserId: 'target-user',
+          loadBalances: () async => [
+            {
+              'exhibitors': 'Target Exhibitor',
+              'balance_due_cents': 2400,
+              'online_available': true,
+            },
+          ],
+          startCheckout: (_) async {
+            attempts++;
+            return 'https://example.invalid';
+          },
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.text('Target Exhibitor — USD 24.00 outstanding'),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining('The exhibitor must sign in to pay.'),
+      findsOneWidget,
+    );
+    expect(
+      tester
+          .widget<FilledButton>(
+            find.byWidgetPredicate((w) => w is FilledButton),
+          )
+          .onPressed,
+      isNull,
+    );
+    await tester.tap(find.text('Pay outstanding balance'));
+    await tester.pumpAndSettle();
+    expect(attempts, 0);
+    expect(find.text('Continue to secure payment'), findsNothing);
+  });
   testWidgets('no unpaid submissions shows no payment action', (tester) async {
     await tester.pumpWidget(
       MaterialApp(

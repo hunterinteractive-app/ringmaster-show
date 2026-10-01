@@ -1401,7 +1401,11 @@ class _ShowExpansionCard extends StatelessWidget {
           ),
           children: [
             const SizedBox(height: AppSpacing.md),
-            if (!readOnly) SubmittedBalancePayment(showId: showId),
+            SubmittedBalancePayment(
+              key: ValueKey('$showId-${AppSession.impersonatedUserId}'),
+              showId: showId,
+              supportUserId: readOnly ? AppSession.impersonatedUserId : null,
+            ),
             Wrap(
               spacing: AppSpacing.sm,
               runSpacing: AppSpacing.sm,
