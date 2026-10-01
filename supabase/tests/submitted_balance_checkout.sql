@@ -188,6 +188,20 @@ select public.finalize_entry_cart_paid(day_cart_id,(q->>'payment_session_id')::u
 select is((select count(*)::int from public.entries where source_cart_id=(select day_cart_id from payment_test_context) and payment_status='paid'),1,'only billable entry marked paid');
 select is((select status from public.entries where source_cart_id=(select day_cart_id from payment_test_context) and is_fur),'scratched','scratch retained after payment');
 rollback to savepoint eligible_scratch;
+-- A separate paid cart for this same exhibitor/show must not block checkout.
+savepoint other_cart_payment;
+insert into public.entry_carts(id,user_id,show_id,status,payment_status)
+select '00000000-0000-4000-8000-000000000098',owner_id,day_show_id,'submitted','paid' from payment_test_context;
+insert into public.show_exhibitor_balances(show_id,exhibitor_id,exhibitor_user_id,entry_cart_id,source,currency,paid_online_cents)
+select show_id,exhibitor_id,exhibitor_user_id,'00000000-0000-4000-8000-000000000098','cart',currency,800
+from public.show_exhibitor_balances where entry_cart_id=(select day_cart_id from payment_test_context);
+select lives_ok($t$select checkout_private.validate_submitted_cart(day_cart_id) from payment_test_context$t$,'payment on another cart does not block this cart');
+select is((select (public.list_my_submitted_balances(day_show_id)->0->>'review_required')::boolean from payment_test_context),false,'remaining cart payment button stays enabled');
+select lives_ok($t$select public.create_payment_quote_attempt(day_cart_id,owner_id,'stripe',0.02,0.029,30) from payment_test_context$t$,'remaining cart can start checkout after another cart is paid');
+create temp table other_cart_quote as select public.create_payment_quote_attempt(day_cart_id,owner_id,'stripe',0.02,0.029,30) q from payment_test_context;
+select lives_ok($t$select public.finalize_entry_cart_paid(day_cart_id,(q->>'payment_session_id')::uuid,'stripe','pi_other_cart',(q->'quote'->>'expected_amount_cents')::int,q->'quote'->>'currency') from payment_test_context,other_cart_quote$t$,'remaining cart payment completes after another cart is paid');
+select is((select sum(balance_due_cents)::int from public.show_exhibitor_balances where entry_cart_id=(select day_cart_id from payment_test_context)),0,'remaining cart balance clears');
+rollback to savepoint other_cart_payment;
 create temp table quote as select public.create_payment_quote_attempt(day_cart_id,owner_id,'stripe',0.02,0.029,30) q from payment_test_context;
 select is((select status from public.entry_carts where id=(select day_cart_id from payment_test_context)),'submitted','checkout does not reopen the cart');
 select is((select count(*)::int from original_entries),2,'fixture contains regular and fur entries');
