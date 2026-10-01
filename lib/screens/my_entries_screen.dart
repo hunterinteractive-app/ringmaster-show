@@ -17,6 +17,7 @@ import '../utils/entry_class_name.dart';
 import '../utils/species_sex.dart';
 import '../widgets/rm_widgets.dart';
 import '../widgets/stripe_payment_confirmation_dialog.dart';
+import '../widgets/submitted_balance_payment.dart';
 
 final supabase = Supabase.instance.client;
 
@@ -1400,6 +1401,7 @@ class _ShowExpansionCard extends StatelessWidget {
           ),
           children: [
             const SizedBox(height: AppSpacing.md),
+            if (!readOnly) SubmittedBalancePayment(showId: showId),
             Wrap(
               spacing: AppSpacing.sm,
               runSpacing: AppSpacing.sm,

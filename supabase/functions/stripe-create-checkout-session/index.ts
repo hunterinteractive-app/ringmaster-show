@@ -176,7 +176,9 @@ function buildStripeSessionForm(args: {
   );
   form.set(
     "cancel_url",
-    `${appBaseUrl}/#/cart?cart_id=${quote.cart_id}&show_id=${quote.show_id}&show_name=${
+    quote.settles_submitted_entries === true
+      ? `${appBaseUrl}/#/entries?show_id=${quote.show_id}&stripe=cancel`
+      : `${appBaseUrl}/#/cart?cart_id=${quote.cart_id}&show_id=${quote.show_id}&show_name=${
       encodeURIComponent(quote.show_name)
     }&stripe=cancel`,
   );
