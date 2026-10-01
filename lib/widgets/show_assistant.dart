@@ -65,7 +65,36 @@ class _ShowAssistantOverlayState extends State<ShowAssistantOverlay> {
       final mobile = box.maxWidth < 600;
       return Stack(
         children: [
-          widget.child,
+          Column(
+            children: [
+              Expanded(child: widget.child),
+              if (mobile && MediaQuery.viewInsetsOf(context).bottom == 0)
+                Material(
+                  color: Theme.of(context).colorScheme.surface,
+                  child: SafeArea(
+                    top: false,
+                    child: SizedBox(
+                      height: 56,
+                      width: double.infinity,
+                      child: Align(
+                        alignment: Alignment.centerRight,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          child: TextButton.icon(
+                            key: const ValueKey('assistant-launcher'),
+                            onPressed: controller.open,
+                            icon: const ExcludeSemantics(
+                              child: RabbitAvatar(size: 40),
+                            ),
+                            label: const Text('Ask Chester'),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
           if (controller.isOpen) ...[
             Positioned.fill(
               child: GestureDetector(
@@ -103,7 +132,7 @@ class _ShowAssistantOverlayState extends State<ShowAssistantOverlay> {
                 ),
               ),
             ),
-          ] else
+          ] else if (!mobile)
             Positioned(
               right: 16,
               bottom: MediaQuery.viewInsetsOf(context).bottom + 72,

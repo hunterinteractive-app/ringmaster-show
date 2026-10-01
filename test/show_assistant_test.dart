@@ -330,6 +330,11 @@ void main() {
       ),
     );
     final controller = ShowAssistantController.instance;
+    var pageButtonTaps = 0;
+    tester.view.physicalSize = const Size(320, 640);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
     await tester.pumpWidget(
       MaterialApp(
         navigatorKey: controller.navigatorKey,
@@ -338,10 +343,41 @@ void main() {
           data: const MediaQueryData(disableAnimations: true),
           child: ShowAssistantOverlay(child: child!),
         ),
-        home: const Scaffold(body: Text('Show screen')),
+        home: Scaffold(
+          body: Align(
+            alignment: Alignment.bottomRight,
+            child: TextButton(
+              onPressed: () => pageButtonTaps++,
+              child: const Text('Save entry'),
+            ),
+          ),
+        ),
       ),
     );
-    await tester.tap(find.byKey(const ValueKey('assistant-launcher')));
+    final launcher = find.byKey(const ValueKey('assistant-launcher'));
+    final save = find.text('Save entry');
+    expect(
+      tester.getRect(save).bottom,
+      lessThanOrEqualTo(tester.getRect(launcher).top),
+    );
+    await tester.tap(save);
+    expect(pageButtonTaps, 1);
+    expect(find.byType(FloatingActionButton), findsNothing);
+    tester.view.physicalSize = const Size(1000, 800);
+    await tester.pumpAndSettle();
+    expect(find.byType(FloatingActionButton), findsOneWidget);
+    expect(
+      tester.getRect(save).bottom,
+      greaterThan(tester.getRect(launcher).bottom),
+    );
+    tester.view.physicalSize = const Size(320, 640);
+    await tester.pumpAndSettle();
+    expect(find.byType(FloatingActionButton), findsNothing);
+    expect(
+      tester.getRect(save).bottom,
+      lessThanOrEqualTo(tester.getRect(launcher).top),
+    );
+    await tester.tap(launcher);
     await tester.pumpAndSettle();
     expect(find.byType(DropdownButtonFormField<String>), findsNothing);
     expect(find.text('A friendly ring assistant'), findsOneWidget);
@@ -381,7 +417,9 @@ void main() {
                   as RenderRepaintBoundary)
               .toImage();
       final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-      final directory = await Directory.systemTemp.createTemp('chester-preview-');
+      final directory = await Directory.systemTemp.createTemp(
+        'chester-preview-',
+      );
       try {
         final preview = File('${directory.path}/assistant.png');
         await preview.writeAsBytes(bytes!.buffer.asUint8List());
