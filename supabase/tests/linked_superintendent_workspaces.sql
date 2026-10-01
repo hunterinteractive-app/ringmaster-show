@@ -29,7 +29,7 @@ select lives_ok($$select public.save_workspace_assignment((select id from ws_fix
 select is((select table_number from public.show_judging_assignments where id=(select id from ws_fixture where k='assignment')),'2','shared table persisted');
 select is((select show_id from public.show_judging_assignments where id=(select id from ws_fixture where k='assignment')),(select id from ws_fixture where k='one'),'source show unchanged');
 select is((select completed_by from public.show_judging_assignments where id=(select id from ws_fixture where k='assignment')),(select id from ws_fixture where k='manager'),'completion actor recorded');
-select throws_ok($$select public.save_workspace_assignment((select id from ws_fixture where k='group'),(select id from ws_fixture where k='assignment'),'9',1,'draft','2026-09-20T00:00:00Z')$$,'40001','Another superintendent changed this assignment. Refresh and try again.','stale editor cannot overwrite');
+select throws_ok($$select public.save_workspace_assignment((select id from ws_fixture where k='group'),(select id from ws_fixture where k='assignment'),'9',1,'draft','2026-09-20T00:00:00Z')$$,'PT409','Another superintendent changed this assignment. Refresh and try again.','stale editor cannot overwrite');
 select throws_ok($$select public.save_workspace_assignment((select id from ws_fixture where k='group'),(select id from ws_fixture where k='foreign'),'9',1,'draft','2026-09-20T00:00:00Z')$$,'42501','Assignment does not belong to this workspace.','cannot edit unrelated show');
 reset role;
 delete from public.role_assignments where user_id=(select id from ws_fixture where k='manager') and show_id=(select id from ws_fixture where k='two');
