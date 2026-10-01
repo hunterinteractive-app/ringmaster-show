@@ -637,6 +637,8 @@ class LegsReportLoader {
         row['resolved_section_id'] = sectionId;
         row['resolved_section_letter'] = showLetter;
         row['resolved_judging_date'] = judgingDate;
+        row['allows_ris_leg'] =
+            _str(rawSection['breed_scope']).toLowerCase() == 'all';
         normalizeSpeciesSexPresentation(
           row,
           speciesOverride: legSpeciesFromResultRow(row),
@@ -781,6 +783,7 @@ class LegsReportLoader {
 
       byEntryId[entryId] = _EntryLegContext(
         sectionId: sectionId,
+        allowsRisLeg: row['allows_ris_leg'] == true,
         sectionLetter: sectionLetter,
         judgingDate: _tryParseDate(row['resolved_judging_date']),
         varietyDisplay: varietyDisplay,
@@ -1180,7 +1183,11 @@ class LegsReportLoader {
       );
     }
 
-    if (_isReserveInShowAward(normalized) &&
+    // Restricted-breed specialties may recognize RIS, but cannot earn a
+    // leg for RIS. Other qualifying awards still compete below. Applies
+    // to historical shows as well as new shows; no date cutoff.
+    if (ctx.allowsRisLeg &&
+        _isReserveInShowAward(normalized) &&
         ctx.showAnimals >= 5 &&
         ctx.showExhibitors >= 3) {
       return _LegRuleMatch(
@@ -1441,6 +1448,7 @@ class _LegRuleMatch {
 }
 
 class _EntryLegContext {
+  final bool allowsRisLeg;
   final String sectionId;
   final String sectionLetter;
   final DateTime? judgingDate;
@@ -1491,6 +1499,7 @@ class _EntryLegContext {
 
   const _EntryLegContext({
     required this.sectionId,
+    required this.allowsRisLeg,
     required this.sectionLetter,
     required this.judgingDate,
     required this.varietyDisplay,
