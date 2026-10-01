@@ -14,6 +14,7 @@ import 'package:pdf/widgets.dart' as pw;
 import '../closeout/utils/breed_results_detail_order.dart';
 import 'print_pack_pdf_helpers.dart';
 import 'control_sheet_labels.dart';
+import 'control_sheet_judging_order.dart';
 import '../closeout/data/report_data_reader.dart';
 
 final supabase = Supabase.instance.client;
@@ -207,6 +208,7 @@ class ControlSheetsGeneratorSheet extends StatefulWidget {
   final bool includeScratched;
   final bool combineSections;
   final bool youthFirst;
+  final bool printJudgingOrder;
 
   const ControlSheetsGeneratorSheet({
     super.key,
@@ -219,6 +221,7 @@ class ControlSheetsGeneratorSheet extends StatefulWidget {
     required this.includeScratched,
     required this.combineSections,
     required this.youthFirst,
+    this.printJudgingOrder = false,
   });
 
   @override
@@ -232,6 +235,7 @@ class _ControlSheetsGeneratorSheetState
   String? _msg;
 
   double _fontScale = 1.0;
+  bool _pageBreakByVariety = false;
 
   double _scaled(double base, {double max = 16}) {
     final value = base * _fontScale;
@@ -862,6 +866,7 @@ class _ControlSheetsGeneratorSheetState
     List<Map<String, dynamic>> rows,
     pw.ThemeData theme, {
     required bool includeQrCode,
+    ControlSheetJudgingOrder? judgingOrder,
     required Map<String, Map<String, int>> cavySopSortMap,
   }) {
     final doc = pw.Document(theme: theme);
@@ -1024,6 +1029,7 @@ class _ControlSheetsGeneratorSheetState
           'sectionLetter': _safe(first, 'section_letter').toUpperCase(),
           'sectionSortOrder': _toInt(first['section_sort_order']),
           'breed': _safe(first, 'breed'),
+          'species': _safe(first, 'species'),
           'color': isFurOrWool
               ? controlSheetFurColor(first)
               : _colorLabel(first),
@@ -1236,16 +1242,23 @@ class _ControlSheetsGeneratorSheetState
       return 0;
     }
 
-    final sortedAllPages = [...allPages]..sort(compareControlPages);
+    final sortedAllPages = [...allPages]
+      ..sort((a, b) {
+        final order = judgingOrder == null
+            ? 0
+            : judgingOrder.rank(a).compareTo(judgingOrder.rank(b));
+        return order != 0 ? order : compareControlPages(a, b);
+      });
 
     final sortedSectionGroups =
         <MapEntry<String, List<Map<String, dynamic>>>>[];
 
-    if (widget.combineSections) {
+    if (widget.combineSections || judgingOrder != null) {
       // Keep Open and Youth as separate sheet sections inside the same PDF,
       // while preserving the sorted Open/Youth-by-breed flow. Repeated section
       // titles are allowed here because each run gets its own PDF header.
       String? currentTitle;
+      int? currentRank;
       List<Map<String, dynamic>> currentPages = <Map<String, dynamic>>[];
 
       void flushCurrentRun() {
@@ -1259,11 +1272,14 @@ class _ControlSheetsGeneratorSheetState
             ? 'Section'
             : (p['sectionTitle'] ?? '').toString().trim();
 
-        if (currentTitle != null && currentTitle != sectionTitle) {
+        if (currentTitle != null &&
+            (currentTitle != sectionTitle ||
+                currentRank != judgingOrder?.rank(p))) {
           flushCurrentRun();
         }
 
         currentTitle = sectionTitle;
+        currentRank = judgingOrder?.rank(p);
         currentPages.add(p);
       }
 
@@ -1301,7 +1317,9 @@ class _ControlSheetsGeneratorSheetState
           pw.SizedBox(height: 3),
           pw.Center(
             child: pw.Text(
-              'Judging Sheet - Breed Class • Compact',
+              _pageBreakByVariety
+                  ? 'Judging Sheet - Breed Class • By Variety'
+                  : 'Judging Sheet - Breed Class • Compact',
               style: pw.TextStyle(
                 fontSize: _scaled(12),
                 fontWeight: pw.FontWeight.bold,
@@ -1918,6 +1936,7 @@ class _ControlSheetsGeneratorSheetState
               estimatedRemainingHeight =
                   estimatedUsablePageHeight - estimatedBreedHeaderHeight;
 
+              String? previousVariety;
               for (var i = 0; i < breedPages.length; i++) {
                 final p = breedPages[i];
                 final isFurOrWool = p['isFurOrWool'] == true;
@@ -1925,6 +1944,14 @@ class _ControlSheetsGeneratorSheetState
                     ((p['color'] ?? '').toString().trim().isEmpty)
                     ? 'standard'
                     : controlSheetCountLabel(p['color']);
+                // Keep all classes of a variety together before starting the
+                // next variety on a fresh sheet. Fur/wool is a separate group.
+                final varietyKey = '$isFurOrWool|$groupLabel';
+                final startsNewVariety =
+                    _pageBreakByVariety &&
+                    previousVariety != null &&
+                    previousVariety != varietyKey;
+                previousVariety = varietyKey;
                 final classLabel = controlSheetCountLabel(p['class']);
                 final sexLabel = controlSheetCountLabel(p['sex']);
                 final groupStatsKey = '$breed|$groupLabel';
@@ -2004,8 +2031,9 @@ class _ControlSheetsGeneratorSheetState
                 // start it on a fresh page. This avoids orphaned class headers
                 // where the header prints at the bottom of one page and all
                 // animals continue on the next page.
-                if (estimatedRemainingHeight < estimatedClassHeight &&
-                    widgets.isNotEmpty) {
+                if (startsNewVariety ||
+                    (estimatedRemainingHeight < estimatedClassHeight &&
+                        widgets.isNotEmpty)) {
                   widgets.add(pw.NewPage());
                   widgets.add(
                     breedHeaderBlock(
@@ -2053,6 +2081,14 @@ class _ControlSheetsGeneratorSheetState
         return;
       }
 
+      final judgingOrder = widget.printJudgingOrder
+          ? await loadControlSheetJudgingOrder(supabase, widget.showId)
+          : null;
+      if (judgingOrder != null && !judgingOrder.isAvailable) {
+        throw StateError(
+          'No judging order is saved. Refresh Print Order and try again.',
+        );
+      }
       final cavySopSortMap = await _loadCavySopSortMap();
 
       final theme = await buildPrintPackPdfTheme();
@@ -2061,11 +2097,12 @@ class _ControlSheetsGeneratorSheetState
         theme,
         includeQrCode: includeQrCode,
         cavySopSortMap: cavySopSortMap,
+        judgingOrder: judgingOrder,
       );
       final bytes = await doc.save();
 
       final name =
-          'control_compact_${widget.showName}_${widget.sectionLabel}${includeQrCode ? '_QR' : ''}.pdf';
+          'control_${_pageBreakByVariety ? 'by_variety' : 'compact'}_${widget.showName}_${widget.sectionLabel}${includeQrCode ? '_QR' : ''}.pdf';
 
       final savedPath = await savePdfToUserChosenLocation(
         bytes: Uint8List.fromList(bytes),
@@ -2215,6 +2252,17 @@ class _ControlSheetsGeneratorSheetState
                 ),
               ),
             ),
+            SwitchListTile.adaptive(
+              title: const Text('Start each variety on a new page'),
+              subtitle: const Text(
+                'Classes within a variety share pages. The next variety starts on a fresh sheet. Applies with or without QR codes.',
+              ),
+              value: _pageBreakByVariety,
+              onChanged: _building
+                  ? null
+                  : (value) => setState(() => _pageBreakByVariety = value),
+            ),
+            const SizedBox(height: 8),
             FilledButton.icon(
               style: FilledButton.styleFrom(
                 backgroundColor: AppColors.primaryButton,
@@ -2225,9 +2273,7 @@ class _ControlSheetsGeneratorSheetState
                   ? null
                   : () => _generatePdf(includeQrCode: false),
               icon: const Icon(Icons.picture_as_pdf),
-              label: Text(
-                _building ? 'Building Compact PDF…' : 'Generate Compact PDF',
-              ),
+              label: Text(_building ? 'Building PDF…' : 'Generate PDF'),
             ),
             const SizedBox(height: 8),
             Container(
@@ -2258,9 +2304,7 @@ class _ControlSheetsGeneratorSheetState
                   : () => _generatePdf(includeQrCode: true),
               icon: const Icon(Icons.qr_code_2),
               label: Text(
-                _building
-                    ? 'Building Compact PDF…'
-                    : 'Generate Compact PDF with QR Code',
+                _building ? 'Building PDF…' : 'Generate PDF with QR Code',
               ),
             ),
             const SizedBox(height: 8),
