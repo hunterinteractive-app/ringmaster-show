@@ -57,9 +57,19 @@ class ShowPaymentConfiguration {
         .trim()
         .toLowerCase();
 
+    final timingMode = (json['payment_timing_mode'] ?? '').toString().trim();
+    if (!const {
+      'online_only',
+      'online_or_at_show',
+      'pay_at_show_only',
+    }.contains(timingMode)) {
+      throw const FormatException(
+        'Payment timing could not be loaded. Refresh before saving.',
+      );
+    }
+
     return ShowPaymentConfiguration(
-      paymentTimingMode: (json['payment_timing_mode'] ?? 'pay_at_show_only')
-          .toString(),
+      paymentTimingMode: timingMode,
       allowOnline: json['allow_online'] == true,
       allowAtShow: json['allow_at_show'] == true,
       requireOnlinePayment: json['require_online_payment'] == true,
