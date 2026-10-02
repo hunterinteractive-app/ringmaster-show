@@ -1,3 +1,4 @@
+import 'closeout/models/report_recipient.dart';
 import 'closeout/data/report_data_reader.dart';
 import 'closeout/data/loaders/check_in_sheet_report_loader.dart';
 import 'closeout/pdf/builders/check_in_sheet_report_pdf.dart';
@@ -2711,16 +2712,13 @@ class _PublishResultsPanelState extends State<_PublishResultsPanel> {
                 .toString()
                 .trim(),
         }..removeWhere((id, email) => id.isEmpty || email.isEmpty);
+        final contacts = {
+          for (final entry in emailsByExhibitorId.entries)
+            entry.key: <String, dynamic>{'email': entry.value},
+        };
         for (final artifact in artifacts) {
-          final metadata = artifact.metadata;
-          final existingEmail =
-              (metadata['exhibitor_email'] ?? metadata['email'] ?? '')
-                  .toString()
-                  .trim();
-          if (existingEmail.isNotEmpty) continue;
-          final exhibitorId = metadata['exhibitor_id']?.toString().trim() ?? '';
-          final email = emailsByExhibitorId[exhibitorId];
-          if (email != null) metadata['exhibitor_email'] = email;
+          final email = exhibitorReportRecipient(artifact.metadata, contacts);
+          if (email != null) artifact.metadata['exhibitor_email'] = email;
         }
       }
       if (!mounted) return;
@@ -5270,9 +5268,10 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
       (artifact.metadata[key] ?? '').toString().trim();
 
   String? _recipientFor(ReportArtifactSummary artifact) {
-    final keys = _groupFor(artifact.reportName) == 'exhibitor'
-        ? const ['exhibitor_email', 'email']
-        : const ['sweepstakes_email', 'email'];
+    if (_groupFor(artifact.reportName) == 'exhibitor') {
+      return exhibitorReportRecipient(artifact.metadata, _checkInExhibitors);
+    }
+    const keys = ['sweepstakes_email', 'email'];
     for (final key in keys) {
       final value = _metadataString(artifact, key);
       if (value.isNotEmpty) return value;
