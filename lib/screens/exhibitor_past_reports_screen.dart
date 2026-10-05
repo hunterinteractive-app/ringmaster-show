@@ -127,7 +127,13 @@ class _ExhibitorPastReportsScreenState
           .createSignedUrl(path, 300);
 
       final uri = Uri.parse(signedUrl);
-      final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      // Permission checks and signing outlive the browser's tap activation.
+      // Open in this tab so mobile browsers do not block the PDF as a pop-up.
+      final opened = await launchUrl(
+        uri,
+        mode: LaunchMode.externalApplication,
+        webOnlyWindowName: '_self',
+      );
 
       if (!opened) {
         throw Exception('Could not open the report download.');
