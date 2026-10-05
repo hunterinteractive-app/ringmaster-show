@@ -1837,6 +1837,7 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
               style: const TextStyle(color: AppColors.text),
               decoration: InputDecoration(
                 labelText: 'Class',
+                helperMaxLines: 5,
                 helperText: needsValidation
                     ? 'Select the class for this animal.'
                     : 'Projected class selected.',

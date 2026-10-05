@@ -38,6 +38,7 @@ import '../services/show_payment_configuration_service.dart';
 import '../utils/date_time_utils.dart';
 import '../theme/app_theme.dart';
 import '../widgets/rm_widgets.dart';
+import '../widgets/show_list_header.dart';
 import '../widgets/rm_timezone_notice_banner.dart';
 
 final supabase = Supabase.instance.client;
@@ -1527,6 +1528,10 @@ class _ShowListScreenState extends State<ShowListScreen> {
 
         return Scaffold(
           appBar: _ResponsiveShowAppBar(
+            headerHeight: ShowListHeader.heightFor(
+              context,
+              demoMode: widget.demoMode,
+            ),
             bundle: bundle,
             showAdmin:
                 !_loadingAdminAccess &&
@@ -2146,6 +2151,7 @@ class _ShowListScreenState extends State<ShowListScreen> {
 class _ResponsiveShowAppBar extends StatelessWidget
     implements PreferredSizeWidget {
   final _ShowListBundle? bundle;
+  final double headerHeight;
   final bool showAdmin;
   final VoidCallback? onAdmin;
   final bool showSuperintendent;
@@ -2160,6 +2166,7 @@ class _ResponsiveShowAppBar extends StatelessWidget
   final bool demoMode;
 
   const _ResponsiveShowAppBar({
+    required this.headerHeight,
     required this.bundle,
     required this.showAdmin,
     required this.onAdmin,
@@ -2176,7 +2183,7 @@ class _ResponsiveShowAppBar extends StatelessWidget
   });
 
   @override
-  Size get preferredSize => const Size.fromHeight(92);
+  Size get preferredSize => Size.fromHeight(headerHeight);
 
   @override
   Widget build(BuildContext context) {
@@ -2245,62 +2252,9 @@ class _ResponsiveShowAppBar extends StatelessWidget
         ? actionItems.skip(directCount).toList()
         : const <_TopBarActionData>[];
 
-    return AppBar(
-      toolbarHeight: 92,
-      titleSpacing: 16,
-      title: LayoutBuilder(
-        builder: (context, constraints) {
-          final compact = constraints.maxWidth < 320;
-          final logoSize = compact ? 58.0 : 80.0;
-          final titleFont = compact ? 20.0 : 28.0;
-          final subtitleFont = compact ? 12.0 : 15.0;
-
-          return Row(
-            children: [
-              Image.asset(
-                'assets/images/RingMaster_One_Show_Transparent.png',
-                excludeFromSemantics: true,
-                height: logoSize,
-                width: logoSize * 1.6,
-                fit: BoxFit.contain,
-                filterQuality: FilterQuality.high,
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'RingMaster Show',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        color: AppColors.headerText,
-                        fontSize: titleFont,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      demoMode
-                          ? 'Demo Mode — RingMaster Show'
-                          : 'Upcoming Shows',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: AppColors.headerText.withValues(alpha: .82),
-                        fontSize: subtitleFont,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          );
-        },
-      ),
+    return ShowListHeader(
+      height: headerHeight,
+      demoMode: demoMode,
       actions: [
         for (final action in directActions)
           _TopBarAction(
@@ -2311,7 +2265,6 @@ class _ResponsiveShowAppBar extends StatelessWidget
           ),
         if (overflowActions.isNotEmpty)
           _TopBarOverflowMenu(actions: overflowActions),
-        const SizedBox(width: 10),
       ],
     );
   }
