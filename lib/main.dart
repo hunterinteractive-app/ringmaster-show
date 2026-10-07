@@ -1,3 +1,5 @@
+import 'config/convention_demo.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'screens/admin/admin_resources_screen.dart';
 import 'screens/my_animals_screen.dart';
 import 'screens/account_settings_screen.dart';
@@ -41,11 +43,14 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   SupabaseConfig.validate();
+  ConventionDemo.validate(SupabaseConfig.url, Uri.base);
 
   await Supabase.initialize(
     url: SupabaseConfig.url,
     anonKey: SupabaseConfig.anonKey,
   );
+
+  await ConventionDemo.selectPersona();
 
   initialQrUri = _qrUriFromBrowser();
   initialCheckinUri = _checkinUriFromBrowser();
@@ -144,6 +149,23 @@ class MyApp extends StatelessWidget {
         navigatorObservers: [ShowAssistantController.instance.navigation],
         builder: (context, child) => Column(
           children: [
+            if (ConventionDemo.enabled)
+              Material(
+                color: const Color(0xFFFFE8A3),
+                child: SafeArea(
+                  bottom: false,
+                  child: TextButton(
+                    onPressed: () => launchUrl(
+                      Uri.parse('http://127.0.0.1:8787/booth'),
+                      webOnlyWindowName: '_self',
+                    ),
+                    child: const Text(
+                      'Convention demo • Fictional data • Emails and payments simulated • Demo controls',
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ),
+              ),
             Expanded(
               child: ShowAssistantOverlay(
                 child: child ?? const SizedBox.shrink(),

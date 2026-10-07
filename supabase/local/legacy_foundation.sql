@@ -1,7 +1,7 @@
 -- LOCAL ONLY: historical contracts needed before replaying tracked migrations.
 -- The loader-only fixture deliberately has a smaller reporting view. This file
 -- restores the older aggregate shape which subsequent migrations replace.
--- No hosted data or schema export is used. Do not apply to an existing project.
+-- Inspected schema contracts only; no hosted rows are copied. Fresh local projects only.
 
 create table public.sweepstakes_results (
   id uuid primary key default extensions.gen_random_uuid(),
@@ -332,6 +332,22 @@ alter table public.clubs add column is_active boolean default true;
 alter table public.exhibitors add column is_active boolean default true,
   add column is_merged boolean default false, add column merged_into_exhibitor_id uuid,
   add column merged_at timestamptz, add column updated_at timestamptz default now();
+-- Historical production column required while parsing the household-access
+-- migration. It must exist before migrations, not only in fixture preparation.
+alter table public.exhibitors
+  add column if not exists birth_date date,
+  add column if not exists claimed_by_user_id uuid;
+-- Historical flags referenced by SQL functions in the wave-schedule migration.
+alter table public.shows
+  add column if not exists auto_email_checkin_sheets boolean default false,
+  add column if not exists email_sending_disabled boolean default false,
+  add column if not exists finalized_at timestamptz,
+  add column if not exists is_closed boolean default false,
+  add column if not exists is_demo boolean default false,
+  add column if not exists demo_resets_at timestamptz,
+  add column if not exists timezone text default 'America/Indiana/Indianapolis',
+  add column if not exists entry_open_at timestamptz;
+
 create table public.exhibitor_merge_log (
   id uuid primary key default extensions.gen_random_uuid(),
   kept_exhibitor_id uuid references public.exhibitors(id),
@@ -587,3 +603,194 @@ returns boolean language sql stable security definer set search_path='' as $$
 $$;
 revoke all on function public.user_can_enter_results(uuid,uuid) from public,anon;
 grant execute on function public.user_can_enter_results(uuid,uuid) to authenticated,service_role;
+
+-- Historical prerequisites verified in registration_prerequisites_20261006.json.
+-- No fixture rows, permission bypasses, or payment state are inserted here.
+alter table public.show_payments
+  add column if not exists stripe_account_id text,
+  add column if not exists stripe_connected_account_id text,
+  add column if not exists destination_account_id text;
+alter table public.show_payment_sessions
+  add column if not exists destination_account_id text;
+alter table public.entries
+  add column if not exists result_entered_at timestamptz;
+create table public.show_judging_assignments (
+  id uuid default gen_random_uuid() not null primary key,
+  show_id uuid not null,
+  section_id uuid,
+  breed_id text not null,
+  variety_key text,
+  judge_id uuid,
+  table_number text,
+  sort_order integer default 0,
+  status text default 'planned'::text,
+  created_at timestamp with time zone default now(),
+  updated_at timestamp with time zone default now(),
+  judging_date date,
+  scope text default 'combined'::text,
+  entry_count_actual integer,
+  entry_count_estimated integer,
+  is_judge_change boolean default false not null,
+  override_reason text,
+  notes text,
+  created_by uuid,
+  completed_at timestamp with time zone,
+  completed_by uuid,
+  species text
+);
+alter table public.show_judging_assignments enable row level security;
+grant all on public.show_judging_assignments to service_role;
+CREATE OR REPLACE FUNCTION public.user_can_manage_show_lineup(p_show_id uuid)
+ RETURNS boolean
+ LANGUAGE sql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$ select exists (select 1 from public.role_assignments ra where ra.show_id = p_show_id and ra.user_id = auth.uid() and ra.role in ('admin', 'superintendent')) or exists (select 1 from public.role_assignments ra where ra.user_id = auth.uid() and ra.role = 'super_admin') or exists (select 1 from public.super_admins sa where sa.user_id = auth.uid()); $function$
+;
+revoke all on function public.user_can_manage_show_lineup(uuid) from public,anon;
+grant execute on function public.user_can_manage_show_lineup(uuid) to authenticated,service_role;
+
+-- Restore the historical typed payment contract before newer refund migrations.
+drop function public.apply_show_payment_to_balance(uuid);
+CREATE OR REPLACE FUNCTION public.apply_show_payment_to_balance(p_show_payment_id uuid)
+ RETURNS show_exhibitor_balances
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_payment public.show_payments%rowtype;
+  v_balance public.show_exhibitor_balances%rowtype;
+
+  v_paid_online_cents integer := 0;
+  v_paid_manual_cents integer := 0;
+  v_refunded_cents integer := 0;
+  v_balance_due_cents integer := 0;
+  v_payment_status text := 'unpaid';
+
+  v_latest_payment_id uuid;
+  v_latest_checkout_session_id text;
+  v_latest_payment_intent_id text;
+begin
+  select *
+  into v_payment
+  from public.show_payments sp
+  where sp.id = p_show_payment_id;
+
+  if v_payment.id is null then
+    raise exception 'show_payments row % not found', p_show_payment_id;
+  end if;
+
+  if v_payment.balance_id is null then
+    raise exception 'show_payments row % is missing balance_id', p_show_payment_id;
+  end if;
+
+  select *
+  into v_balance
+  from public.show_exhibitor_balances seb
+  where seb.id = v_payment.balance_id;
+
+  if v_balance.id is null then
+    raise exception 'show_exhibitor_balances row % not found', v_payment.balance_id;
+  end if;
+
+  -- Sum successful online Stripe/card payments for this balance.
+  select
+    coalesce(sum(
+      case
+        when sp.status in ('paid', 'partially_refunded')
+          and coalesce(sp.payment_method, '') <> 'manual'
+          and coalesce(sp.provider, '') <> 'manual'
+        then coalesce(sp.amount_cents, sp.total_cents, 0)
+        else 0
+      end
+    ), 0)::integer,
+
+    coalesce(sum(
+      case
+        when sp.status in ('paid', 'partially_refunded')
+          and (
+            coalesce(sp.payment_method, '') = 'manual'
+            or coalesce(sp.provider, '') = 'manual'
+          )
+        then coalesce(sp.amount_cents, sp.total_cents, 0)
+        else 0
+      end
+    ), 0)::integer,
+
+    coalesce(sum(
+      case
+        when sp.status in ('refunded', 'partially_refunded')
+        then coalesce(sp.amount_cents, sp.total_cents, 0)
+        else 0
+      end
+    ), 0)::integer
+  into
+    v_paid_online_cents,
+    v_paid_manual_cents,
+    v_refunded_cents
+  from public.show_payments sp
+  where sp.balance_id = v_payment.balance_id;
+
+  v_balance_due_cents :=
+    greatest(
+      coalesce(v_balance.calculated_total_cents, 0)
+      - coalesce(v_paid_online_cents, 0)
+      - coalesce(v_paid_manual_cents, 0)
+      + coalesce(v_refunded_cents, 0),
+      0
+    );
+
+  v_payment_status :=
+    case
+      when coalesce(v_balance.calculated_total_cents, 0) <= 0 then 'paid'
+      when (coalesce(v_paid_online_cents, 0) + coalesce(v_paid_manual_cents, 0))
+           > coalesce(v_balance.calculated_total_cents, 0)
+        then 'overpaid'
+      when v_balance_due_cents = 0 then 'paid'
+      when (coalesce(v_paid_online_cents, 0) + coalesce(v_paid_manual_cents, 0)) > 0
+        then 'partial'
+      when exists (
+        select 1
+        from public.show_payments pending_sp
+        where pending_sp.balance_id = v_payment.balance_id
+          and pending_sp.status in ('pending', 'processing', 'requires_action')
+      )
+        then 'pending'
+      else 'unpaid'
+    end;
+
+  select
+    sp.id,
+    coalesce(sp.checkout_session_id, sp.stripe_checkout_session_id),
+    coalesce(sp.payment_intent_id, sp.stripe_payment_intent_id)
+  into
+    v_latest_payment_id,
+    v_latest_checkout_session_id,
+    v_latest_payment_intent_id
+  from public.show_payments sp
+  where sp.balance_id = v_payment.balance_id
+  order by sp.updated_at desc nulls last, sp.created_at desc nulls last
+  limit 1;
+
+  update public.show_exhibitor_balances seb
+  set
+    paid_online_cents = coalesce(v_paid_online_cents, 0),
+    paid_manual_cents = coalesce(v_paid_manual_cents, 0),
+    refunded_cents = coalesce(v_refunded_cents, 0),
+    balance_due_cents = v_balance_due_cents,
+    payment_status = v_payment_status,
+    latest_show_payment_id = v_latest_payment_id,
+    latest_checkout_session_id = v_latest_checkout_session_id,
+    latest_payment_intent_id = v_latest_payment_intent_id,
+    updated_at = now()
+  where seb.id = v_payment.balance_id
+  returning *
+  into v_balance;
+
+  return v_balance;
+end;
+$function$
+;
+revoke all on function public.apply_show_payment_to_balance(uuid) from public,anon,authenticated;
+grant execute on function public.apply_show_payment_to_balance(uuid) to service_role;

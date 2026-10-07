@@ -81,6 +81,9 @@ flutter:
   assets:
     - assets/images/
     - assets/images/RingMaster_One_Show_Transparent.png
+    - assets/fonts/Roboto-Regular.ttf
+    - assets/fonts/Roboto-Bold.ttf
+    - assets/fonts/Roboto_LICENSE.txt
     - assets/fonts/NotoSans-Regular.ttf
     - assets/fonts/NotoSans-Bold.ttf
     - assets/fonts/NotoSans-Italic.ttf
