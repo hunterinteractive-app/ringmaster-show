@@ -1,3 +1,4 @@
+import '../services/show_assistant_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../widgets/household_access_announcement.dart';
 import '../services/household_session.dart';
@@ -1514,6 +1515,7 @@ class _ShowListScreenState extends State<ShowListScreen> {
 
   @override
   Widget build(BuildContext context) {
+    ShowAssistantController.instance.register(context, 'Upcoming Shows', null);
     if (_checkingLegal) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }

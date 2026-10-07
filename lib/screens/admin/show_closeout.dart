@@ -1,3 +1,4 @@
+import '../../services/show_assistant_service.dart';
 import 'package:ringmaster_show/reporting_core/network/transient_retry.dart';
 // lib/screens/admin/show_closeout.dart
 // ignore_for_file: deprecated_member_use, use_build_context_synchronously
@@ -7330,6 +7331,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
 
   @override
   Widget build(BuildContext context) {
+    ShowAssistantController.instance.register(context, 'Close Show/Reports', widget.showId);
     final reportsBlocked = !_resultsReadyForReports;
     final reportsBlockedMessage = _resultsReadinessMessage();
     final selectedScopeFinalized = _selectedCloseoutScopeIsFinalized;
