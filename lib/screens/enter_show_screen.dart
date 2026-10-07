@@ -16,6 +16,8 @@ import 'package:ringmaster_show/policies/open_youth_entry_policy.dart';
 import 'package:ringmaster_show/utils/section_breed_scope.dart';
 
 import 'cart_screen.dart';
+import 'show_addons_screen.dart';
+import '../services/show_addon_service.dart';
 
 final supabase = Supabase.instance.client;
 
@@ -388,13 +390,7 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
 
     await Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (_) => CartScreen(
-          cartId: cartId,
-          showId: widget.showId,
-          showName: widget.showName,
-        ),
-      ),
+      MaterialPageRoute(builder: (_) => _cartDestination(cartId)),
     );
 
     await _loadActiveCartIdIfExists();
@@ -405,8 +401,40 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
     }
   }
 
+  bool _hasShowAddons = false;
+  DateTime? _animalEntryOpenAt, _animalEntryCloseAt;
+  bool get _animalEntryWindowOpen {
+    final now = DateTime.now();
+    return !(_animalEntryOpenAt?.isAfter(now) ?? false) &&
+        !(_animalEntryCloseAt?.isBefore(now) ?? false);
+  }
+
+  bool _checkAnimalEntryWindow() {
+    if (_animalEntryWindowOpen) return true;
+    setState(
+      () => _msg =
+          'Animal entries are outside this show’s entry window. Contests follow their own registration dates.',
+    );
+    return false;
+  }
+
+  Widget _cartDestination(String cartId) =>
+      _hasShowAddons && !AppSession.isSupportMode
+      ? ShowAddonsScreen(
+          cartId: cartId,
+          showId: widget.showId,
+          showName: widget.showName,
+          exhibitorId: _selectedExhibitorId,
+        )
+      : CartScreen(
+          cartId: cartId,
+          showId: widget.showId,
+          showName: widget.showName,
+        );
+
   Future<_EnterShowLoadBundle> _loadAll() async {
     await _loadShowContext();
+    _hasShowAddons = await ShowAddonService().available(widget.showId);
     final sections = await _loadEnabledSections();
     await _loadPaymentSettings();
     await _loadCommercialClasses();
@@ -696,13 +724,15 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
   Future<void> _loadShowContext() async {
     final show = await supabase
         .from('shows')
-        .select('start_date,owner_user_id')
+        .select('start_date,owner_user_id,entry_open_at,entry_close_at')
         .eq('id', widget.showId)
         .single();
 
     final sd = show['start_date']?.toString();
     _showDate = sd == null ? null : DateTime.tryParse(sd);
     _showOwnerUserId = show['owner_user_id']?.toString();
+    _animalEntryOpenAt = DateTime.tryParse('${show['entry_open_at'] ?? ''}');
+    _animalEntryCloseAt = DateTime.tryParse('${show['entry_close_at'] ?? ''}');
 
     final breeds = await supabase
         .from('breeds')
@@ -1538,6 +1568,7 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
   Future<void> _addSelectedToCart(
     List<Map<String, dynamic>> eligibleAnimals,
   ) async {
+    if (!_checkAnimalEntryWindow()) return;
     final userId = AppSession.householdOwnerUserId;
     if (userId == null) {
       setState(() => _msg = 'Not signed in.');
@@ -1686,13 +1717,7 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
 
       await Navigator.push(
         context,
-        MaterialPageRoute(
-          builder: (_) => CartScreen(
-            cartId: cartId,
-            showId: widget.showId,
-            showName: widget.showName,
-          ),
-        ),
+        MaterialPageRoute(builder: (_) => _cartDestination(cartId)),
       );
 
       await _loadActiveCartIdIfExists();
@@ -2204,6 +2229,7 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
     required Map<String, dynamic> animal,
     required String classCode,
   }) async {
+    if (!_checkAnimalEntryWindow()) return;
     final userId = AppSession.householdOwnerUserId;
     if (userId == null) {
       setState(() => _msg = 'Not signed in.');
@@ -2316,6 +2342,7 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
   }
 
   Future<void> _addMeatPenToCart() async {
+    if (!_checkAnimalEntryWindow()) return;
     final userId = AppSession.householdOwnerUserId;
     if (userId == null) {
       setState(() => _msg = 'Not signed in.');
@@ -2540,6 +2567,7 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
       future: _loadFuture,
       builder: (context, snap) {
         return RingMasterPageShell(
+      showId: widget.showId,
           title: widget.showName,
           subtitle: 'Enter Show',
           showBackButton: true,
@@ -2604,6 +2632,27 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
                       child: ListView(
                         padding: const EdgeInsets.only(bottom: 12),
                         children: [
+                          if (_hasShowAddons)
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                              child: OutlinedButton.icon(
+                                onPressed:
+                                    _submitting || AppSession.isSupportMode
+                                    ? null
+                                    : _viewCart,
+                                icon: const Icon(Icons.emoji_events_outlined),
+                                label: const Text(
+                                  'Contests & Add-Ons — continue without adding animals',
+                                ),
+                              ),
+                            ),
+                          if (!_animalEntryWindowOpen)
+                            const Padding(
+                              padding: EdgeInsets.all(16),
+                              child: Text(
+                                'Animal entries are outside this show’s entry window. Use Contests & Add-Ons above for any registrations still available.',
+                              ),
+                            ),
                           Padding(
                             padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
                             child: AppTheme.surfaceTextScope(

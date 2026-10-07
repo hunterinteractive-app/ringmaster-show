@@ -34,6 +34,7 @@ import 'account_profile_setup_screen.dart';
 
 import '../config/legal_config.dart';
 import '../services/app_session.dart';
+import '../services/show_addon_service.dart';
 import '../services/show_payment_configuration_service.dart';
 import '../utils/date_time_utils.dart';
 import '../theme/app_theme.dart';
@@ -646,7 +647,17 @@ class _ShowListScreenState extends State<ShowListScreen> {
         .or('entry_close_at.is.null,entry_close_at.gte.$now')
         .order('start_date');
 
-    return (res as List).cast<Map<String, dynamic>>();
+    final rows = (res as List).cast<Map<String, dynamic>>();
+    final contestShows = await ShowAddonService().openContestShows();
+    final byId = {for (final show in rows) show['id'].toString(): show};
+    for (final show in contestShows) {
+      byId[show['id'].toString()] = show;
+    }
+    return byId.values.toList()..sort(
+      (a, b) => (a['start_date'] ?? '').toString().compareTo(
+        (b['start_date'] ?? '').toString(),
+      ),
+    );
   }
 
   Future<Set<String>> _loadAdminShowIds() async {
@@ -1952,6 +1963,11 @@ class _ShowListScreenState extends State<ShowListScreen> {
                                                         ),
                                                   ),
                                                 ],
+                                                if (s['contest_registration_open'] ==
+                                                    true)
+                                                  const Text(
+                                                    'Contest registration is open.',
+                                                  ),
                                               ],
                                             );
 

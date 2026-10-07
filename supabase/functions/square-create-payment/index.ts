@@ -81,7 +81,15 @@ Deno.serve(async (request: Request) => {
       show.entry_close_at &&
       Date.now() > Date.parse(String(show.entry_close_at))
     ) {
-      throw new Error("This show's entry deadline has passed.");
+      // A contest can remain open beyond animal entry close. The shared quote
+      // validates its own registration window before creating a payment attempt.
+      const { data: animalItems, error: itemsError } = await backend
+        .from("entry_cart_items").select("id").eq("cart_id", cartId)
+        .eq("is_show_addon_carrier", false).limit(1);
+      if (itemsError) throw itemsError;
+      if ((animalItems ?? []).length > 0) {
+        throw new Error("This show's entry deadline has passed.");
+      }
     }
     if (
       cart.selected_payment_timing && cart.selected_payment_timing !== "online"

@@ -5,6 +5,7 @@ import '../../services/show_assistant_service.dart';
 import 'package:ringmaster_show/services/final_award_format.dart';
 import 'package:ringmaster_show/services/final_award_access_service.dart';
 import 'package:flutter/material.dart';
+import 'show_addon_settings_screen.dart';
 import 'package:ringmaster_show/theme/app_theme.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ringmaster_show/widgets/help_report_dialog.dart';
@@ -2273,6 +2274,48 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                                           if (mounted) await _load();
                                         },
                                 ),
+                              if (canManageShowSettings) ...[
+                                _buildSettingsActionTile(
+                                  icon: Icons.emoji_events_outlined,
+                                  title: 'Contest Settings',
+                                  subtitle:
+                                      'Enable contests, set entry fees, and choose registration fields',
+                                  onTap: (_saving || _isReadOnly)
+                                      ? null
+                                      : () => Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (_) =>
+                                                ShowAddonSettingsScreen(
+                                                  showId: widget.showId,
+                                                  showName:
+                                                      _effectiveShowName(),
+                                                  kind: 'contest',
+                                                ),
+                                          ),
+                                        ),
+                                ),
+                                _buildSettingsActionTile(
+                                  icon: Icons.confirmation_number_outlined,
+                                  title: 'Show Add-Ons',
+                                  subtitle:
+                                      'Offer extra coops, parking passes, banquet tickets, tours, and custom items',
+                                  onTap: (_saving || _isReadOnly)
+                                      ? null
+                                      : () => Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (_) =>
+                                                ShowAddonSettingsScreen(
+                                                  showId: widget.showId,
+                                                  showName:
+                                                      _effectiveShowName(),
+                                                  kind: 'extra',
+                                                ),
+                                          ),
+                                        ),
+                                ),
+                              ],
                               if (_canManageCheckinSettings)
                                 _buildSettingsActionTile(
                                   icon: Icons.qr_code_2,

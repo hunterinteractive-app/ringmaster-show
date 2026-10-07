@@ -18,6 +18,9 @@ import '../services/show_payment_configuration_service.dart';
 import '../services/square_checkout_service.dart';
 import '../services/payment_quote_preview_service.dart';
 import '../services/exhibitor_fee_service.dart';
+import '../services/show_addon_service.dart';
+import '../models/show_addon.dart';
+import 'show_addons_screen.dart';
 
 import 'my_entries_screen.dart';
 
@@ -49,7 +52,16 @@ class _CartScreenState extends State<CartScreen> {
 
   List<Map<String, dynamic>> _items = [];
   List<ExhibitorFee> _exhibitorFees = [];
-  bool get _hasCheckoutItems => _items.isNotEmpty || _exhibitorFees.isNotEmpty;
+  List<Map<String, dynamic>> _addons = [];
+  bool _addonsAvailable = false;
+  int get _addonsTotalCents => _addons.fold(
+    0,
+    (total, r) =>
+        total +
+        (r['quantity'] as num).toInt() * (r['unit_price_cents'] as num).toInt(),
+  );
+  bool get _hasCheckoutItems =>
+      _items.isNotEmpty || _exhibitorFees.isNotEmpty || _addons.isNotEmpty;
   Map<String, dynamic>? _show;
   Map<String, Map<String, dynamic>> _sectionById = {};
   List<String> _breedScopeErrors = [];
@@ -152,7 +164,7 @@ class _CartScreenState extends State<CartScreen> {
       final items = await supabase
           .from('entry_cart_items')
           .select(
-            'id,exhibitor_id,section_id,animal_id,species,breed,variety,fur_variety,sex,tattoo,animal_name,class_name,created_at,is_fur,is_exhibitor_fee_carrier',
+            'id,exhibitor_id,section_id,animal_id,species,breed,variety,fur_variety,sex,tattoo,animal_name,class_name,created_at,is_fur,is_exhibitor_fee_carrier,is_show_addon_carrier',
           )
           .eq('cart_id', widget.cartId)
           .order('created_at');
@@ -168,9 +180,15 @@ class _CartScreenState extends State<CartScreen> {
 
       final parsedItems = (items as List)
           .cast<Map<String, dynamic>>()
-          .where((item) => item['is_exhibitor_fee_carrier'] != true)
+          .where(
+            (item) =>
+                item['is_exhibitor_fee_carrier'] != true &&
+                item['is_show_addon_carrier'] != true,
+          )
           .toList();
       final exhibitorFees = await ExhibitorFee.forCart(widget.cartId);
+      final addons = await ShowAddonService().cart(widget.cartId);
+      final addonsAvailable = await ShowAddonService().available(widget.showId);
       final breedScopeErrors = <String>[];
       for (final item in parsedItems) {
         final section = parsedSections[item['section_id']?.toString()];
@@ -188,6 +206,7 @@ class _CartScreenState extends State<CartScreen> {
 
       await _loadExhibitorLabelsForCart([
         ...parsedItems,
+        ...addons,
         ...exhibitorFees.map(
           (fee) => <String, dynamic>{'exhibitor_id': fee.exhibitorId},
         ),
@@ -214,6 +233,8 @@ class _CartScreenState extends State<CartScreen> {
         _sectionById = parsedSections;
         _items = parsedItems;
         _exhibitorFees = exhibitorFees;
+        _addons = addons;
+        _addonsAvailable = addonsAvailable;
         _breedScopeErrors = breedScopeErrors;
         _paymentConfiguration = paymentConfiguration;
         _selectedOnlineProvider = selectedProvider;
@@ -377,6 +398,10 @@ class _CartScreenState extends State<CartScreen> {
   Future<void> _refreshQuotePreview() async {
     final provider = _selectedOnlineProvider;
     if (AppSession.isSupportMode ||
+        (_items.isEmpty &&
+            _exhibitorFees.isEmpty &&
+            _addons.isNotEmpty &&
+            _addonsTotalCents == 0) ||
         _selectedPaymentTiming != 'online' ||
         provider == null) {
       if (!mounted) return;
@@ -682,7 +707,11 @@ class _CartScreenState extends State<CartScreen> {
             .fold<int>(0, (total, fee) => total + fee.amountCents) /
         100.0;
     final total =
-        (entriesSubtotal + furSubtotal + showFeeSubtotal + exhibitorFee) -
+        (entriesSubtotal +
+            furSubtotal +
+            showFeeSubtotal +
+            exhibitorFee +
+            (identical(items, _items) ? _addonsTotalCents / 100.0 : 0)) -
         discountAmount;
 
     return {
@@ -1008,6 +1037,7 @@ class _CartScreenState extends State<CartScreen> {
   }
 
   Future<void> _confirmDayOf() async {
+    if (AppSession.isSupportMode) return;
     if (_breedScopeErrors.isNotEmpty) {
       setState(() => _msg = _breedScopeErrors.first);
       return;
@@ -1041,12 +1071,22 @@ class _CartScreenState extends State<CartScreen> {
     });
 
     try {
-      final res = await supabase.rpc(
-        'commit_entry_cart_day_of',
-        params: {'p_cart_id': widget.cartId},
-      );
+      final freeAddons =
+          _items.isEmpty &&
+          _exhibitorFees.isEmpty &&
+          _addons.isNotEmpty &&
+          _addonsTotalCents == 0;
+      final res = freeAddons
+          ? await supabase.rpc(
+              'commit_free_addon_cart',
+              params: {'p_cart_id': widget.cartId},
+            )
+          : await supabase.rpc(
+              'commit_entry_cart_day_of',
+              params: {'p_cart_id': widget.cartId},
+            );
 
-      final insertedCount = (res as num).toInt();
+      final insertedCount = (res as num?)?.toInt() ?? 0;
 
       if (!mounted) return;
 
@@ -1054,9 +1094,11 @@ class _CartScreenState extends State<CartScreen> {
         context: context,
         barrierDismissible: false,
         builder: (_) => AlertDialog(
-          title: const Text('Entries Received'),
+          title: const Text('Registration Received'),
           content: Text(
-            _items.isEmpty
+            _addons.isNotEmpty
+                ? 'Your ${insertedCount > 0 ? '$insertedCount animal entries and ' : ''}contests and add-ons have been received. View them under My Entries → Contests & Add-Ons.${freeAddons ? '' : ' Your balance can be paid at the show.'}'
+                : _items.isEmpty
                 ? 'Your exhibitor fee is recorded and can be paid at the show.'
                 : insertedCount == 1
                 ? 'We have received your 1 entry. To review it, please view the Entries tab.'
@@ -1231,12 +1273,39 @@ class _CartScreenState extends State<CartScreen> {
     final grouped = _groupItemsByExhibitor();
     final hasFeeConfig =
         _feeSettings != null && _sectionFeeBySectionId.isNotEmpty;
+    final freeAddons =
+        _items.isEmpty &&
+        _exhibitorFees.isEmpty &&
+        _addons.isNotEmpty &&
+        _addonsTotalCents == 0;
 
     return RingMasterPageShell(
       title: widget.showName,
       subtitle: 'Entry Cart',
       showBackButton: true,
       actions: [
+        if (_addonsAvailable || _addons.isNotEmpty)
+          IconButton(
+            tooltip: 'Contests & Add-Ons',
+            icon: const Icon(Icons.confirmation_number_outlined),
+            onPressed:
+                (_confirming || _payingOnline || AppSession.isSupportMode)
+                ? null
+                : () async {
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => ShowAddonsScreen(
+                          cartId: widget.cartId,
+                          showId: widget.showId,
+                          showName: widget.showName,
+                          openCart: false,
+                        ),
+                      ),
+                    );
+                    if (mounted) await _load();
+                  },
+          ),
         IconButton(
           tooltip: 'Reload',
           icon: const Icon(Icons.refresh),
@@ -1339,17 +1408,22 @@ class _CartScreenState extends State<CartScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          _deadlinePassed()
-                              ? 'Entry deadline: PASSED'
-                              : 'Entry deadline: ${formatLocalDateTime(_show?['entry_close_at']?.toString())}',
-                          style: TextStyle(
-                            color: _deadlinePassed()
-                                ? AppColors.danger
-                                : Colors.black87,
-                            fontWeight: FontWeight.w600,
+                        if (_items.isEmpty && _addons.isNotEmpty)
+                          const Text(
+                            'Contest registrations and add-on orders follow their registration deadlines.',
+                          )
+                        else
+                          Text(
+                            _deadlinePassed()
+                                ? 'Entry deadline: PASSED'
+                                : 'Entry deadline: ${formatLocalDateTime(_show?['entry_close_at']?.toString())}',
+                            style: TextStyle(
+                              color: _deadlinePassed()
+                                  ? AppColors.danger
+                                  : Colors.black87,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
-                        ),
                         const SizedBox(height: 14),
                         Text(
                           'Overall Fees',
@@ -1396,6 +1470,13 @@ class _CartScreenState extends State<CartScreen> {
                                       padding: const EdgeInsets.only(top: 4),
                                       child: Text(
                                         '${fee.label} — ${_exhibitorLabelById[fee.exhibitorId] ?? 'Exhibitor'} (once per exhibitor number): ${_money(fee.amountCents / 100, currency: currency)}',
+                                      ),
+                                    ),
+                                  if (_addons.isNotEmpty)
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 4),
+                                      child: Text(
+                                        'Contests & Add-Ons: ${addonMoney(_addonsTotalCents, currency)}',
                                       ),
                                     ),
                                   if (onlinePaymentFee > 0) ...[
@@ -1488,7 +1569,51 @@ class _CartScreenState extends State<CartScreen> {
                     ),
                   ),
                 ),
-                if (_items.isEmpty)
+                for (final addon in _addons)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: AppTheme.surfaceTextScope(
+                      context,
+                      child: Card(
+                        child: ListTile(
+                          title: Text(
+                            '${addon['name']} × ${addon['quantity']}',
+                          ),
+                          subtitle: Text(
+                            '${_exhibitorLabelById[addon['exhibitor_id']] ?? 'Exhibitor'} • ${addonMoney((addon['quantity'] as num).toInt() * (addon['unit_price_cents'] as num).toInt(), currency)}'
+                            '${addon['division'] == null ? '' : '\nDivision: ${addon['division']}'}'
+                            '${addon['registration_data']?['team']?['name'] == null ? '' : '\nTeam: ${addon['registration_data']['team']['name']}'}'
+                            '${addon['registration_data']?['project_title'] == null ? '' : '\nProject: ${addon['registration_data']['project_title']}'}'
+                            '${addon['registration_data']?['category'] == null ? '' : '\nCategory: ${addon['registration_data']['category']}'}'
+                            '${addon['registration_data']?['session_name'] == null ? '' : '\nSession: ${addon['registration_data']['session_name']}'}'
+                            '${addon['animal_snapshot'] == null ? '' : '\nAnimal: ${addon['animal_snapshot']['label']}'}',
+                          ),
+                          trailing: IconButton(
+                            tooltip: 'Remove ${addon['name']}',
+                            icon: const Icon(Icons.delete_outline),
+                            onPressed:
+                                (_confirming ||
+                                    _payingOnline ||
+                                    AppSession.isSupportMode)
+                                ? null
+                                : () async {
+                                    try {
+                                      await ShowAddonService().remove(
+                                        addon['id'].toString(),
+                                      );
+                                      if (mounted) await _load();
+                                    } catch (e) {
+                                      if (mounted) {
+                                        setState(() => _msg = e.toString());
+                                      }
+                                    }
+                                  },
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                if (!_hasCheckoutItems)
                   const Padding(
                     padding: EdgeInsets.all(32),
                     child: Center(
@@ -1575,7 +1700,18 @@ class _CartScreenState extends State<CartScreen> {
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                   child: SizedBox(
                     width: double.infinity,
-                    child: _selectedPaymentTiming == 'online'
+                    child: freeAddons
+                        ? FilledButton(
+                            onPressed: _confirming || AppSession.isSupportMode
+                                ? null
+                                : _confirmDayOf,
+                            child: Text(
+                              _confirming
+                                  ? 'Confirming…'
+                                  : 'Confirm Free Registration',
+                            ),
+                          )
+                        : _selectedPaymentTiming == 'online'
                         ? FilledButton.icon(
                             onPressed: _canPayOnline ? _payOnline : null,
                             icon: const Icon(Icons.credit_card),
@@ -1590,6 +1726,7 @@ class _CartScreenState extends State<CartScreen> {
                         : FilledButton(
                             onPressed:
                                 (_confirming ||
+                                    AppSession.isSupportMode ||
                                     (_items.isNotEmpty && _deadlinePassed()) ||
                                     !_hasCheckoutItems)
                                 ? null
@@ -1597,6 +1734,8 @@ class _CartScreenState extends State<CartScreen> {
                             child: Text(
                               _confirming
                                   ? 'Confirming…'
+                                  : _addons.isNotEmpty
+                                  ? 'Confirm Registration (Pay at Show)'
                                   : _items.isEmpty
                                   ? 'Confirm Fee (Pay at Show)'
                                   : 'Confirm Entries (Pay Day-of-Show)',

@@ -8,6 +8,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
 
 import 'my_animals_screen.dart';
+import 'show_addon_registrations_screen.dart';
 import 'account_settings_screen.dart';
 import 'package:ringmaster_show/screens/admin/entries_by_breed_section_table.dart';
 import '../services/app_session.dart';
@@ -1042,6 +1043,16 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
       showBackButton: true,
       useScrollView: false,
       actions: [
+        IconButton(
+          tooltip: 'Contests & Add-Ons',
+          icon: const Icon(Icons.confirmation_number_outlined),
+          onPressed: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => const ShowAddonRegistrationsScreen(),
+            ),
+          ),
+        ),
         IconButton(
           tooltip: AppSession.isSupportMode
               ? 'Animals disabled in support mode'
