@@ -410,3 +410,28 @@ must follow the generation/hash check.
 
 See `docs/contact-and-judging-fixes-2026-09-12.md` for the measured 51,422-entry
 results and local Storage-policy limitations.
+# Registration-only final-day scenarios
+
+`registration_stress.py` reuses the authenticated purchaser flow, signed local
+payment callbacks, durable payment queue, and staff dashboards. Prepare a fresh
+isolated local workspace using the bootstrap below, with a unique project ID of
+at most 40 characters beginning `ringmaster-show-full-e2e-`. Preserve prior data
+volumes. Freeze source and migration hashes before running.
+
+```sh
+python3 tool/full_e2e/registration_stress.py prepare WORKSPACE OUTPUT \
+  --entries 35000 --final-day-percent 65 --peak 500
+python3 tool/full_e2e/registration_stress.py run WORKSPACE OUTPUT
+```
+
+This profile uses 3,441 synthetic exhibitors at 35,000 entries, proportional
+historical Open/Youth classes, and whole purchaser carts. Exact entry shares are
+25% early, 10% middle, and 65% final day. Four admins and eight superintendents
+read dashboards throughout registration. The 500 simultaneous purchaser slots
+are a separate stress assumption, not a concurrency estimate from published
+entry counts. Calendar days run consecutively without real-world think time.
+
+Evidence includes daily timing, individual API events, sampled container CPU
+and memory, database connections and size, host disk space, and an independent
+entry/payment/balance reconciliation. Payments and email delivery remain local
+simulations. This command does not run check-in, judging, printing, or closeout.

@@ -9,11 +9,14 @@ from convention_2024 import build
 from workload import scale_manifest, staff_counts
 
 
-def prepare(lab, output, scale=1, staff_scale=None):
+def prepare(lab, output, scale=1, staff_scale=None, *, manifest=None):
     if int(lab.sql(f"select count(*) from public.shows where id='{SHOW}'")):
         raise RuntimeError('Fresh show required; preserve previous run evidence')
     contracts = json.loads((ROOT / 'supabase/local/e2e_historical_contracts.json').read_text())
     columns = json.loads((ROOT / 'supabase/local/e2e_historical_columns.json').read_text())
+    applied = {r['version'] for r in lab.rows('select version from supabase_migrations.schema_migrations')}
+    current_payments = '20260914102453' in applied
+    current_cart_calculator = '20260914091005' in applied
     existing = {(r['table_name'], r['column_name']) for r in lab.rows("select table_name,column_name from information_schema.columns where table_schema='public'")}
     existing_tables = {t for t, _ in existing}
     statements = ['begin;']
@@ -42,15 +45,20 @@ def prepare(lab, output, scale=1, staff_scale=None):
         'create unique index local_e2e_coop_identity on public.show_animal_coop_numbers(show_id,animal_id,scope);',
         # The loader baseline used void placeholders for these historical APIs.
         'drop function public.calculate_sweepstakes_for_show(uuid,text,text);',
-        'drop function public.apply_show_payment_to_balance(uuid);',
         'drop function public.calculate_sweepstakes_for_breed_baseline(uuid,text,text,text);',
     ]
+    if not current_payments:
+        statements.append('drop function public.apply_show_payment_to_balance(uuid);')
     allow = {'calculate_sweepstakes_for_show', 'calculate_sweepstakes_for_breed_baseline',
              'user_can_enter_results', 'calculate_entry_cart_balance_without_canada_special'}
     for f in contracts['functions']:
         if f['proname'] in allow:
+            if current_cart_calculator and f['proname'] == 'calculate_entry_cart_balance_without_canada_special':
+                continue  # Preserve migrated exhibitor fees/addons and authorization.
             statements.append(f['definition'] + ';')
     for f in sorted(json.loads((ROOT / 'supabase/local/e2e_historical_extras.json').read_text()), key=lambda f: 0 if f['arguments']=='p_role app_role' else 1):
+        if current_payments and f['proname'] == 'apply_show_payment_to_balance':
+            continue  # Preserve current payment/refund reconciliation.
         statements.append(f['definition'] + ';')
     # The original loader-only baseline returned JSON here. Real workers use
     # the historical typed result contracts; restore them before any rendering.
@@ -79,8 +87,9 @@ def prepare(lab, output, scale=1, staff_scale=None):
     statements += ['grant insert,update,delete on public.entry_carts, public.entry_cart_items, public.animals, public.exhibitors to authenticated;',
                    'revoke all on function public.calculate_sweepstakes_for_show(uuid,text,text), public.calculate_sweepstakes_for_breed_baseline(uuid,text,text,text), public.user_can_enter_results(uuid,uuid) from public,anon;',
                    'grant execute on function public.calculate_sweepstakes_for_show(uuid,text,text), public.calculate_sweepstakes_for_breed_baseline(uuid,text,text,text), public.user_can_enter_results(uuid,uuid) to authenticated,service_role;']
-    _, historical = build()
-    manifest = scale_manifest(historical, scale, staff_scale)
+    if manifest is None:
+        _, historical = build()
+        manifest = scale_manifest(historical, scale, staff_scale)
     statements.append(f"insert into public.shows(id,name,start_date,end_date,coop_numbering_mode,secretary_name,secretary_email,is_national_show,is_published,is_test,payment_timing_mode,final_award_mode,club_name,location_name,secretary_address) values ('{SHOW}','LOCAL E2E Convention {manifest['totals']['entries']}','2026-09-10','2026-09-10','separate','Synthetic Secretary','secretary@example.invalid',true,true,true,'online_or_at_show','bis_ris','Synthetic Convention Club','LOCAL ONLY','1 Synthetic Lane, Localtown IN 00000');")
     for s in manifest['sections']:
         statements.append(f"insert into public.show_sections(id,show_id,kind,letter,display_name,sort_order) values ('{s['id']}','{SHOW}','{s['kind']}','A','{s['kind'].title()} A',{1 if s['kind']=='open' else 2});")

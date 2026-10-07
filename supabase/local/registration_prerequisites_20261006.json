@@ -1,0 +1,1200 @@
+{
+  "source": "Read-only schema inspection, 2026-10-06; no application rows copied.",
+  "columns": [
+    {
+      "table_name": "show_admins",
+      "column_name": "show_id",
+      "data_type": "uuid",
+      "udt_schema": "pg_catalog",
+      "udt_name": "uuid",
+      "column_default": null,
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "show_admins",
+      "column_name": "user_id",
+      "data_type": "uuid",
+      "udt_schema": "pg_catalog",
+      "udt_name": "uuid",
+      "column_default": null,
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "show_admins",
+      "column_name": "role",
+      "data_type": "text",
+      "udt_schema": "pg_catalog",
+      "udt_name": "text",
+      "column_default": "'admin'::text",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "show_admins",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "udt_schema": "pg_catalog",
+      "udt_name": "timestamptz",
+      "column_default": "now()",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "show_judging_assignments",
+      "column_name": "id",
+      "data_type": "uuid",
+      "udt_schema": "pg_catalog",
+      "udt_name": "uuid",
+      "column_default": "gen_random_uuid()",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "show_judging_assignments",
+      "column_name": "show_id",
+      "data_type": "uuid",
+      "udt_schema": "pg_catalog",
+      "udt_name": "uuid",
+      "column_default": null,
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "show_judging_assignments",
+      "column_name": "section_id",
+      "data_type": "uuid",
+      "udt_schema": "pg_catalog",
+      "udt_name": "uuid",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "show_judging_assignments",
+      "column_name": "breed_id",
+      "data_type": "text",
+      "udt_schema": "pg_catalog",
+      "udt_name": "text",
+      "column_default": null,
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "show_judging_assignments",
+      "column_name": "variety_key",
+      "data_type": "text",
+      "udt_schema": "pg_catalog",
+      "udt_name": "text",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "show_judging_assignments",
+      "column_name": "judge_id",
+      "data_type": "uuid",
+      "udt_schema": "pg_catalog",
+      "udt_name": "uuid",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "show_judging_assignments",
+      "column_name": "table_number",
+      "data_type": "text",
+      "udt_schema": "pg_catalog",
+      "udt_name": "text",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "show_judging_assignments",
+      "column_name": "sort_order",
+      "data_type": "integer",
+      "udt_schema": "pg_catalog",
+      "udt_name": "int4",
+      "column_default": "0",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "show_judging_assignments",
+      "column_name": "status",
+      "data_type": "text",
+      "udt_schema": "pg_catalog",
+      "udt_name": "text",
+      "column_default": "'planned'::text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "show_judging_assignments",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "udt_schema": "pg_catalog",
+      "udt_name": "timestamptz",
+      "column_default": "now()",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "show_judging_assignments",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "udt_schema": "pg_catalog",
+      "udt_name": "timestamptz",
+      "column_default": "now()",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "show_judging_assignments",
+      "column_name": "judging_date",
+      "data_type": "date",
+      "udt_schema": "pg_catalog",
+      "udt_name": "date",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "show_judging_assignments",
+      "column_name": "scope",
+      "data_type": "text",
+      "udt_schema": "pg_catalog",
+      "udt_name": "text",
+      "column_default": "'combined'::text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "show_judging_assignments",
+      "column_name": "entry_count_actual",
+      "data_type": "integer",
+      "udt_schema": "pg_catalog",
+      "udt_name": "int4",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "show_judging_assignments",
+      "column_name": "entry_count_estimated",
+      "data_type": "integer",
+      "udt_schema": "pg_catalog",
+      "udt_name": "int4",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "show_judging_assignments",
+      "column_name": "is_judge_change",
+      "data_type": "boolean",
+      "udt_schema": "pg_catalog",
+      "udt_name": "bool",
+      "column_default": "false",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "show_judging_assignments",
+      "column_name": "override_reason",
+      "data_type": "text",
+      "udt_schema": "pg_catalog",
+      "udt_name": "text",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "show_judging_assignments",
+      "column_name": "notes",
+      "data_type": "text",
+      "udt_schema": "pg_catalog",
+      "udt_name": "text",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "show_judging_assignments",
+      "column_name": "created_by",
+      "data_type": "uuid",
+      "udt_schema": "pg_catalog",
+      "udt_name": "uuid",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "show_judging_assignments",
+      "column_name": "completed_at",
+      "data_type": "timestamp with time zone",
+      "udt_schema": "pg_catalog",
+      "udt_name": "timestamptz",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "show_judging_assignments",
+      "column_name": "completed_by",
+      "data_type": "uuid",
+      "udt_schema": "pg_catalog",
+      "udt_name": "uuid",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "show_judging_assignments",
+      "column_name": "species",
+      "data_type": "text",
+      "udt_schema": "pg_catalog",
+      "udt_name": "text",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "show_judging_assignments",
+      "column_name": "workspace_marker_id",
+      "data_type": "uuid",
+      "udt_schema": "pg_catalog",
+      "udt_name": "uuid",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "show_payment_events",
+      "column_name": "id",
+      "data_type": "uuid",
+      "udt_schema": "pg_catalog",
+      "udt_name": "uuid",
+      "column_default": "gen_random_uuid()",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "show_payment_events",
+      "column_name": "show_payment_id",
+      "data_type": "uuid",
+      "udt_schema": "pg_catalog",
+      "udt_name": "uuid",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "show_payment_events",
+      "column_name": "provider",
+      "data_type": "text",
+      "udt_schema": "pg_catalog",
+      "udt_name": "text",
+      "column_default": "'stripe'::text",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "show_payment_events",
+      "column_name": "event_type",
+      "data_type": "text",
+      "udt_schema": "pg_catalog",
+      "udt_name": "text",
+      "column_default": null,
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "show_payment_events",
+      "column_name": "event_id",
+      "data_type": "text",
+      "udt_schema": "pg_catalog",
+      "udt_name": "text",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "show_payment_events",
+      "column_name": "payload",
+      "data_type": "jsonb",
+      "udt_schema": "pg_catalog",
+      "udt_name": "jsonb",
+      "column_default": "'{}'::jsonb",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "show_payment_events",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "udt_schema": "pg_catalog",
+      "udt_name": "timestamptz",
+      "column_default": "now()",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "show_payment_events",
+      "column_name": "processing_status",
+      "data_type": "text",
+      "udt_schema": "pg_catalog",
+      "udt_name": "text",
+      "column_default": "'received'::text",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "show_payment_events",
+      "column_name": "processing_error",
+      "data_type": "text",
+      "udt_schema": "pg_catalog",
+      "udt_name": "text",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "show_payment_events",
+      "column_name": "received_at",
+      "data_type": "timestamp with time zone",
+      "udt_schema": "pg_catalog",
+      "udt_name": "timestamptz",
+      "column_default": "now()",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "show_payment_events",
+      "column_name": "processed_at",
+      "data_type": "timestamp with time zone",
+      "udt_schema": "pg_catalog",
+      "udt_name": "timestamptz",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "show_payment_events",
+      "column_name": "payment_session_id",
+      "data_type": "uuid",
+      "udt_schema": "pg_catalog",
+      "udt_name": "uuid",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "show_payment_events",
+      "column_name": "provider_payment_id",
+      "data_type": "text",
+      "udt_schema": "pg_catalog",
+      "udt_name": "text",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "show_payment_sessions",
+      "column_name": "id",
+      "data_type": "uuid",
+      "udt_schema": "pg_catalog",
+      "udt_name": "uuid",
+      "column_default": "gen_random_uuid()",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "show_payment_sessions",
+      "column_name": "show_payment_id",
+      "data_type": "uuid",
+      "udt_schema": "pg_catalog",
+      "udt_name": "uuid",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "show_payment_sessions",
+      "column_name": "show_id",
+      "data_type": "uuid",
+      "udt_schema": "pg_catalog",
+      "udt_name": "uuid",
+      "column_default": null,
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "show_payment_sessions",
+      "column_name": "cart_id",
+      "data_type": "uuid",
+      "udt_schema": "pg_catalog",
+      "udt_name": "uuid",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "show_payment_sessions",
+      "column_name": "provider",
+      "data_type": "text",
+      "udt_schema": "pg_catalog",
+      "udt_name": "text",
+      "column_default": "'stripe'::text",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "show_payment_sessions",
+      "column_name": "stripe_checkout_session_id",
+      "data_type": "text",
+      "udt_schema": "pg_catalog",
+      "udt_name": "text",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "show_payment_sessions",
+      "column_name": "stripe_payment_intent_id",
+      "data_type": "text",
+      "udt_schema": "pg_catalog",
+      "udt_name": "text",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "show_payment_sessions",
+      "column_name": "stripe_charge_id",
+      "data_type": "text",
+      "udt_schema": "pg_catalog",
+      "udt_name": "text",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "show_payment_sessions",
+      "column_name": "checkout_url",
+      "data_type": "text",
+      "udt_schema": "pg_catalog",
+      "udt_name": "text",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "show_payment_sessions",
+      "column_name": "expires_at",
+      "data_type": "timestamp with time zone",
+      "udt_schema": "pg_catalog",
+      "udt_name": "timestamptz",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "show_payment_sessions",
+      "column_name": "status",
+      "data_type": "text",
+      "udt_schema": "pg_catalog",
+      "udt_name": "text",
+      "column_default": "'created'::text",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "show_payment_sessions",
+      "column_name": "currency",
+      "data_type": "text",
+      "udt_schema": "pg_catalog",
+      "udt_name": "text",
+      "column_default": "'usd'::text",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "show_payment_sessions",
+      "column_name": "amount_cents",
+      "data_type": "integer",
+      "udt_schema": "pg_catalog",
+      "udt_name": "int4",
+      "column_default": "0",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "show_payment_sessions",
+      "column_name": "platform_fee_cents",
+      "data_type": "integer",
+      "udt_schema": "pg_catalog",
+      "udt_name": "int4",
+      "column_default": "0",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "show_payment_sessions",
+      "column_name": "destination_account_id",
+      "data_type": "text",
+      "udt_schema": "pg_catalog",
+      "udt_name": "text",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "show_payment_sessions",
+      "column_name": "metadata",
+      "data_type": "jsonb",
+      "udt_schema": "pg_catalog",
+      "udt_name": "jsonb",
+      "column_default": "'{}'::jsonb",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "show_payment_sessions",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "udt_schema": "pg_catalog",
+      "udt_name": "timestamptz",
+      "column_default": "now()",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "show_payment_sessions",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "udt_schema": "pg_catalog",
+      "udt_name": "timestamptz",
+      "column_default": "now()",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "show_payment_sessions",
+      "column_name": "provider_session_id",
+      "data_type": "text",
+      "udt_schema": "pg_catalog",
+      "udt_name": "text",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "show_payment_sessions",
+      "column_name": "provider_order_id",
+      "data_type": "text",
+      "udt_schema": "pg_catalog",
+      "udt_name": "text",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "show_payment_sessions",
+      "column_name": "provider_payment_id",
+      "data_type": "text",
+      "udt_schema": "pg_catalog",
+      "udt_name": "text",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "show_payment_sessions",
+      "column_name": "provider_capture_id",
+      "data_type": "text",
+      "udt_schema": "pg_catalog",
+      "udt_name": "text",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "show_payment_sessions",
+      "column_name": "provider_charge_id",
+      "data_type": "text",
+      "udt_schema": "pg_catalog",
+      "udt_name": "text",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "show_payment_sessions",
+      "column_name": "idempotency_key",
+      "data_type": "text",
+      "udt_schema": "pg_catalog",
+      "udt_name": "text",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "show_payment_sessions",
+      "column_name": "quote_hash",
+      "data_type": "text",
+      "udt_schema": "pg_catalog",
+      "udt_name": "text",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "show_payment_sessions",
+      "column_name": "quote_version",
+      "data_type": "integer",
+      "udt_schema": "pg_catalog",
+      "udt_name": "int4",
+      "column_default": "1",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "show_payment_sessions",
+      "column_name": "attempt_status",
+      "data_type": "text",
+      "udt_schema": "pg_catalog",
+      "udt_name": "text",
+      "column_default": "'created'::text",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "show_payment_sessions",
+      "column_name": "provider_attempt_id",
+      "data_type": "text",
+      "udt_schema": "pg_catalog",
+      "udt_name": "text",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "show_payment_sessions",
+      "column_name": "expected_amount_cents",
+      "data_type": "integer",
+      "udt_schema": "pg_catalog",
+      "udt_name": "int4",
+      "column_default": null,
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "show_payment_sessions",
+      "column_name": "expected_currency",
+      "data_type": "text",
+      "udt_schema": "pg_catalog",
+      "udt_name": "text",
+      "column_default": null,
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "show_payment_sessions",
+      "column_name": "online_fee_cents",
+      "data_type": "integer",
+      "udt_schema": "pg_catalog",
+      "udt_name": "int4",
+      "column_default": "0",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "show_payment_sessions",
+      "column_name": "finalized_at",
+      "data_type": "timestamp with time zone",
+      "udt_schema": "pg_catalog",
+      "udt_name": "timestamptz",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "show_payment_sessions",
+      "column_name": "failure_code",
+      "data_type": "text",
+      "udt_schema": "pg_catalog",
+      "udt_name": "text",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "show_payment_sessions",
+      "column_name": "failure_message",
+      "data_type": "text",
+      "udt_schema": "pg_catalog",
+      "udt_name": "text",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "show_payment_sessions",
+      "column_name": "quote_snapshot",
+      "data_type": "jsonb",
+      "udt_schema": "pg_catalog",
+      "udt_name": "jsonb",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "show_payments",
+      "column_name": "id",
+      "data_type": "uuid",
+      "udt_schema": "pg_catalog",
+      "udt_name": "uuid",
+      "column_default": "gen_random_uuid()",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "show_payments",
+      "column_name": "show_id",
+      "data_type": "uuid",
+      "udt_schema": "pg_catalog",
+      "udt_name": "uuid",
+      "column_default": null,
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "show_payments",
+      "column_name": "exhibitor_user_id",
+      "data_type": "uuid",
+      "udt_schema": "pg_catalog",
+      "udt_name": "uuid",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "show_payments",
+      "column_name": "exhibitor_id",
+      "data_type": "uuid",
+      "udt_schema": "pg_catalog",
+      "udt_name": "uuid",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "show_payments",
+      "column_name": "entry_cart_id",
+      "data_type": "uuid",
+      "udt_schema": "pg_catalog",
+      "udt_name": "uuid",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "show_payments",
+      "column_name": "currency",
+      "data_type": "text",
+      "udt_schema": "pg_catalog",
+      "udt_name": "text",
+      "column_default": "'usd'::text",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "show_payments",
+      "column_name": "subtotal_cents",
+      "data_type": "integer",
+      "udt_schema": "pg_catalog",
+      "udt_name": "int4",
+      "column_default": "0",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "show_payments",
+      "column_name": "total_cents",
+      "data_type": "integer",
+      "udt_schema": "pg_catalog",
+      "udt_name": "int4",
+      "column_default": "0",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "show_payments",
+      "column_name": "platform_fee_cents",
+      "data_type": "integer",
+      "udt_schema": "pg_catalog",
+      "udt_name": "int4",
+      "column_default": "0",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "show_payments",
+      "column_name": "status",
+      "data_type": "text",
+      "udt_schema": "pg_catalog",
+      "udt_name": "text",
+      "column_default": "'draft'::text",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "show_payments",
+      "column_name": "payment_method",
+      "data_type": "text",
+      "udt_schema": "pg_catalog",
+      "udt_name": "text",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "show_payments",
+      "column_name": "payment_intent_id",
+      "data_type": "text",
+      "udt_schema": "pg_catalog",
+      "udt_name": "text",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "show_payments",
+      "column_name": "checkout_session_id",
+      "data_type": "text",
+      "udt_schema": "pg_catalog",
+      "udt_name": "text",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "show_payments",
+      "column_name": "charge_id",
+      "data_type": "text",
+      "udt_schema": "pg_catalog",
+      "udt_name": "text",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "show_payments",
+      "column_name": "transfer_id",
+      "data_type": "text",
+      "udt_schema": "pg_catalog",
+      "udt_name": "text",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "show_payments",
+      "column_name": "application_fee_id",
+      "data_type": "text",
+      "udt_schema": "pg_catalog",
+      "udt_name": "text",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "show_payments",
+      "column_name": "stripe_connected_account_id",
+      "data_type": "text",
+      "udt_schema": "pg_catalog",
+      "udt_name": "text",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "show_payments",
+      "column_name": "stripe_account_snapshot",
+      "data_type": "jsonb",
+      "udt_schema": "pg_catalog",
+      "udt_name": "jsonb",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "show_payments",
+      "column_name": "paid_at",
+      "data_type": "timestamp with time zone",
+      "udt_schema": "pg_catalog",
+      "udt_name": "timestamptz",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "show_payments",
+      "column_name": "refunded_at",
+      "data_type": "timestamp with time zone",
+      "udt_schema": "pg_catalog",
+      "udt_name": "timestamptz",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "show_payments",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "udt_schema": "pg_catalog",
+      "udt_name": "timestamptz",
+      "column_default": "now()",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "show_payments",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "udt_schema": "pg_catalog",
+      "udt_name": "timestamptz",
+      "column_default": "now()",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "show_payments",
+      "column_name": "metadata",
+      "data_type": "jsonb",
+      "udt_schema": "pg_catalog",
+      "udt_name": "jsonb",
+      "column_default": "'{}'::jsonb",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "show_payments",
+      "column_name": "cart_id",
+      "data_type": "uuid",
+      "udt_schema": "pg_catalog",
+      "udt_name": "uuid",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "show_payments",
+      "column_name": "provider",
+      "data_type": "text",
+      "udt_schema": "pg_catalog",
+      "udt_name": "text",
+      "column_default": "'stripe'::text",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "show_payments",
+      "column_name": "payment_type",
+      "data_type": "text",
+      "udt_schema": "pg_catalog",
+      "udt_name": "text",
+      "column_default": "'entry'::text",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "show_payments",
+      "column_name": "amount_cents",
+      "data_type": "integer",
+      "udt_schema": "pg_catalog",
+      "udt_name": "int4",
+      "column_default": "0",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "show_payments",
+      "column_name": "platform_fee_percent",
+      "data_type": "numeric",
+      "udt_schema": "pg_catalog",
+      "udt_name": "numeric",
+      "column_default": "2.00",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "show_payments",
+      "column_name": "platform_fee_amount_cents",
+      "data_type": "integer",
+      "udt_schema": "pg_catalog",
+      "udt_name": "int4",
+      "column_default": "0",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "show_payments",
+      "column_name": "stripe_checkout_session_id",
+      "data_type": "text",
+      "udt_schema": "pg_catalog",
+      "udt_name": "text",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "show_payments",
+      "column_name": "stripe_payment_intent_id",
+      "data_type": "text",
+      "udt_schema": "pg_catalog",
+      "udt_name": "text",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "show_payments",
+      "column_name": "stripe_charge_id",
+      "data_type": "text",
+      "udt_schema": "pg_catalog",
+      "udt_name": "text",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "show_payments",
+      "column_name": "stripe_application_fee_id",
+      "data_type": "text",
+      "udt_schema": "pg_catalog",
+      "udt_name": "text",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "show_payments",
+      "column_name": "stripe_balance_transaction_id",
+      "data_type": "text",
+      "udt_schema": "pg_catalog",
+      "udt_name": "text",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "show_payments",
+      "column_name": "stripe_transfer_id",
+      "data_type": "text",
+      "udt_schema": "pg_catalog",
+      "udt_name": "text",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "show_payments",
+      "column_name": "stripe_refund_id",
+      "data_type": "text",
+      "udt_schema": "pg_catalog",
+      "udt_name": "text",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "show_payments",
+      "column_name": "checkout_url",
+      "data_type": "text",
+      "udt_schema": "pg_catalog",
+      "udt_name": "text",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "show_payments",
+      "column_name": "failure_reason",
+      "data_type": "text",
+      "udt_schema": "pg_catalog",
+      "udt_name": "text",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "show_payments",
+      "column_name": "payer_user_id",
+      "data_type": "uuid",
+      "udt_schema": "pg_catalog",
+      "udt_name": "uuid",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "show_payments",
+      "column_name": "destination_account_id",
+      "data_type": "text",
+      "udt_schema": "pg_catalog",
+      "udt_name": "text",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "show_payments",
+      "column_name": "payment_method_type",
+      "data_type": "text",
+      "udt_schema": "pg_catalog",
+      "udt_name": "text",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "show_payments",
+      "column_name": "failed_at",
+      "data_type": "timestamp with time zone",
+      "udt_schema": "pg_catalog",
+      "udt_name": "timestamptz",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "show_payments",
+      "column_name": "balance_id",
+      "data_type": "uuid",
+      "udt_schema": "pg_catalog",
+      "udt_name": "uuid",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "show_payments",
+      "column_name": "stripe_account_id",
+      "data_type": "text",
+      "udt_schema": "pg_catalog",
+      "udt_name": "text",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "show_payments",
+      "column_name": "raw_event",
+      "data_type": "jsonb",
+      "udt_schema": "pg_catalog",
+      "udt_name": "jsonb",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "show_payments",
+      "column_name": "payment_status",
+      "data_type": "text",
+      "udt_schema": "pg_catalog",
+      "udt_name": "text",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "show_payments",
+      "column_name": "payment_session_id",
+      "data_type": "uuid",
+      "udt_schema": "pg_catalog",
+      "udt_name": "uuid",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "show_payments",
+      "column_name": "provider_payment_id",
+      "data_type": "text",
+      "udt_schema": "pg_catalog",
+      "udt_name": "text",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "show_payments",
+      "column_name": "provider_refund_id",
+      "data_type": "text",
+      "udt_schema": "pg_catalog",
+      "udt_name": "text",
+      "column_default": null,
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "show_payments",
+      "column_name": "gross_charged_cents",
+      "data_type": "integer",
+      "udt_schema": "pg_catalog",
+      "udt_name": "int4",
+      "column_default": "0",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "show_payments",
+      "column_name": "online_fee_cents",
+      "data_type": "integer",
+      "udt_schema": "pg_catalog",
+      "udt_name": "int4",
+      "column_default": "0",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "show_payments",
+      "column_name": "refunded_cents",
+      "data_type": "integer",
+      "udt_schema": "pg_catalog",
+      "udt_name": "int4",
+      "column_default": "0",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "show_payments",
+      "column_name": "application_fee_refunded_cents",
+      "data_type": "integer",
+      "udt_schema": "pg_catalog",
+      "udt_name": "int4",
+      "column_default": "0",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "show_role_assignments",
+      "column_name": "show_id",
+      "data_type": "uuid",
+      "udt_schema": "pg_catalog",
+      "udt_name": "uuid",
+      "column_default": null,
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "show_role_assignments",
+      "column_name": "user_id",
+      "data_type": "uuid",
+      "udt_schema": "pg_catalog",
+      "udt_name": "uuid",
+      "column_default": null,
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "show_role_assignments",
+      "column_name": "role",
+      "data_type": "text",
+      "udt_schema": "pg_catalog",
+      "udt_name": "text",
+      "column_default": null,
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "show_role_assignments",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "udt_schema": "pg_catalog",
+      "udt_name": "timestamptz",
+      "column_default": "now()",
+      "is_nullable": "NO"
+    }
+  ],
+  "functions": [
+    {
+      "proname": "user_can_manage_show_lineup",
+      "args": "p_show_id uuid",
+      "definition": "CREATE OR REPLACE FUNCTION public.user_can_manage_show_lineup(p_show_id uuid)\n RETURNS boolean\n LANGUAGE sql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$ select exists (select 1 from public.role_assignments ra where ra.show_id = p_show_id and ra.user_id = auth.uid() and ra.role in ('admin', 'superintendent')) or exists (select 1 from public.role_assignments ra where ra.user_id = auth.uid() and ra.role = 'super_admin') or exists (select 1 from public.super_admins sa where sa.user_id = auth.uid()); $function$\n"
+    }
+  ]
+}
