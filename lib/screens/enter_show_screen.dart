@@ -1862,6 +1862,7 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
               style: const TextStyle(color: AppColors.text),
               decoration: InputDecoration(
                 labelText: 'Class',
+                helperMaxLines: 5,
                 helperText: needsValidation
                     ? 'Select the class for this animal.'
                     : 'Projected class selected.',
@@ -2567,7 +2568,7 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
       future: _loadFuture,
       builder: (context, snap) {
         return RingMasterPageShell(
-      showId: widget.showId,
+          showId: widget.showId,
           title: widget.showName,
           subtitle: 'Enter Show',
           showBackButton: true,

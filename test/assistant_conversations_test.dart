@@ -70,7 +70,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: AssistantConversationsScreen(
-          loadRows: (_, __) async => throw Exception('denied'),
+          loadRows: (_, _) async => throw Exception('denied'),
         ),
       ),
     );

@@ -85,6 +85,12 @@ Signed-in Chester checks the published match RPC before built-in answers or AI. 
 
 The reviewed-answer migration was applied to the live project on 2026-09-19; the new UI is available in the local preview and requires the normal app release for all users. No answers were published during setup.
 
+## Production restoration — September 22, 2026
+
+Chester was initially deployed as a local-only bundle, so subsequent superintendent releases omitted the uncommitted assistant source. Version 1.00.03 restores the complete assistant on top of b89d6fa, preserving linked superintendent changes. Assistant source, assets, migrations, and regression tests are now committed; the deployment workflow runs Chester tests with accessibility tests. No backend migration is reapplied by this release. Existing AI enablement and approved reusable answers remain in the live database.
+
+Validation: clean Flutter analysis; 46 native assistant/accessibility/data tests passed; four superintendent widget tests passed in Chrome (these require dart:html); release web build passed.
+
 ## Conversation-quality improvements — September 30, 2026
 
 Migration `20261001035738_improve_chester_context.sql` adds a read-only `animals` topic to the existing invoker RPC. It requires accepted household access, explicitly filters `owner_user_id` even when a secretary has broader table permissions, and omits deleted animals, contact details and internal identifiers. Entry lookups retain their household restriction and now include visible show sections for comparison. No payment verification or unrestricted secretary exhibitor search is added.

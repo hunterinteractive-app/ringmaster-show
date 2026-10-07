@@ -8,6 +8,7 @@ import 'package:ringmaster_show/services/app_session.dart';
 import 'package:ringmaster_show/services/show_role_contact_defaults.dart';
 
 import 'print_packs/check_in_generator_sheet.dart';
+import 'print_packs/control_sheet_judging_order.dart';
 import 'print_packs/control_sheets_generator_sheet.dart';
 import 'print_packs/coop_cards_generator_sheet.dart';
 import 'print_packs/remark_cards_generator_sheet.dart';
@@ -39,6 +40,9 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
   bool _combineSections = true;
   bool _pairOpenYouthByLetter = false;
   bool _youthFirst = false;
+  bool _printJudgingOrder = false;
+  bool _hasJudgingOrder = false;
+  String? _judgingOrderError;
   bool _autoEmailCheckInSheets = false;
   bool _savingAutoEmailCheckInSheets = false;
   bool _savingSecretaryInfo = false;
@@ -178,6 +182,19 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
         _selectedSectionId = null;
       }
 
+      try {
+        final order = await loadControlSheetJudgingOrder(
+          supabase,
+          widget.showId,
+        );
+        _hasJudgingOrder = order.isAvailable;
+        _judgingOrderError = null;
+      } catch (_) {
+        _hasJudgingOrder = false;
+        _judgingOrderError =
+            'Unable to load judging order. Refresh to try again.';
+      }
+      if (!_hasJudgingOrder) _printJudgingOrder = false;
       if (!mounted) return;
       setState(() => _loading = false);
     } catch (e) {
@@ -537,6 +554,7 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
           // content still keeps Open and Youth as separate sheet sections.
           combineSections: sectionIds.length > 1,
           youthFirst: _youthFirst,
+          printJudgingOrder: _printJudgingOrder,
         ),
       ),
     );
@@ -849,6 +867,21 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
                   subtitle:
                       'Choose whether Control Sheets list Open or Youth first and how they are printed.',
                   children: [
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Print by current judging order'),
+                      subtitle: Text(
+                        _judgingOrderError ??
+                            (_hasJudgingOrder
+                                ? 'Control sheets follow table and breed order. Unassigned breeds print last.'
+                                : 'Available after judges and breeds are assigned in Judging Line-Up.'),
+                      ),
+                      value: _printJudgingOrder,
+                      onChanged: _hasJudgingOrder
+                          ? (value) =>
+                                setState(() => _printJudgingOrder = value)
+                          : null,
+                    ),
                     SwitchListTile(
                       value: _pairOpenYouthByLetter,
                       contentPadding: EdgeInsets.zero,

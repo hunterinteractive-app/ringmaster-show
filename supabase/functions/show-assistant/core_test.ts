@@ -191,5 +191,7 @@ Deno.test("large authorized record lists remain bounded and explicitly partial",
 });
 
 Deno.test("a personal answer without the required lookup fails closed", async () => {
-  await rejects(() => answerQuestion([], true, async () => text, async () => ({}), true));
+  await rejects(() =>
+    answerQuestion([], true, async () => text, async () => ({}), true)
+  );
 });

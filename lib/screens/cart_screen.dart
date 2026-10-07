@@ -1280,6 +1280,7 @@ class _CartScreenState extends State<CartScreen> {
         _addonsTotalCents == 0;
 
     return RingMasterPageShell(
+      showId: widget.showId,
       title: widget.showName,
       subtitle: 'Entry Cart',
       showBackButton: true,
@@ -1373,13 +1374,9 @@ class _CartScreenState extends State<CartScreen> {
                             if (_checkoutUrl != null) ...[
                               const SizedBox(height: 10),
                               OutlinedButton.icon(
-                                onPressed: () {
-                                  launchUrl(
-                                    Uri.parse(_checkoutUrl!),
-                                    mode: LaunchMode.platformDefault,
-                                    webOnlyWindowName: '_self',
-                                  );
-                                },
+                                // Always validate/reprice, including a retry after
+                                // the browser blocked opening the payment page.
+                                onPressed: _payingOnline ? null : _payOnline,
                                 icon: const Icon(Icons.open_in_new),
                                 label: const Text('Open Payment Page'),
                               ),

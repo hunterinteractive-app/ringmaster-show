@@ -183,6 +183,52 @@ begin
 end;
 $$;
 
+-- Repeated clicks reuse an identical, freshly calculated quote. Late additions,
+-- deletions, same-price edits, and fee changes require a new quote.
+do $$
+declare c payment_test_context%rowtype; a jsonb; old_id uuid; added uuid;
+  old_total integer; snapshot jsonb; blocked boolean;
+begin
+  select * into c from payment_test_context;
+  a:=public.create_payment_quote_attempt(c.cart_id,c.owner_id,'stripe',0.02,0.029,30);
+  perform pg_temp.assert_true((a->>'reused')::boolean,'unchanged retry must reuse');
+  old_id:=(a->>'payment_session_id')::uuid;
+  old_total:=(a->'quote'->>'show_balance_total_cents')::integer;
+  insert into public.entry_cart_items(cart_id,section_id,species,tattoo,breed,variety,sex,class_name,exhibitor_id,is_fur)
+    select cart_id,section_id,species,'LATE-ADD',breed,variety,sex,class_name,exhibitor_id,false
+    from public.entry_cart_items where cart_id=c.cart_id and not is_fur limit 1 returning id into added;
+  blocked:=false;
+  begin
+    perform public.finalize_entry_cart_paid(c.cart_id,old_id,'stripe','pi_stale',
+      (a->'quote'->>'expected_amount_cents')::integer,'usd');
+  exception when others then blocked:=sqlerrm like 'Cart changed after checkout%'; end;
+  perform pg_temp.assert_true(blocked,'late addition must block old payment finalization');
+  perform pg_temp.assert_true(not exists(select 1 from public.entries where source_cart_id=c.cart_id),'stale quote submitted entries');
+  a:=public.create_payment_quote_attempt(c.cart_id,c.owner_id,'stripe',0.02,0.029,30);
+  perform pg_temp.assert_true(not (a->>'reused')::boolean,'late addition reused old quote');
+  perform pg_temp.assert_true((a->'quote'->>'show_balance_total_cents')::integer=old_total+1000,'late entry missing from recalculation');
+  perform pg_temp.assert_true((select attempt_status='superseded' from public.show_payment_sessions where id=old_id),'old quote not superseded');
+  perform pg_temp.assert_true(not exists(select 1 from public.show_payments where payment_session_id=old_id and status='pending'),'old ledger still pending');
+  old_id:=(a->>'payment_session_id')::uuid;
+  update public.entry_cart_items set tattoo='SAME-PRICE-EDIT' where id=added;
+  a:=public.create_payment_quote_attempt(c.cart_id,c.owner_id,'stripe',0.02,0.029,30);
+  perform pg_temp.assert_true((a->>'payment_session_id')::uuid<>old_id,'same-price edit reused old quote');
+  delete from public.entry_cart_items where id=added;
+  a:=public.create_payment_quote_attempt(c.cart_id,c.owner_id,'stripe',0.02,0.029,30);
+  perform pg_temp.assert_true((a->'quote'->>'show_balance_total_cents')::integer=old_total,'deleted entry still charged');
+  old_id:=(a->>'payment_session_id')::uuid;
+  update public.show_section_fee_settings set fee_per_entry=11
+    where section_id in(select section_id from public.entry_cart_items where cart_id=c.cart_id);
+  a:=public.create_payment_quote_attempt(c.cart_id,c.owner_id,'stripe',0.02,0.029,30);
+  perform pg_temp.assert_true((a->>'payment_session_id')::uuid<>old_id,'changed fee reused old quote');
+  perform pg_temp.assert_true((a->'quote'->>'show_balance_total_cents')::integer=old_total+100,'fee change missing from fresh calculation');
+  update public.show_section_fee_settings set fee_per_entry=10
+    where section_id in(select section_id from public.entry_cart_items where cart_id=c.cart_id);
+  a:=public.create_payment_quote_attempt(c.cart_id,c.owner_id,'stripe',0.02,0.029,30);
+  update payment_test_context set active_session_id=(a->>'payment_session_id')::uuid;
+end;
+$$;
+
 -- 3. An old Stripe session cannot finalize after a newer retry.
 do $$
 declare v_ctx payment_test_context%rowtype;

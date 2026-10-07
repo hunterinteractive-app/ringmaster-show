@@ -53,8 +53,9 @@ void main() {
         expect(bytes.length, greaterThan(1000));
         expect(String.fromCharCodes(bytes.take(5)), '%PDF-');
         final directory = Platform.environment['CONTEST_REPORT_QA_DIR'];
-        if (directory != null)
+        if (directory != null) {
           await File('$directory/contest_$type.pdf').writeAsBytes(bytes);
+        }
       }
     },
   );

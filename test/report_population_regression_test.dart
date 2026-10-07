@@ -11,6 +11,52 @@ import 'package:ringmaster_show/screens/admin/closeout/models/base/report_reques
 
 void main() {
   test(
+    'specialty RIS falls back to qualifying BOB rather than printing RIS',
+    () async {
+      final fixture = _Fixture(
+        _qualificationRows(),
+        award: 'RIS,BOB',
+        breedScope: 'limited',
+      );
+      addTearDown(fixture.client.dispose);
+      final legs = await LegsReportLoader(fixture.repo).load(_request);
+      expect(legs.single.winCode, 'BOB');
+    },
+  );
+  test('specialty RIS alone cannot create a leg', () async {
+    final rows = _qualificationRows();
+    for (final row in rows) {
+      row['placement'] = 2;
+    }
+    final fixture = _Fixture(rows, award: 'RIS', breedScope: 'limited');
+    addTearDown(fixture.client.dispose);
+    expect(await LegsReportLoader(fixture.repo).load(_request), isEmpty);
+  });
+
+  for (final scope in ['all', 'limited', 'single', '']) {
+    for (final award in ['RIS', '1RIS', '2RIS', 'BIS', 'BOB']) {
+      test(
+        '$scope section $award leg eligibility, including historical shows',
+        () async {
+          final fixture = _Fixture(
+            _qualificationRows(),
+            award: award,
+            breedScope: scope,
+          );
+          addTearDown(fixture.client.dispose);
+          final legs = await LegsReportLoader(fixture.repo).load(_request);
+          final expected = award == 'BIS' || award == 'BOB'
+              ? award
+              : scope == 'all' && award != '2RIS'
+              ? award
+              : 'FIRST';
+          expect(legs.single.winCode, expected);
+        },
+      );
+    }
+  }
+
+  test(
     'exhibitor counts preserve DQ rules and separate Open A from Youth A',
     () async {
       final fixture = _Fixture(_qualificationRows());
@@ -208,6 +254,7 @@ class _Fixture {
   _Fixture(
     List<Map<String, dynamic>> rows, {
     String award = 'FIRST',
+    String breedScope = 'all',
     bool failAwards = false,
     bool failPoints = false,
   }) {
@@ -243,23 +290,24 @@ class _Fixture {
           ];
         } else if (table == 'entry_awards' && award != 'FIRST') {
           data = [
-            {
-              'id': 'award',
-              'show_id': 'show',
-              'entry_id': 'a',
-              'award_code': award,
-              'entries': {
-                'id': 'a',
+            for (final awardCode in award.split(','))
+              {
+                'id': 'award',
                 'show_id': 'show',
-                'exhibitor_id': 'ex1',
-                'species': 'rabbit',
-                'breed': 'Mini Rex',
-                'tattoo': 'a',
-                'sex': 'Buck',
-                'class_name': 'Senior Buck',
-                'is_shown': true,
+                'entry_id': 'a',
+                'award_code': awardCode,
+                'entries': {
+                  'id': 'a',
+                  'show_id': 'show',
+                  'exhibitor_id': 'ex1',
+                  'species': 'rabbit',
+                  'breed': 'Mini Rex',
+                  'tattoo': 'a',
+                  'sex': 'Buck',
+                  'class_name': 'Senior Buck',
+                  'is_shown': true,
+                },
               },
-            },
           ];
         } else if (table == 'judges') {
           data = [
@@ -281,14 +329,15 @@ class _Fixture {
         );
       }),
     );
-    repo = _FixtureRepository(client, rows);
+    repo = _FixtureRepository(client, rows, breedScope);
   }
   late final SupabaseClient client;
   late final _FixtureRepository repo;
 }
 
 class _FixtureRepository extends CloseoutRepository {
-  _FixtureRepository(super.client, this.rows);
+  _FixtureRepository(super.client, this.rows, this.breedScope);
+  final String breedScope;
   final List<Map<String, dynamic>> rows;
   int snapshotLoads = 0;
   @override
@@ -308,6 +357,7 @@ class _FixtureRepository extends CloseoutRepository {
           {
             'id': id,
             'kind': id,
+            'breed_scope': breedScope,
             'letter': 'A',
             'sort_order': id == 'open' ? 1 : 2,
           },

@@ -65,11 +65,12 @@ class _AssistantConversationsScreenState
         _more = rows.length == (_detail ? 100 : 50);
       });
     } catch (_) {
-      if (mounted)
+      if (mounted) {
         setState(
           () => _error =
               'Unable to load conversations. Super Admin access and the Chester database update are required.',
         );
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -92,11 +93,12 @@ class _AssistantConversationsScreenState
         ),
       );
     } catch (_) {
-      if (mounted)
+      if (mounted) {
         setState(
           () => _error =
               'Unable to create draft. Check Super Admin access and the database update.',
         );
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }

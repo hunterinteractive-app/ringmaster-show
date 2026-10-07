@@ -23,6 +23,11 @@ class UnpaidBalancesReportLoader {
     final rows = <UnpaidBalanceRow>[];
 
     for (final balance in balanceRows) {
+      // Only actual show entries create an amount to collect at check-in.
+      // The shared RPC also returns abandoned or stale cart-only snapshots.
+      // Secretary entries may have no cart, so do not filter by cart status.
+      if (_str(balance['source']) != 'entries') continue;
+
       final totalDue = _centsToDollars(balance['balance_due_cents']);
 
       if (request.hideZeroBalances && totalDue <= 0) {

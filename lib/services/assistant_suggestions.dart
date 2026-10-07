@@ -165,8 +165,9 @@ String? assistantPreparedAnswer(String question) {
             .toLowerCase()
             .replaceAll('’', "'")
             .replaceAll(RegExp(r'[?!.]+$'), '') ==
-        normalized)
+        normalized) {
       return entry.value;
+    }
   }
   return null;
 }

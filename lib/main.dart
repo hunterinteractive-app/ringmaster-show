@@ -173,8 +173,9 @@ class MyApp extends StatelessWidget {
                 : const ShowListScreen(),
           };
           final destination = assistantDestinations[settings.name];
-          if (destination != null)
+          if (destination != null) {
             return MaterialPageRoute(builder: destination);
+          }
           final routeUri = Uri.parse(settings.name ?? '');
           Uri uri = routeUri;
 

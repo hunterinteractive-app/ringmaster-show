@@ -67,7 +67,36 @@ class _ShowAssistantOverlayState extends State<ShowAssistantOverlay> {
       final mobile = box.maxWidth < 600;
       return Stack(
         children: [
-          widget.child,
+          Column(
+            children: [
+              Expanded(child: widget.child),
+              if (mobile && MediaQuery.viewInsetsOf(context).bottom == 0)
+                Material(
+                  color: Theme.of(context).colorScheme.surface,
+                  child: SafeArea(
+                    top: false,
+                    child: SizedBox(
+                      height: 56,
+                      width: double.infinity,
+                      child: Align(
+                        alignment: Alignment.centerRight,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          child: TextButton.icon(
+                            key: const ValueKey('assistant-launcher'),
+                            onPressed: controller.open,
+                            icon: const ExcludeSemantics(
+                              child: RabbitAvatar(size: 40),
+                            ),
+                            label: const Text('Ask Chester'),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
           if (controller.isOpen) ...[
             Positioned.fill(
               child: GestureDetector(
@@ -105,7 +134,7 @@ class _ShowAssistantOverlayState extends State<ShowAssistantOverlay> {
                 ),
               ),
             ),
-          ] else
+          ] else if (!mobile)
             Positioned(
               right: 16,
               bottom: MediaQuery.viewInsetsOf(context).bottom + 72,
@@ -294,8 +323,9 @@ class _AssistantPanelState extends State<AssistantPanel> {
       _showLabel = 'Current show';
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && _scroll.hasClients)
+      if (mounted && _scroll.hasClients) {
         _scroll.jumpTo(_scroll.position.maxScrollExtent);
+      }
     });
   }
 
@@ -336,11 +366,12 @@ class _AssistantPanelState extends State<AssistantPanel> {
             source: source,
           )
           .then((_) {
-            if (mounted && transcript.failed)
+            if (mounted && transcript.failed) {
               setState(
                 () => _notice =
                     'This chat could not be saved for support review. Contact support can still include the full conversation.',
               );
+            }
           }),
     );
   }
@@ -397,8 +428,9 @@ class _AssistantPanelState extends State<AssistantPanel> {
         });
       });
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && _scroll.hasClients)
+        if (mounted && _scroll.hasClients) {
           _scroll.jumpTo(_scroll.position.maxScrollExtent);
+        }
       });
       return;
     }
@@ -515,11 +547,12 @@ class _AssistantPanelState extends State<AssistantPanel> {
               Uri.parse(guide.value),
               mode: LaunchMode.externalApplication,
             );
-            if (!opened && mounted)
+            if (!opened && mounted) {
               setState(
                 () => _notice =
                     'The guide could not open. Try Secretary Resources or the website help pages.',
               );
+            }
           },
           child: Text(
             guide.key,
@@ -580,7 +613,7 @@ class _AssistantPanelState extends State<AssistantPanel> {
           TextButton(
             onPressed: () async {
               await Clipboard.setData(ClipboardData(text: body));
-              if (dialogContext.mounted) {
+              if (mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('Full support message copied.')),
                 );
@@ -769,11 +802,12 @@ class _AssistantPanelState extends State<AssistantPanel> {
                               Uri.parse(item.value),
                               mode: LaunchMode.externalApplication,
                             );
-                            if (!opened && mounted)
+                            if (!opened && mounted) {
                               setState(
                                 () => _notice =
                                     'The website could not open. Please try again.',
                               );
+                            }
                           },
                           child: Text(item.key),
                         ),
@@ -832,12 +866,13 @@ class _AssistantPanelState extends State<AssistantPanel> {
                       ExpansionTile(
                         key: ValueKey('faq-$question'),
                         onExpansionChanged: (open) {
-                          if (open)
+                          if (open) {
                             _saveInteraction(
                               'event',
                               '$question\n\n${assistantPreparedAnswers[question]}${preparedGuideCitation(question)}',
                               'faq',
                             );
+                          }
                         },
                         title: Text(question),
                         childrenPadding: const EdgeInsets.fromLTRB(

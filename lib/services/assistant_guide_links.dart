@@ -8,8 +8,9 @@ Map<String, String> assistantGuideLinks(String answer) {
   final links = <String, String>{};
   for (final match in _guideMarker.allMatches(answer)) {
     final guide = assistantGuideCatalog[match.group(1)];
-    if (guide != null && links.length < 3)
+    if (guide != null && links.length < 3) {
       links[guide['label']!] = guide['url']!;
+    }
   }
   return links;
 }

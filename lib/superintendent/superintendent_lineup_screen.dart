@@ -1,4 +1,5 @@
 import 'final_award_lineup.dart';
+import 'lineup_timing.dart';
 import 'specialty_lineup_dialog.dart';
 // lib/superintendent/superintendent_lineup_screen.dart
 // ignore_for_file: use_build_context_synchronously
@@ -385,7 +386,7 @@ class _SuperintendentLineupScreenState
       final isJudgeChange =
           row['is_judge_change'] == true ||
           (row['breed_id'] ?? '').toString() == '__judge_change__';
-      if (isJudgeChange || row['is_award_plan'] == true) continue;
+      if (isJudgeChange) continue;
 
       final hasDuplicate = row['duplicate_judge_breed'] == true;
       final hasOverride = (row['override_reason'] ?? row['notes'] ?? '')
@@ -393,7 +394,11 @@ class _SuperintendentLineupScreenState
           .trim()
           .isNotEmpty;
 
-      if (hasDuplicate && !hasOverride) count += 1;
+      if ((hasDuplicate && !hasOverride) ||
+          (row['entry_conflicts'] as List?)?.isNotEmpty == true ||
+          row['timing_overlap'] == true) {
+        count += 1;
+      }
     }
     return count;
   }
@@ -403,6 +408,22 @@ class _SuperintendentLineupScreenState
     if (_isSavingPublishedState) return;
 
     if (value) {
+      try {
+        _entryConflicts = await _fetchEntryConflicts();
+        _groupByTable(data.assignments);
+      } catch (_) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Unable to check judge entry conflicts. Please retry before publishing.',
+              ),
+            ),
+          );
+        }
+        return;
+      }
+      if (!mounted) return;
       final confirmed = await _confirmPublishWithIssues(data);
       if (!confirmed) return;
     }
@@ -525,7 +546,85 @@ class _SuperintendentLineupScreenState
     if (mounted) await _refresh();
   }
 
+  List<Map<String, dynamic>> _entryConflicts = [];
+  String? _conflictCheckError;
+
+  Future<List<Map<String, dynamic>>> _fetchEntryConflicts() async {
+    final results = await Future.wait(
+      _workspaceShows.keys.map((id) async {
+        final result = await supabase.rpc(
+          'get_show_lineup_entry_conflicts',
+          params: {'p_show_id': id},
+        );
+        if (result is! List) {
+          throw StateError('Invalid conflict check response');
+        }
+        return List<Map<String, dynamic>>.from(result);
+      }),
+    );
+    return results.expand((rows) => rows).toList();
+  }
+
+  List<String> _conflictsFor(Map<String, dynamic> row, String? judgeId) {
+    if (judgeId == null) return [];
+    final breed = (row['breed_id'] ?? row['breed'] ?? '')
+        .toString()
+        .trim()
+        .toLowerCase();
+    return _entryConflicts
+        .where(
+          (c) =>
+              c['judge_id'] == judgeId &&
+              c['section_id'] == row['section_id'] &&
+              (row['is_award_plan'] == true ||
+                  (c['breed'] ?? '').toString().trim().toLowerCase() == breed),
+        )
+        .map((c) => '${c['exhibitor_name']} • ${c['relationship']}')
+        .toSet()
+        .toList();
+  }
+
   Future<_LineupData> _loadData() async {
+    final data = await _loadLineupData();
+    try {
+      _entryConflicts = await _fetchEntryConflicts();
+      _conflictCheckError = null;
+    } catch (_) {
+      _entryConflicts = [];
+      _conflictCheckError =
+          'Judge entry conflicts could not be checked. Auto Fill is blocked until the check succeeds.';
+    }
+    refreshLineupCounts(data.assignments, data.breedCounts);
+    final grouped = _groupByTable(data.assignments);
+    final timing = LineupTiming();
+    for (final table in grouped.entries) {
+      for (final row in table.value) {
+        if (row['is_judge_change'] == true ||
+            row['breed_id'] == '__judge_change__') {
+          timing.startAt(table.key, plannedStartMinutes(row));
+          continue;
+        }
+        final judge = data.judges
+            .where((j) => j['judge_id'] == row['effective_judge_id'])
+            .firstOrNull;
+        timing.add(
+          table.key,
+          timingBreedKey(row),
+          row['is_award_plan'] == true
+              ? 0
+              : ((row['entry_count_actual'] ?? row['entry_count_estimated'])
+                            as num?)
+                        ?.toInt() ??
+                    0,
+          judgingRate(judge),
+          row: row,
+        );
+      }
+    }
+    return data;
+  }
+
+  Future<_LineupData> _loadLineupData() async {
     if (!_usesWorkspace && !widget.readOnly) {
       _singleWorkspaceId =
           await supabase.rpc(
@@ -560,6 +659,30 @@ class _SuperintendentLineupScreenState
           'id,show_id,kind,letter,is_enabled,shows!show_sections_show_id_fkey(name,final_award_mode)',
         )
         .inFilter('show_id', ids);
+    // Allocate consecutive letters in workspace order, retaining source IDs.
+    final displayLetters = <String, String>{};
+    var nextLetter = 0;
+    for (var i = 0; i < ids.length; i++) {
+      final letters = <String>{
+        for (final section in sections)
+          if (section['show_id'] == ids[i]) section['letter'].toString(),
+        for (final row in data[i].breedCounts)
+          if (row['show_letter'] != null) row['show_letter'].toString(),
+      }.toList()..sort();
+      for (final letter in letters) {
+        displayLetters['${ids[i]}/$letter'] = String.fromCharCode(
+          65 + nextLetter++,
+        );
+      }
+    }
+    Map<String, dynamic> labelRow(Map<String, dynamic> row, String showId) =>
+        labelWorkspaceRow(
+          row,
+          _workspaceShows[showId] ?? '',
+          displayLetter: (_workspaceShows.length > 1)
+              ? displayLetters['$showId/${row['show_letter'] ?? row['letter']}']
+              : null,
+        );
     _awardOptions = [
       for (final section in sections)
         if (section['is_enabled'] != false)
@@ -567,7 +690,7 @@ class _SuperintendentLineupScreenState
             ((section['shows'] as Map?)?['final_award_mode'] ?? 'four_six_bis')
                 .toString(),
           ).entries)
-            labelWorkspaceRow({
+            labelRow({
               'show_id': section['show_id'],
               'section_id': section['id'],
               'show_letter': section['letter'],
@@ -575,7 +698,7 @@ class _SuperintendentLineupScreenState
               'breed': award.value,
               'award_code': award.key,
               'entry_count': 0,
-            }, _workspaceShows[section['show_id']] ?? ''),
+            }, section['show_id'].toString()),
     ];
     for (final row in specialties) {
       if (row['award_code'] == null) continue;
@@ -583,22 +706,19 @@ class _SuperintendentLineupScreenState
           .where((s) => s['id'] == row['award_section_id'])
           .firstOrNull;
       if (section != null) {
-        row['show_letter'] = labelWorkspaceRow({
+        row['show_letter'] = labelRow({
           'show_letter': section['letter'],
-        }, _workspaceShows[section['show_id']] ?? '')['show_letter'];
+        }, section['show_id'].toString())['show_letter'];
       }
     }
     _workspaceVersions = versions;
     final assignments = <Map<String, dynamic>>[];
     final breeds = <Map<String, dynamic>>[];
     for (var i = 0; i < data.length; i++) {
-      final name = _workspaceShows[ids[i]]!;
-      assignments.addAll(
-        data[i].assignments.map((r) => labelWorkspaceRow(r, name)),
-      );
+      assignments.addAll(data[i].assignments.map((r) => labelRow(r, ids[i])));
       breeds.addAll(
         data[i].breedCounts.map(
-          (r) => labelWorkspaceRow({...r, 'show_id': ids[i]}, name),
+          (r) => labelRow({...r, 'show_id': ids[i]}, ids[i]),
         ),
       );
     }
@@ -610,7 +730,13 @@ class _SuperintendentLineupScreenState
       judges: commonWorkspaceJudges(data.map((d) => d.judges).toList()),
       breedCounts: breeds,
       workloads: data.expand((d) => d.workloads).toList(),
-      userPreferences: data.first.userPreferences,
+      userPreferences: {
+        ...data.first.userPreferences,
+        if ((_workspaceShows.length > 1)) ...{
+          'open_youth_mode': 'together',
+          'show_order': 'youth_first',
+        },
+      },
       judgeOrderPublished: data.every((d) => d.judgeOrderPublished),
       judgeOrderPublishedAt: null,
       judgeOrderPublishedBy: null,
@@ -666,6 +792,21 @@ class _SuperintendentLineupScreenState
 
     final assignmentRows = List<Map<String, dynamic>>.from(assignments as List);
     final judgeRows = List<Map<String, dynamic>>.from(judges as List);
+    if (judgeRows.isNotEmpty) {
+      final rates = await supabase
+          .from('judges')
+          .select('id,average_entries_per_hour')
+          .inFilter(
+            'id',
+            judgeRows.map((j) => j['judge_id'].toString()).toList(),
+          );
+      for (final judge in judgeRows) {
+        final rate = rates
+            .where((r) => r['id'] == judge['judge_id'])
+            .firstOrNull;
+        judge['average_entries_per_hour'] = rate?['average_entries_per_hour'];
+      }
+    }
     final breedRows = List<Map<String, dynamic>>.from(breedCounts as List);
     final workloadRows = List<Map<String, dynamic>>.from(workloads as List);
 
@@ -911,19 +1052,16 @@ class _SuperintendentLineupScreenState
           continue;
         }
 
-        if (row['is_external_specialty'] == true) {
-          row['effective_judge_name'] =
-              (row['judge_name'] ?? '').toString().isEmpty
-              ? 'Judge not set'
-              : row['judge_name'];
-          row['effective_judge_id'] = null;
-          continue;
-        }
         row['effective_judge_name'] =
             currentJudgeName ??
             (row['judge_name'] ?? 'Judge not set').toString();
         row['effective_judge_id'] =
             currentJudgeId ?? row['judge_id']?.toString();
+
+        row['entry_conflicts'] = _conflictsFor(
+          row,
+          row['effective_judge_id']?.toString(),
+        );
 
         if (currentJudgeRowIndex != null) {
           final actual = (row['entry_count_actual'] as num?)?.toInt();
@@ -977,6 +1115,7 @@ class _SuperintendentLineupScreenState
         if (judgeId.isEmpty) continue;
 
         row['block_head_count'] = 0;
+        row['is_active_judge_marker'] = false;
 
         final existing = activeJudgeRowByJudgeId[judgeId];
         if (existing == null) {
@@ -999,6 +1138,7 @@ class _SuperintendentLineupScreenState
 
     for (final entry in activeJudgeRowByJudgeId.entries) {
       entry.value['block_head_count'] = runningHeadByJudgeId[entry.key] ?? 0;
+      entry.value['is_active_judge_marker'] = true;
     }
 
     // --- BEGIN: Duplicate judge/breed/scope detection across show letters ---
@@ -1518,6 +1658,68 @@ class _SuperintendentLineupScreenState
     }
 
     try {
+      // Verify all candidates before changing or deleting any current assignments.
+      _entryConflicts = await _fetchEntryConflicts();
+      _conflictCheckError = null;
+      final skipped = <String>[];
+      // Preserved specialties/finals keep their judge and table. Their workload
+      // must be reserved before distributing the regular breed assignments.
+      _groupByTable(data.assignments);
+      final reservedLoads = <String, int>{};
+      final tableByJudge = <String, String>{};
+      final judgeByTable = <String, String>{};
+      final nextOrderByTable = <String, int>{};
+      final availableJudgeIds = data.judges
+          .map((j) => j['judge_id']?.toString())
+          .toSet();
+      for (final row in data.assignments) {
+        if (row['is_external_specialty'] != true &&
+            row['is_award_plan'] != true) {
+          continue;
+        }
+        final judgeId = row['effective_judge_id']?.toString();
+        final table = row['table_number']?.toString();
+        if (judgeId == null ||
+            table == null ||
+            !availableJudgeIds.contains(judgeId)) {
+          throw StateError(
+            'Assign an enabled table judge to each specialty or finals plan before Auto Fill.',
+          );
+        }
+        if ((tableByJudge.containsKey(judgeId) &&
+                tableByJudge[judgeId] != table) ||
+            (judgeByTable.containsKey(table) &&
+                judgeByTable[table] != judgeId)) {
+          throw StateError(
+            'Auto Fill cannot preserve multiple specialty judge blocks at one table or across tables. Review those assignments first.',
+          );
+        }
+        tableByJudge[judgeId] = table;
+        judgeByTable[table] = judgeId;
+        final count = row['is_award_plan'] == true
+            ? 0
+            : ((row['entry_count_actual'] ??
+                              row['entry_count_estimated'] ??
+                              row['entry_count'])
+                          as num?)
+                      ?.toInt() ??
+                  0;
+        reservedLoads[judgeId] = (reservedLoads[judgeId] ?? 0) + count;
+        final next = ((row['sort_order'] as num?)?.toInt() ?? 0) + 1;
+        if (next > (nextOrderByTable[table] ?? 1)) {
+          nextOrderByTable[table] = next;
+        }
+      }
+      for (final judge in data.judges) {
+        final id = judge['judge_id']?.toString();
+        if (id == null || tableByJudge.containsKey(id)) continue;
+        var number = 1;
+        while (judgeByTable.containsKey('$number')) {
+          number++;
+        }
+        tableByJudge[id] = '$number';
+        judgeByTable['$number'] = id;
+      }
       if (_usesWorkspace) {
         _autoFillRows = [];
       } else {
@@ -1670,19 +1872,62 @@ class _SuperintendentLineupScreenState
       }
       // --- END: Load judge preferences ---
 
+      final timing = LineupTiming();
+      final plannedStarts = <String, int>{};
+      for (final row in data.assignments) {
+        if (row['is_judge_change'] != true) continue;
+        final id = row['judge_id']?.toString();
+        if (id == null) continue;
+        final minutes = plannedStartMinutes(row);
+        if (minutes > (plannedStarts[id] ?? 0)) plannedStarts[id] = minutes;
+      }
+      for (final entry in plannedStarts.entries) {
+        final table = tableByJudge[entry.key];
+        if (table != null) timing.startAt(table, entry.value);
+      }
+      double rateFor(String id) => judgingRate(
+        data.judges.where((j) => j['judge_id'] == id).firstOrNull,
+      );
+      final preservedRows =
+          data.assignments
+              .where(
+                (r) =>
+                    r['is_external_specialty'] == true ||
+                    r['is_award_plan'] == true,
+              )
+              .toList()
+            ..sort(
+              (a, b) => ((a['sort_order'] as num?)?.toInt() ?? 0).compareTo(
+                (b['sort_order'] as num?)?.toInt() ?? 0,
+              ),
+            );
+      for (final row in preservedRows) {
+        timing.add(
+          row['table_number'].toString(),
+          timingBreedKey(row),
+          row['is_award_plan'] == true
+              ? 0
+              : ((row['entry_count_actual'] as num?)?.toInt() ?? 0),
+          rateFor(row['effective_judge_id'].toString()),
+        );
+      }
       final judgeLoads = <String, int>{};
       final judgeBreedScopes = <String, Set<String>>{};
       final sortOrderByTable = <String, int>{};
+      final pairScopes = data.userPreferences['open_youth_mode'] != 'separate';
+      String pairKey(Map<String, dynamic> row) =>
+          '${row['show_letter']}|${row['species']}|${_lineupBreedIdentity((row['breed'] ?? '').toString(), row['variety']?.toString())}';
+      final pairedJudges = <String, Map<String, dynamic>>{};
 
       for (var i = 0; i < data.judges.length; i++) {
         final judge = data.judges[i];
         final judgeId = judge['judge_id']?.toString();
         if (judgeId == null || judgeId.isEmpty) continue;
 
-        final tableNumber = '${i + 1}';
-        judgeLoads[judgeId] = 0;
+        final tableNumber = tableByJudge[judgeId]!;
+        judgeLoads[judgeId] = reservedLoads[judgeId] ?? 0;
         judgeBreedScopes[judgeId] = <String>{};
-        sortOrderByTable[tableNumber] = 1;
+        sortOrderByTable[tableNumber] = nextOrderByTable[tableNumber] ?? 1;
 
         await _writeAssignment({
           'p_show_id': widget.showId,
@@ -1696,7 +1941,9 @@ class _SuperintendentLineupScreenState
           'p_scope': 'combined',
           'p_is_judge_change': true,
           'p_entry_count_actual': 0,
-          'p_notes': 'Auto Fill judge start',
+          'p_notes': (plannedStarts[judgeId] ?? 0) > 0
+              ? 'Planned start: ${plannedStarts[judgeId]} minutes after show start.'
+              : 'Auto Fill judge start',
         });
       }
 
@@ -1704,7 +1951,80 @@ class _SuperintendentLineupScreenState
       // completing Show A before moving to Show B, then C, etc. Judge selection
       // inside each show letter still uses workload, duplicate rules, and saved
       // superintendent judge preferences.
-      for (final breed in breedRows) {
+      for (var position = 0; position < breedRows.length; position++) {
+        // Keep letter order, but fill another breed first when that avoids
+        // calling the same breed at two tables. Never split a Youth/Open pair.
+        if (!pairScopes ||
+            !pairedJudges.containsKey(pairKey(breedRows[position]))) {
+          final letter = breedRows[position]['show_letter'];
+          Map<String, dynamic>? nextBreed;
+          var leastOverlap = double.infinity;
+          final seen = <String>{};
+          for (final candidate
+              in breedRows
+                  .skip(position)
+                  .where((r) => r['show_letter'] == letter)) {
+            final key = pairScopes
+                ? pairKey(candidate)
+                : '${pairKey(candidate)}|${candidate['scope']}';
+            if (!seen.add(key)) continue;
+            final group = pairScopes
+                ? breedRows
+                      .skip(position)
+                      .where((r) => pairKey(r) == pairKey(candidate))
+                      .toList()
+                : [candidate];
+            final count = group.fold<int>(
+              0,
+              (n, r) => n + ((r['entry_count'] as num?)?.toInt() ?? 0),
+            );
+            final scopes = group
+                .map(
+                  (r) =>
+                      '${_lineupBreedIdentity(r['breed'].toString(), r['variety']?.toString())}|${r['scope'].toString().toLowerCase()}',
+                )
+                .toSet();
+            final eligible = data.judges
+                .where(
+                  (j) => group.every(
+                    (r) => _conflictsFor(r, j['judge_id']?.toString()).isEmpty,
+                  ),
+                )
+                .toList();
+            final clean = eligible
+                .where(
+                  (j) => !scopes.any(
+                    (judgeBreedScopes[j['judge_id']] ?? {}).contains,
+                  ),
+                )
+                .toList();
+            for (final judge in clean.isEmpty ? eligible : clean) {
+              final id = judge['judge_id'].toString();
+              final overlap = timing.overlap(
+                tableByJudge[id]!,
+                timingBreedKey(candidate),
+                count,
+                rateFor(id),
+              );
+              if (overlap < leastOverlap) {
+                leastOverlap = overlap;
+                nextBreed = candidate;
+              }
+            }
+            if (leastOverlap == 0) break;
+          }
+          if (nextBreed != null && !identical(nextBreed, breedRows[position])) {
+            final group = pairScopes
+                ? breedRows
+                      .skip(position)
+                      .where((r) => pairKey(r) == pairKey(nextBreed!))
+                      .toList()
+                : [nextBreed];
+            breedRows.removeWhere(group.contains);
+            breedRows.insertAll(position, group);
+          }
+        }
+        final breed = breedRows[position];
         final breedName = _lineupBreedIdentity(
           (breed['breed'] ?? '').toString(),
           breed['variety']?.toString(),
@@ -1713,27 +2033,76 @@ class _SuperintendentLineupScreenState
         final count = (breed['entry_count'] as num?)?.toInt() ?? 0;
         final breedScopeKey = '$breedName|$scope';
 
-        Map<String, dynamic>? selectedJudge;
+        final pair = pairScopes
+            ? breedRows.where((r) => pairKey(r) == pairKey(breed)).toList()
+            : [breed];
+        final pairCount = pair.fold<int>(
+          0,
+          (sum, r) => sum + ((r['entry_count'] as num?)?.toInt() ?? 0),
+        );
+        final pairScopeKeys = pair
+            .map(
+              (r) =>
+                  '$breedName|${(r['scope'] ?? '').toString().toLowerCase()}',
+            )
+            .toSet();
+        Map<String, dynamic>? selectedJudge = pairScopes
+            ? pairedJudges[pairKey(breed)]
+            : null;
+        final eligibleJudges = data.judges
+            .where(
+              (j) => pair.every(
+                (r) => _conflictsFor(r, j['judge_id']?.toString()).isEmpty,
+              ),
+            )
+            .toList();
+        if (eligibleJudges.isEmpty) {
+          skipped.add(
+            '${breed['show_letter']} • ${breed['scope']} • ${breed['breed']}',
+          );
+          continue;
+        }
         var selectedScore = double.infinity;
+        var selectedOverlap = double.infinity;
+        var selectedLoad = 1 << 30;
+        double overlapFor(String id) => timing.overlap(
+          tableByJudge[id]!,
+          timingBreedKey(breed),
+          pairCount,
+          rateFor(id),
+        );
 
-        for (final judge in data.judges) {
+        for (final judge
+            in selectedJudge == null
+                ? eligibleJudges
+                : <Map<String, dynamic>>[]) {
           final judgeId = judge['judge_id']?.toString();
           if (judgeId == null || judgeId.isEmpty) continue;
 
           final usedBreedScopes = judgeBreedScopes[judgeId] ?? <String>{};
-          if (usedBreedScopes.contains(breedScopeKey)) continue;
+          if (pairScopeKeys.any(usedBreedScopes.contains)) continue;
 
           final load = judgeLoads[judgeId] ?? 0;
-          final score = judgePreferenceScore(judgeId, breed, load, count);
-          if (score < selectedScore) {
+          final score = judgePreferenceScore(judgeId, breed, load, pairCount);
+          final overlap = overlapFor(judgeId);
+          if (preferLineupJudge(
+            load + pairCount,
+            selectedLoad,
+            overlap,
+            selectedOverlap,
+            score,
+            selectedScore,
+          )) {
+            selectedLoad = load + pairCount;
             selectedJudge = judge;
             selectedScore = score;
+            selectedOverlap = overlap;
           }
         }
 
         // If every judge already has this breed/scope somewhere, place it with
         // the lowest scored judge and record an override note.
-        selectedJudge ??= data.judges.fold<Map<String, dynamic>?>(null, (
+        selectedJudge ??= eligibleJudges.fold<Map<String, dynamic>?>(null, (
           best,
           judge,
         ) {
@@ -1748,22 +2117,47 @@ class _SuperintendentLineupScreenState
                   bestId,
                   breed,
                   judgeLoads[bestId] ?? 0,
-                  count,
+                  pairCount,
                 );
           final score = judgePreferenceScore(
             judgeId,
             breed,
             judgeLoads[judgeId] ?? 0,
-            count,
+            pairCount,
           );
-          return score < bestScore ? judge : best;
+          final overlap = overlapFor(judgeId);
+          final bestOverlap = bestId == null
+              ? double.infinity
+              : overlapFor(bestId);
+          return preferLineupJudge(
+                (judgeLoads[judgeId] ?? 0) + pairCount,
+                (judgeLoads[bestId] ?? 0) + pairCount,
+                overlap,
+                bestOverlap,
+                score,
+                bestScore,
+              )
+              ? judge
+              : best;
         });
 
+        final firstInPair =
+            !pairScopes || !pairedJudges.containsKey(pairKey(breed));
+        if (pairScopes && selectedJudge != null) {
+          pairedJudges[pairKey(breed)] = selectedJudge;
+        }
         final judgeId = selectedJudge?['judge_id']?.toString();
         if (judgeId == null || judgeId.isEmpty) continue;
 
-        final judgeIndex = data.judges.indexOf(selectedJudge!);
-        final tableNumber = '${judgeIndex + 1}';
+        final tableNumber = tableByJudge[judgeId]!;
+        if (firstInPair) {
+          timing.add(
+            tableNumber,
+            timingBreedKey(breed),
+            pairCount,
+            rateFor(judgeId),
+          );
+        }
         final sortOrder = sortOrderByTable[tableNumber] ?? 1;
         final requiresOverride =
             judgeBreedScopes[judgeId]?.contains(breedScopeKey) == true;
@@ -1807,11 +2201,31 @@ class _SuperintendentLineupScreenState
       await _future;
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Auto Fill completed. Review before finalizing.'),
-        ),
-      );
+      if (skipped.isNotEmpty) {
+        await showDialog<void>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Breeds left unassigned'),
+            content: SingleChildScrollView(
+              child: Text(
+                'No conflict-free judge was available for these assignments. Youth/Open pairs stay together.\n\n${skipped.join('\n')}',
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Auto Fill completed. Review before finalizing.'),
+          ),
+        );
+      }
     } catch (error) {
       _autoFillRows = null;
       if (!mounted) return;
@@ -1940,6 +2354,20 @@ class _SuperintendentLineupScreenState
 
           return Column(
             children: [
+              const Padding(
+                padding: EdgeInsets.all(12),
+                child: Text(
+                  'Timing honors planned judge starts; otherwise tables start together, using recorded judge pace or 25 head/hour when unknown. A 10-minute buffer flags close breed calls. Check actual progress before calling the next show.',
+                ),
+              ),
+              if (_conflictCheckError != null)
+                Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Text(
+                    _conflictCheckError!,
+                    style: const TextStyle(color: Colors.red),
+                  ),
+                ),
               if (_isAutoFilling || _isSyncingEntries)
                 const LinearProgressIndicator(minHeight: 3),
               Expanded(
@@ -2145,13 +2573,20 @@ class _SummaryCards extends StatelessWidget {
 
     final assignedBreedKeys = <String>{};
     var assignedHead = 0;
-    var conflictCount = 0;
+    final conflictCount = data.assignments
+        .where(
+          (row) =>
+              !_isJudgeRow(row) &&
+              (row['duplicate_judge_breed'] == true ||
+                  (row['entry_conflicts'] as List?)?.isNotEmpty == true ||
+                  row['timing_overlap'] == true),
+        )
+        .length;
 
     for (final row in assignedBreedRows) {
       final key = _breedKeyFromAssignment(row);
       if (key.isNotEmpty) assignedBreedKeys.add(key);
       assignedHead += _headCountForRow(row);
-      if (row['duplicate_judge_breed'] == true) conflictCount += 1;
     }
 
     final availableBreedKeys = <String>{};
@@ -2162,6 +2597,18 @@ class _SummaryCards extends StatelessWidget {
       if (key.isNotEmpty) availableBreedKeys.add(key);
       availableHead += _headCountForRow(row);
     }
+
+    // Outside specialties count toward planning workload, not host entries.
+    var specialtyHead = 0;
+    for (final row in data.assignments) {
+      if (row['is_external_specialty'] != true) continue;
+      final count = _headCountForRow(row);
+      specialtyHead += count;
+      if ((row['effective_judge_id'] ?? '').toString().isNotEmpty) {
+        assignedHead += count;
+      }
+    }
+    availableHead += specialtyHead;
 
     final remainingHead = (availableHead - assignedHead).clamp(
       0,
@@ -2201,7 +2648,7 @@ class _SummaryCards extends StatelessWidget {
           value: assignedHeadLabel,
           helper: availableHead == 0
               ? 'No entries'
-              : '${((assignedHead / availableHead) * 100).toStringAsFixed(0)}% complete • $remainingHead remaining',
+              : '${((assignedHead / availableHead) * 100).toStringAsFixed(0)}% complete • $remainingHead remaining${specialtyHead > 0 ? ' • Includes $specialtyHead outside specialty entries' : ''}',
           isWarning: remainingHead > 0,
         ),
         _MetricCard(
@@ -2209,8 +2656,8 @@ class _SummaryCards extends StatelessWidget {
           label: 'Needs Attention',
           value: conflictCount.toString(),
           helper: conflictCount == 0
-              ? 'No duplicate judge/breed flags'
-              : 'Duplicate judge/breed flags',
+              ? 'No detected judge conflicts'
+              : 'Judge, breed, or estimated timing conflicts',
           isWarning: conflictCount > 0,
         ),
         _PublishJudgeOrderCard(
@@ -2510,8 +2957,7 @@ class _TableCard extends StatelessWidget {
           (row['breed_id'] ?? '').toString() == '__judge_change__';
       if (!isJudgeChange) return false;
 
-      final blockHeadCount = (row['block_head_count'] as num?)?.toInt() ?? 0;
-      return blockHeadCount > 0;
+      return row['is_active_judge_marker'] == true;
     });
 
     return DragTarget<String>(
@@ -2888,11 +3334,40 @@ class _LineupRow extends StatelessWidget {
                     letterSpacing: 0.4,
                   ),
                 ),
+                if (isJudgeChange && plannedStartMinutes(row) > 0)
+                  Text(
+                    'Planned start: ${plannedStartMinutes(row)} min after show start',
+                    style: textTheme.bodySmall,
+                  ),
+                if (!isJudgeChange &&
+                    row['estimated_start_minutes'] != null &&
+                    row['is_award_plan'] != true)
+                  Text(
+                    'Estimated ${row['estimated_start_minutes']}–${row['estimated_end_minutes']} min after start',
+                    style: textTheme.bodySmall,
+                  ),
+                if (row['timing_overlap'] == true)
+                  Text(
+                    'Possible breed overlap at another table (10-minute buffer)',
+                    style: textTheme.bodySmall?.copyWith(
+                      color: colorScheme.error,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                 if (row['is_award_plan'] == true)
                   const Text('Planning only • Not published'),
                 if (row['is_external_specialty'] == true)
                   Text(
                     'Outside specialty • ${specialtyStatus((row['status'] ?? 'draft').toString())}',
+                  ),
+                if (!isJudgeChange &&
+                    (row['entry_conflicts'] as List?)?.isNotEmpty == true)
+                  Text(
+                    'Judge / family entry conflict: ${(row['entry_conflicts'] as List).join('; ')}',
+                    style: textTheme.bodySmall?.copyWith(
+                      color: colorScheme.error,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 if (!isJudgeChange && isDuplicateJudgeBreed) ...[
                   const SizedBox(height: 2),
@@ -3774,7 +4249,7 @@ class _AddAssignmentSheetState extends State<_AddAssignmentSheet> {
         },
       );
 
-      if (result is! List) return const <String>[];
+      if (result is! List) throw StateError('Invalid conflict check response');
 
       return result.map<String>((item) {
         if (item is Map) {
@@ -3798,7 +4273,7 @@ class _AddAssignmentSheetState extends State<_AddAssignmentSheet> {
         return item.toString();
       }).toList();
     } catch (_) {
-      return const <String>[];
+      return const ['Conflict check unavailable — refresh and try again.'];
     }
   }
   // --- END: Open & Youth Pair helpers ---
@@ -3844,10 +4319,11 @@ class _AddAssignmentSheetState extends State<_AddAssignmentSheet> {
             onPressed: () => Navigator.pop(context, false),
             child: const Text('Cancel'),
           ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Add Anyway'),
-          ),
+          if (!conflicts.any((c) => c.startsWith('Conflict check unavailable')))
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Add Anyway'),
+            ),
         ],
       ),
     );

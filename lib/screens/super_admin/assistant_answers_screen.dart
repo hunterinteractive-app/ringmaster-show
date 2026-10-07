@@ -32,17 +32,19 @@ class _AssistantAnswersScreenState extends State<AssistantAnswersScreen> {
         'chester_answer_admin',
         params: {'p_action': 'list', 'p_offset': _rows.length},
       );
-      if (mounted)
+      if (mounted) {
         setState(() {
           _rows.addAll((data as List).map((e) => Map<String, dynamic>.from(e)));
           _more = data.length == 50;
         });
+      }
     } catch (_) {
-      if (mounted)
+      if (mounted) {
         setState(
           () => _error =
               'Unable to load reviewed answers. Super Admin access and the database update are required.',
         );
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -170,7 +172,7 @@ class _AssistantAnswerEditorState extends State<AssistantAnswerEditor> {
           'p_reviewed': _reviewed,
         },
       );
-      if (mounted)
+      if (mounted) {
         setState(() {
           _draft = Map<String, dynamic>.from(response as Map);
           _reviewed = false;
@@ -180,19 +182,22 @@ class _AssistantAnswerEditorState extends State<AssistantAnswerEditor> {
               ? 'Unpublished. Chester will no longer match this answer.'
               : 'Draft saved. Published content has not changed.';
         });
+      }
     } on PostgrestException catch (e) {
-      if (mounted)
+      if (mounted) {
         setState(
           () => _status = e.code == '23505'
               ? 'A matching question is already used by another published answer. Edit the matching questions.'
               : e.message,
         );
+      }
     } catch (_) {
-      if (mounted)
+      if (mounted) {
         setState(
           () =>
               _status = 'Unable to save. Your edits are still here; try again.',
         );
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }

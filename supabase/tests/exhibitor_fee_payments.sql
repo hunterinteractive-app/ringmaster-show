@@ -148,11 +148,27 @@ begin
  perform pg_temp.assert_true((select sum(total_amount_cents)=(select expected_amount_cents from public.show_payment_sessions where id=sid) from public.show_payment_line_items where payment_session_id=sid and line_type<>'platform_fee'),'receipt lines reconcile to amount collected');
  perform public.calculate_entry_cart_balance(c.cart_id);
  perform pg_temp.assert_true((select calculated_total_cents=2250 and (fee_snapshot->>'exhibitor_fee_cents')::int=750 from public.show_exhibitor_balances where entry_cart_id=c.cart_id),'pending quote retains exactly one fee');
+ -- A newly added exhibitor must be fully priced, including their one-time fee.
+ select exhibitor_id into ex from public.entry_cart_items where cart_id=c.day_cart_id limit 1;
+ select section_id into sec from public.entry_cart_items where cart_id=c.cart_id limit 1;
+ insert into public.entry_cart_items(cart_id,section_id,exhibitor_id,species,tattoo,breed,variety,sex,class_name)
+ values(c.cart_id,sec,ex,'rabbit','LATE-EX','Test Breed','Test Variety','Buck','Senior');
+ q:=public.create_payment_quote_attempt(c.cart_id,c.owner_id,'stripe',0.02,0.029,30);
+ perform pg_temp.assert_true((q->'quote'->>'show_balance_total_cents')::int=4200,
+   'late exhibitor must add entry, section fee, and one-time fee');
+ delete from public.entry_cart_items where cart_id=c.cart_id and tattoo='LATE-EX';
+ q:=public.create_payment_quote_attempt(c.cart_id,c.owner_id,'stripe',0.02,0.029,30);
+ perform pg_temp.assert_true((q->'quote'->>'show_balance_total_cents')::int=2250,
+   'removed exhibitor balance must not remain in checkout');
+ sid:=(q->>'payment_session_id')::uuid;
+ -- Drop only this temporary test fee assessment so the later secretary-entry
+ -- fixture can exercise the existing fresh fee-only cart path.
+ delete from exhibitor_fees_private.charges where show_id=c.show_id and exhibitor_id=ex;
  select expected_amount_cents into due from public.show_payment_sessions where id=sid;
  perform public.finalize_entry_cart_paid(c.cart_id,sid,'stripe','pi_exhibitor_fee',due,'usd');
  perform public.finalize_entry_cart_paid(c.cart_id,sid,'stripe','pi_exhibitor_fee',due,'usd');
  perform public.calculate_entry_cart_balance(c.cart_id);
- perform pg_temp.assert_true((select paid_online_cents=2250 and balance_due_cents=0 from public.show_exhibitor_balances where entry_cart_id=c.cart_id),'paid fee remains paid after retry and recalculation');
+ perform pg_temp.assert_true((select paid_online_cents=2250 and balance_due_cents=0 from public.show_exhibitor_balances where entry_cart_id=c.cart_id and exhibitor_id in (select exhibitor_id from public.entry_cart_items where cart_id=c.cart_id)),'paid fee remains paid after retry and recalculation');
  perform pg_temp.assert_true((select count(*)=2 from public.entries where source_cart_id=c.cart_id),'one regular animal and fur result, with no fee entry');
  -- A secretary-entered exhibitor gets a separate fee-only cart that can also be paid online.
  select exhibitor_id into ex from public.entry_cart_items where cart_id=c.day_cart_id limit 1;

@@ -133,16 +133,21 @@ class CheckInSheetReportLoader {
       final rows = await supabase
           .rpc(
             waveId == null
-                ? 'report_closeout_checkin_entries'
+                ? 'report_checkin_entries'
                 : 'report_wave_checkin_entries',
             params: {
               'p_show_id': showId,
               if (waveId != null) 'p_wave_id': waveId,
-              'p_exhibitor_id': exhibitorId,
-              'p_section_ids': sectionIds,
+              if (waveId != null) ...{
+                'p_exhibitor_id': exhibitorId,
+                'p_section_ids': sectionIds,
+              },
               'p_include_scratched': false,
             },
           )
+          .eq('exhibitor_id', exhibitorId)
+          .inFilter('section_id', sectionIds)
+          .order('entry_id')
           .range(from, to);
 
       final page = (rows as List)

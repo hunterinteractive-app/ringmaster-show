@@ -79,7 +79,7 @@ class CloseoutRepository {
     final sections = await readAllReportPages(
       (from, to) => supabase
           .from('show_sections')
-          .select('id,kind,letter,sort_order,judging_date')
+          .select('id,kind,letter,sort_order,judging_date,breed_scope')
           .eq('show_id', showId)
           .eq('is_enabled', true)
           .order('sort_order', ascending: true)

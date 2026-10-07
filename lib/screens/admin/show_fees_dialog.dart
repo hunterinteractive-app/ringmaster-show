@@ -84,6 +84,8 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
 
   String _onlinePaymentFeeMode = 'club_absorbs';
   String _paymentTimingMode = 'pay_at_show_only';
+  bool _settingsLoaded = false;
+  bool _paymentTimingEdited = false;
   String? _defaultOnlineProvider;
   final Map<String, bool> _providerEnabled = {
     'stripe': false,
@@ -173,6 +175,7 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
 
   Future<void> _load() async {
     setState(() {
+      _settingsLoaded = false;
       _loading = true;
       _msg = null;
     });
@@ -327,6 +330,7 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
       if (!mounted) return;
       setState(() {
         _sections = sections;
+        _settingsLoaded = true;
         _loading = false;
         if (widget.squareReturnStatus == 'success') {
           _msg = 'Square connected and is ready for this show.';
@@ -352,11 +356,10 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
       widget.showId,
     );
 
-    _paymentTimingMode = switch (configuration.paymentTimingMode) {
-      'online_only' => 'online_only',
-      'online_or_at_show' => 'online_or_at_show',
-      _ => 'pay_at_show_only',
-    };
+    // Provider status refreshes must not discard an unsaved timing choice.
+    if (!_paymentTimingEdited) {
+      _paymentTimingMode = configuration.paymentTimingMode;
+    }
     _defaultOnlineProvider = configuration.defaultOnlineProvider;
 
     for (final provider in _providerEnabled.keys) {
@@ -955,6 +958,13 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
   }
 
   Future<void> _save() async {
+    if (_loading || !_settingsLoaded) {
+      setState(
+        () => _msg =
+            'Settings did not finish loading. Close and reopen this screen before saving.',
+      );
+      return;
+    }
     if (!_validate()) return;
 
     setState(() {
@@ -1058,6 +1068,7 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
       if (!mounted) return;
       setState(() {
         _saving = false;
+        _paymentTimingEdited = false;
         _msg = 'Saved.';
       });
     } catch (e) {
@@ -1919,7 +1930,10 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
         groupValue: _paymentTimingMode,
         onChanged: (value) {
           if (disabled || value == null) return;
-          setState(() => _paymentTimingMode = value);
+          setState(() {
+            _paymentTimingEdited = true;
+            _paymentTimingMode = value;
+          });
         },
         child: Opacity(
           opacity: disabled ? .65 : 1,
@@ -2587,7 +2601,9 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
                                         ),
                                       ),
                                       onPressed:
-                                          (_saving ||
+                                          (_loading ||
+                                              !_settingsLoaded ||
+                                              _saving ||
                                               _isReadOnly ||
                                               _connectingStripe ||
                                               _connectingSquare)

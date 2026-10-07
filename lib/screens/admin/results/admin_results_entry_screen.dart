@@ -6415,6 +6415,37 @@ class ResultsEntrySheet extends StatefulWidget {
 }
 
 class ResultsEntrySheetState extends State<ResultsEntrySheet> {
+  bool _checkingFurEligibility = false;
+  String? _furEligibilityMessage;
+
+  Future<void> _checkFurEligibility() async {
+    if (!widget.isFurOrWoolClass) return;
+    setState(() => _checkingFurEligibility = true);
+    try {
+      final rows = await supabase.rpc(
+        'report_fur_breed_eligibility',
+        params: {
+          'p_show_id': widget.showId,
+          'p_entry_ids': [_entryUuid],
+        },
+      );
+      if (!mounted) return;
+      setState(() {
+        _furEligibilityMessage = (rows as List).isEmpty
+            ? 'Unable to verify the matching breed entry. Refresh and try again.'
+            : (rows.first as Map)['blocked_reason'] as String?;
+        _checkingFurEligibility = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _checkingFurEligibility = false;
+        _furEligibilityMessage =
+            'Unable to check breed eligibility. Refresh and try again.';
+      });
+    }
+  }
+
   bool _saving = false;
   String? _msg;
 
@@ -6432,6 +6463,7 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
   @override
   void initState() {
     super.initState();
+    _checkFurEligibility();
 
     final storedStatus = (widget.entry['result_status'] ?? '')
         .toString()
@@ -7211,6 +7243,14 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
 
       final scratched = _isScratched(widget.entry);
       final effectiveStatus = (_resultStatus ?? 'Shown').trim();
+      if (widget.isFurOrWoolClass &&
+          effectiveStatus == 'Shown' &&
+          (_checkingFurEligibility || _furEligibilityMessage != null)) {
+        throw Exception(
+          _furEligibilityMessage ??
+              'Please wait for the breed eligibility check.',
+        );
+      }
       final shouldClearPlacement = scratched || effectiveStatus != 'Shown';
 
       final awardError = widget.isFurOrWoolClass ? null : _validateAwards();
@@ -7393,7 +7433,11 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
     var placementOptions = _placementOptions();
 
     final effectiveResultStatus = (_resultStatus ?? 'Shown').trim();
-    final canPlace = !scratched && effectiveResultStatus == 'Shown';
+    final canPlace =
+        !scratched &&
+        effectiveResultStatus == 'Shown' &&
+        !_checkingFurEligibility &&
+        _furEligibilityMessage == null;
 
     if (placementOptions.isEmpty && canPlace) {
       final count = widget.shownCount <= 0
@@ -7495,6 +7539,16 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
                   ),
                 ),
               ],
+              if (_checkingFurEligibility || _furEligibilityMessage != null)
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  color: Colors.grey.shade200,
+                  child: Text(
+                    _checkingFurEligibility
+                        ? 'Checking breed eligibility…'
+                        : 'Fur / Wool unavailable: $_furEligibilityMessage',
+                  ),
+                ),
               const SizedBox(height: 14),
               DropdownButtonFormField<String>(
                 initialValue: _judgeId,

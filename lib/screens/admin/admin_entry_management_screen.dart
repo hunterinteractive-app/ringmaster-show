@@ -16,6 +16,9 @@ import 'package:ringmaster_show/utils/species_sex.dart';
 import 'package:ringmaster_show/utils/entry_class_options.dart';
 import 'package:ringmaster_show/services/entry_refund_service.dart';
 import 'entry_refund_dialog.dart';
+import 'entry_management_loader.dart';
+import 'closeout/data/report_data_reader.dart';
+import '../../services/manual_animal_lookup.dart';
 
 final supabase = Supabase.instance.client;
 
@@ -340,24 +343,13 @@ class _AdminEntryManagementScreenState
         .trim()
         .toLowerCase();
 
-    var q = supabase
-        .from('entries')
-        .select(
-          'id,show_id,section_id,exhibitor_id,exhibitor_user_id,animal_id,species,'
-          'tattoo,animal_name,breed,variety,fur_variety,sex,class_name,notes,status,created_at,updated_at,scratched_at,'
-          'is_fur,fur_placement,fur_notes,'
-          'show_sections(id,letter,display_name,kind),'
-          'exhibitors!entries_exhibitor_id_fkey(id,display_name,showing_name,first_name,last_name,email,phone,address_line1,address_line2,city,state,zip,arba_number,owner_user_id,is_local_only,type,is_merged,merged_into_exhibitor_id)',
-        )
-        .eq('show_id', widget.showId);
+    final loadedEntries = await loadManagedEntries(
+      supabase,
+      showId: widget.showId,
+      sectionId: _selectedSectionId,
+    );
 
-    if (_selectedSectionId != null) {
-      q = q.eq('section_id', _selectedSectionId!);
-    }
-    final res = await q.order('created_at', ascending: true);
-    _entries = (res as List).cast<Map<String, dynamic>>();
-
-    final animalIds = _entries
+    final animalIds = loadedEntries
         .map((entry) => (entry['animal_id'] ?? '').toString().trim())
         .where((animalId) => animalId.isNotEmpty)
         .toSet()
@@ -368,11 +360,16 @@ class _AdminEntryManagementScreenState
       final end = start + coopPageSize < animalIds.length
           ? start + coopPageSize
           : animalIds.length;
-      final coopRows = await supabase
-          .from('show_animal_coop_numbers')
-          .select('animal_id,scope,coop_number')
-          .eq('show_id', widget.showId)
-          .inFilter('animal_id', animalIds.sublist(start, end));
+      final coopRows = await readAllReportPages(
+        (from, to) => supabase
+            .from('show_animal_coop_numbers')
+            .select('animal_id,scope,coop_number')
+            .eq('show_id', widget.showId)
+            .inFilter('animal_id', animalIds.sublist(start, end))
+            .order('animal_id')
+            .order('scope')
+            .range(from, to),
+      );
       for (final raw in coopRows as List) {
         final row = Map<String, dynamic>.from(raw as Map);
         final animalId = (row['animal_id'] ?? '').toString().trim();
@@ -383,7 +380,7 @@ class _AdminEntryManagementScreenState
       }
     }
 
-    for (final entry in _entries) {
+    for (final entry in loadedEntries) {
       final animalId = (entry['animal_id'] ?? '').toString().trim();
       final section = entry['show_sections'];
       final sectionKind = section is Map
@@ -394,6 +391,7 @@ class _AdminEntryManagementScreenState
           ? ''
           : (coopNumberByAnimalAndScope['$animalId|$scope'] ?? '');
     }
+    _entries = loadedEntries;
   }
 
   String _sectionLabel(Map<String, dynamic> s) {
@@ -860,6 +858,7 @@ class _AdminEntryManagementScreenState
     }();
 
     return RingMasterPageShell(
+      showId: widget.showId,
       title: 'RingMaster Show',
       subtitle: 'Entry Mgmt — ${widget.showName}',
       showBackButton: true,
@@ -4901,32 +4900,16 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
         final normalizedTattoo = _tattoo.text.trim().toUpperCase();
         final now = DateTime.now().toUtc().toIso8601String();
 
-        var existingAnimalQuery = supabase
-            .from('animals')
-            .select('id')
-            .eq('tattoo', normalizedTattoo)
-            .eq('breed', animalBreed)
-            .eq('species', entrySpecies)
-            // A tattoo is not an animal identifier by itself. In particular,
-            // a buck and doe may legitimately share one. Keep their saved
-            // animal IDs distinct so the entry-level duplicate check remains
-            // based on animal_id, not tattoo text.
-            .eq('sex', _sexValue!.trim())
-            .isFilter('deleted_at', null);
-
-        if (exhibitorOwnerUserId.isNotEmpty) {
-          existingAnimalQuery = existingAnimalQuery.eq(
-            'owner_user_id',
-            exhibitorOwnerUserId,
-          );
-        } else {
-          existingAnimalQuery = existingAnimalQuery.eq(
-            'exhibitor_id',
-            resolvedExhibitorId,
-          );
-        }
-
-        final existingAnimal = await existingAnimalQuery.maybeSingle();
+        final existingAnimal = await findManualEntryAnimal(
+          supabase,
+          tattoo: normalizedTattoo,
+          breed: animalBreed,
+          variety: animalVariety,
+          species: entrySpecies,
+          sex: _sexValue!.trim(),
+          ownerUserId: exhibitorOwnerUserId,
+          exhibitorId: resolvedExhibitorId,
+        );
 
         if (existingAnimal != null) {
           animalId = (existingAnimal['id'] ?? '').toString();

@@ -1,5 +1,9 @@
 import '../../services/show_addon_report_service.dart';
 import '../../widgets/show_addon_report_downloads.dart';
+import 'closeout/models/report_recipient.dart';
+import 'closeout/data/report_data_reader.dart';
+import 'closeout/data/loaders/check_in_sheet_report_loader.dart';
+import 'closeout/pdf/builders/check_in_sheet_report_pdf.dart';
 import 'package:ringmaster_show/services/final_award_format.dart';
 import 'package:ringmaster_show/reporting_core/network/transient_retry.dart';
 import 'closeout/data/loaders/delivery_status_loader.dart';
@@ -2710,16 +2714,13 @@ class _PublishResultsPanelState extends State<_PublishResultsPanel> {
                 .toString()
                 .trim(),
         }..removeWhere((id, email) => id.isEmpty || email.isEmpty);
+        final contacts = {
+          for (final entry in emailsByExhibitorId.entries)
+            entry.key: <String, dynamic>{'email': entry.value},
+        };
         for (final artifact in artifacts) {
-          final metadata = artifact.metadata;
-          final existingEmail =
-              (metadata['exhibitor_email'] ?? metadata['email'] ?? '')
-                  .toString()
-                  .trim();
-          if (existingEmail.isNotEmpty) continue;
-          final exhibitorId = metadata['exhibitor_id']?.toString().trim() ?? '';
-          final email = emailsByExhibitorId[exhibitorId];
-          if (email != null) metadata['exhibitor_email'] = email;
+          final email = exhibitorReportRecipient(artifact.metadata, contacts);
+          if (email != null) artifact.metadata['exhibitor_email'] = email;
         }
       }
       if (!mounted) return;
@@ -4523,6 +4524,7 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
   String? _downloadingArtifactId;
   bool _downloadingCsv = false;
   List<ReportArtifactSummary> _artifacts = const [];
+  Map<String, Map<String, dynamic>> _checkInExhibitors = {};
   String? _selectedGroup;
   String? _selectedReportName;
   String? _selectedArbaArtifactId;
@@ -4685,6 +4687,25 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
             .eq('report_name', 'arba_report'),
       ]);
       if (!mounted) return;
+      final entryRows = await readAllReportPages(
+        (from, to) => _supabase
+            .from('entries')
+            .select(
+              'exhibitor_id,exhibitors!entries_exhibitor_id_fkey(id,display_name,email)',
+            )
+            .eq('show_id', widget.showId)
+            .order('id')
+            .range(from, to),
+      );
+      if (!mounted) return;
+      final checkInExhibitors = <String, Map<String, dynamic>>{};
+      for (final entry in entryRows) {
+        final exhibitor = entry['exhibitors'];
+        if (exhibitor is Map) {
+          checkInExhibitors[entry['exhibitor_id'].toString()] =
+              Map<String, dynamic>.from(exhibitor);
+        }
+      }
       final rows = values[0] as List;
       final show = Map<String, dynamic>.from(
         values[1] as Map? ?? const <String, dynamic>{},
@@ -4715,6 +4736,7 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
         _printPackPoller = Timer(const Duration(seconds: 5), _loadArtifacts);
       }
       setState(() {
+        _checkInExhibitors = checkInExhibitors;
         _canAccessPrintPack = canAccessPrintPack;
         _artifacts = rows
             .map(
@@ -4772,6 +4794,9 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
             .toSet()
             .toList()
           ..sort();
+    if (group == 'exhibitor' && !reportNames.contains('checkin_sheet')) {
+      reportNames.add('checkin_sheet');
+    }
     if (group == 'other') {
       if (_canAccessPrintPack && !reportNames.contains(_printPackReportName)) {
         reportNames.add(_printPackReportName);
@@ -4804,6 +4829,9 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
   ReportArtifactSummary? get _selectedArtifact {
     final reportName = _selectedReportName;
     if (reportName == null) return null;
+    if (reportName == 'checkin_sheet' && _selectedExhibitorId == null) {
+      return null;
+    }
     if (reportName == 'arba_report') {
       return _arbaArtifacts.cast<ReportArtifactSummary?>().firstWhere(
         (artifact) => artifact?.id == _selectedArbaArtifactId,
@@ -4844,11 +4872,16 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
   /// V1 permits these reports before closeout is finalized. Keep their
   /// operational copy separate from report artifacts generated for a
   /// finalized scope so a pre-show refresh never overwrites historical output.
-  ReportArtifactSummary? _operationalArtifactFor(String reportName) {
+  ReportArtifactSummary? _operationalArtifactFor(
+    String reportName, {
+    String? exhibitorId,
+  }) {
     for (final artifact in _artifacts) {
       if (artifact.reportName == reportName &&
           artifact.isCurrent &&
-          (artifact.finalizeRunId ?? '').trim().isEmpty) {
+          (artifact.finalizeRunId ?? '').trim().isEmpty &&
+          (reportName != 'checkin_sheet' ||
+              artifact.metadata['exhibitor_id'] == exhibitorId)) {
         return artifact;
       }
     }
@@ -4898,7 +4931,11 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
         ..sort();
 
   Map<String, String> get _exhibitorNames {
-    final names = <String, String>{};
+    final names = <String, String>{
+      if (_selectedReportName == 'checkin_sheet')
+        for (final entry in _checkInExhibitors.entries)
+          entry.key: (entry.value['display_name'] ?? entry.key).toString(),
+    };
     for (final artifact in _selectedReportArtifacts) {
       final id = artifact.metadata['exhibitor_id']?.toString().trim() ?? '';
       if (id.isEmpty) continue;
@@ -4932,13 +4969,18 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
   }
 
   List<String> _metadataValuesFor(String reportName, String key) =>
-      _artifacts
-          .where((artifact) => artifact.reportName == reportName)
-          .map((artifact) => artifact.metadata[key]?.toString().trim() ?? '')
-          .where((value) => value.isNotEmpty)
-          .map((value) => key == 'scope' ? value.toUpperCase() : value)
-          .toSet()
-          .toList()
+      reportName == 'checkin_sheet' && key == 'exhibitor_id'
+            ? _checkInExhibitors.keys.toList()
+            : _artifacts
+                  .where((artifact) => artifact.reportName == reportName)
+                  .map(
+                    (artifact) =>
+                        artifact.metadata[key]?.toString().trim() ?? '',
+                  )
+                  .where((value) => value.isNotEmpty)
+                  .map((value) => key == 'scope' ? value.toUpperCase() : value)
+                  .toSet()
+                  .toList()
         ..sort();
 
   Future<void> _queueSelectedReport() async {
@@ -4962,7 +5004,8 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
       }
       return;
     }
-    if (_operationalReportKeys.contains(selectedReportName)) {
+    if (selectedReportName == 'checkin_sheet' ||
+        _operationalReportKeys.contains(selectedReportName)) {
       await _generateOperationalReport(selectedReportName!);
       return;
     }
@@ -5022,6 +5065,18 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
   }
 
   Future<void> _generateOperationalReport(String reportName) async {
+    if (reportName == 'checkin_sheet' && _selectedExhibitorId == null) return;
+    final exhibitorId = _selectedExhibitorId;
+    final checkInMetadata = <String, dynamic>{
+      if (reportName == 'checkin_sheet') ...{
+        'exhibitor_id': exhibitorId,
+        'exhibitor_name': _checkInExhibitors[exhibitorId]?['display_name'],
+        'exhibitor_email': _checkInExhibitors[exhibitorId]?['email'],
+      },
+    };
+    final versionKey = reportName == 'checkin_sheet'
+        ? 'operational/checkin/$exhibitorId'
+        : 'operational';
     setState(() => _queueingSelectedReport = true);
     ReportArtifactSummary? artifact;
     try {
@@ -5041,7 +5096,7 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
         throw StateError('Add at least one enabled show section first.');
       }
 
-      artifact = _operationalArtifactFor(reportName);
+      artifact = _operationalArtifactFor(reportName, exhibitorId: exhibitorId);
       if (artifact == null) {
         final inserted = await _supabase
             .from('show_report_artifacts')
@@ -5057,6 +5112,7 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
                   'label_mode': _mailingLabelMode.name,
                   'label_sort': _mailingLabelSort.name,
                 },
+                ...checkInMetadata,
                 'operational_report': true,
                 'scope_key': 'operational',
                 'scope_label': 'Operational report',
@@ -5088,6 +5144,7 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
                   'label_mode': _mailingLabelMode.name,
                   'label_sort': _mailingLabelSort.name,
                 },
+                ...checkInMetadata,
                 'operational_report': true,
                 'scope_key': 'operational',
                 'scope_label': 'Operational report',
@@ -5102,13 +5159,19 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
         reportName: reportName,
         // Operational reports intentionally have no closeout version. This
         // stable storage key permits regeneration before or after finalizing.
-        finalizeRunId: 'operational',
+        finalizeRunId: versionKey,
         artifactId: artifact.id,
         sectionIds: sectionIds,
         showName: widget.showName,
+        exhibitorId: exhibitorId,
       );
 
       final file = switch (reportName) {
+        'checkin_sheet' =>
+          await CheckInSheetReportPdfBuilder(assets: _reportAssets).buildFile(
+            await CheckInSheetReportLoader(_supabase).load(request),
+            request,
+          ),
         'exhibitor_mailing_labels' =>
           await ExhibitorMailingLabelsPdf(assets: _reportAssets).buildFile(
             await ExhibitorMailingLabelsLoader(_supabase).load(request),
@@ -5163,7 +5226,7 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
       final storagePath = await uploadService.upload(
         showId: widget.showId,
         showName: widget.showName,
-        finalizeRunId: 'operational',
+        finalizeRunId: versionKey,
         artifactId: artifact.id,
         file: file,
       );
@@ -5208,9 +5271,10 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
       (artifact.metadata[key] ?? '').toString().trim();
 
   String? _recipientFor(ReportArtifactSummary artifact) {
-    final keys = _groupFor(artifact.reportName) == 'exhibitor'
-        ? const ['exhibitor_email', 'email']
-        : const ['sweepstakes_email', 'email'];
+    if (_groupFor(artifact.reportName) == 'exhibitor') {
+      return exhibitorReportRecipient(artifact.metadata, _checkInExhibitors);
+    }
+    const keys = ['sweepstakes_email', 'email'];
     for (final key in keys) {
       final value = _metadataString(artifact, key);
       if (value.isNotEmpty) return value;
@@ -5493,7 +5557,8 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
               ),
               message: message,
               allowLegs: includeLegs,
-              forceResend: message.isNotEmpty,
+              forceResend:
+                  source.reportName == 'checkin_sheet' || message.isNotEmpty,
             )
           : await service.sendClubReportEmail(
               showId: widget.showId,
@@ -5941,7 +6006,12 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
             onDownload: _selectedArtifact?.artifactStatus == 'generated'
                 ? () => _download(_selectedArtifact!)
                 : null,
-            onQueue: _selectedReportName == null ? null : _queueSelectedReport,
+            onQueue:
+                _selectedReportName == null ||
+                    (_selectedReportName == 'checkin_sheet' &&
+                        _selectedExhibitorId == null)
+                ? null
+                : _queueSelectedReport,
             sending: _sendingSelectedReport,
             onEmailThisShow: _selectedArtifact == null
                 ? null

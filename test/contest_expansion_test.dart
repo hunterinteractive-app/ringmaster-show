@@ -100,8 +100,9 @@ void main() {
         'private/file.pdf',
         '2015-01-01',
         '2014-01-01',
-      ])
+      ]) {
         expect(csv, isNot(contains(private)));
+      }
       expect(ContestReportService.csvCell('=1+1'), contains("'=1+1"));
       expect(ContestReportService.csvCell('a,"b"'), '"a,""b"""');
     },

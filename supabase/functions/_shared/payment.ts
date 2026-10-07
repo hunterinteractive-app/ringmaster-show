@@ -4,6 +4,7 @@ import { SupabaseClient } from "npm:@supabase/supabase-js@2";
 export type PaymentProvider = "stripe" | "square" | "paypal";
 
 export type QuoteSnapshot = {
+  settles_submitted_entries?: boolean;
   version: number;
   cart_id: string;
   show_id: string;
