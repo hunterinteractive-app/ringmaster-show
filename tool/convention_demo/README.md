@@ -59,3 +59,20 @@ exhibitor login, actual check-in PDF generation/upload, simulated report email w
 attachment and delivery record, an additional interactive paid entry, and snapshot
 reset restoring 120 entries. A full audit of every administration feature and a
 physical disconnected-network rehearsal remain outside these checks.
+
+## Show 1.00.06 update (2026-10-07)
+
+Merged Show main `48edac2914c4d3210c808841a143f1b03bcefdb9`. The application
+source matches that release apart from the opt-in demo entry point and fonts.
+The existing local database was backed up to `output/convention-demo/before-1.00.06.dump`
+and upgraded in place; all 126 current entries and both demo personas were retained.
+New contests and add-ons are available but start empty/disabled in this sample show.
+The launcher now refreshes all local Edge Function sources before installing
+provider guards. Reset also clears the private contest/add-on tables.
+
+Validation: release web/renderer build, targeted Flutter analysis, three demo
+isolation tests, 64 contest-expansion and 30 registration-window assertions,
+add-on deletion integration checks, both persona logins/catalog RPCs, captured
+email, and simulated checkout-page checks passed. Browser verified secretary
+management and Contest Settings at version 1.00.06. Database tests rolled back;
+no live payments, emails, or production deployments were performed.

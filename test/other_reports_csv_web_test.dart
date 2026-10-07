@@ -15,6 +15,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ringmaster_show/screens/admin/show_closeout_v2_preview.dart';
 import 'package:ringmaster_show/utils/csv_exporter.dart';
+import 'package:ringmaster_show/services/show_addon_report_service.dart';
 
 void main() {
   test(
@@ -56,7 +57,7 @@ void main() {
     SharedPreferences.setMockInitialValues({
       'closeout_v2_report_selection_show1': jsonEncode({
         'group': 'other',
-        'reportName': 'entered_exhibitors_contact_report',
+        'report_name': 'entered_exhibitors_contact_report',
       }),
     });
     await Supabase.initialize(
@@ -112,4 +113,62 @@ void main() {
     expect(find.text('Download PDF'), findsOneWidget);
     await tester.pumpWidget(const SizedBox.shrink());
   });
+  for (final reportName in ShowAddonReportService.reportNames) {
+    testWidgets(
+      '$reportName downloads before finalization or any report artifacts',
+      (tester) async {
+        SharedPreferences.setMockInitialValues({
+          'closeout_v2_report_selection_show1': jsonEncode({
+            'group': 'other',
+            'report_name': reportName,
+          }),
+        });
+        tester.view.physicalSize = const Size(1000, 1800);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        await tester.pumpWidget(
+          const MaterialApp(
+            home: ShowCloseoutV2PreviewPage(
+              showId: 'show1',
+              showName: 'Show',
+              canFinalizeShow: true,
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        final csv = find.byKey(const ValueKey('other-reports-download-csv'));
+        final pdf = find.byKey(const ValueKey('other-reports-download-pdf'));
+        expect(tester.widget<OutlinedButton>(csv).onPressed, isNotNull);
+        expect(tester.widget<OutlinedButton>(pdf).onPressed, isNotNull);
+        expect(find.textContaining('Available at any time.'), findsOneWidget);
+        expect(find.text('Generate Selected Report'), findsNothing);
+        expect(
+          find.text('Optional message from the show secretary'),
+          findsNothing,
+        );
+        final downloads = <String>[];
+        final subscription = html.document.onClick.listen((event) {
+          final target = event.target;
+          if (target is html.AnchorElement &&
+              target.download?.endsWith('.csv') == true) {
+            event.preventDefault();
+            downloads.add(target.download!);
+          }
+        });
+        try {
+          await tester.ensureVisible(csv);
+          await tester.tap(csv);
+          await tester.pumpAndSettle();
+          expect(downloads, [
+            '${ShowAddonReportService.title(reportName)} - Show.csv',
+          ]);
+          expect(tester.takeException(), isNull);
+        } finally {
+          await tester.runAsync(subscription.cancel);
+        }
+        await tester.pumpWidget(const SizedBox.shrink());
+      },
+    );
+  }
 }

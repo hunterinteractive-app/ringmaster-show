@@ -11,6 +11,7 @@ import 'package:ringmaster_show/screens/cart_screen.dart';
 void main() {
   var entitled = true;
   var feeOnly = false;
+  var addonMode = 'none';
   Map<String, dynamic>? saved;
   setUpAll(() async {
     SharedPreferences.setMockInitialValues({});
@@ -27,16 +28,55 @@ void main() {
         Object? value;
         if (path.endsWith('can_configure_best_opposite_final_award')) {
           value = entitled;
+        } else if (path.endsWith('get_show_addons')) {
+          value = {
+            'items': addonMode == 'none'
+                ? []
+                : [
+                    {'id': 'contest'},
+                  ],
+          };
+        } else if (path.endsWith('get_cart_addons')) {
+          value = addonMode == 'none'
+              ? []
+              : [
+                  {
+                    'id': 'contest',
+                    'offering_id': 'contest',
+                    'exhibitor_id': 'ex1',
+                    'name': 'Showmanship',
+                    'kind': 'contest',
+                    'quantity': 1,
+                    'unit_price_cents': addonMode == 'free' ? 0 : 500,
+                  },
+                  if (addonMode == 'mixed')
+                    {
+                      'id': 'ticket',
+                      'offering_id': 'ticket',
+                      'exhibitor_id': 'ex1',
+                      'name': 'Banquet Ticket',
+                      'kind': 'extra',
+                      'quantity': 2,
+                      'unit_price_cents': 700,
+                    },
+                ];
         } else if (path.endsWith('get_show_checkout_options')) {
           value = {
-            'payment_timing_mode': 'pay_at_show_only',
-            'allow_at_show': true,
-            'allow_online': false,
+            'payment_timing_mode': addonMode == 'free'
+                ? 'online_only'
+                : 'pay_at_show_only',
+            'allow_at_show': addonMode != 'free',
+            'allow_online': addonMode == 'free',
             'providers': [],
           };
         } else if (path.endsWith('get_cart_exhibitor_fees')) {
           value = [
-            for (final id in feeOnly ? ['ex1'] : ['ex1', 'ex2'])
+            for (final id
+                in addonMode == 'free'
+                    ? <String>[]
+                    : feeOnly
+                    ? ['ex1']
+                    : ['ex1', 'ex2'])
               {
                 'exhibitor_id': id,
                 'label': 'Facility Fee',
@@ -85,7 +125,17 @@ void main() {
               },
           ];
         } else if (path.endsWith('/entry_cart_items')) {
-          value = feeOnly
+          value = addonMode == 'free'
+              ? [
+                  {
+                    'id': 'addon-carrier',
+                    'exhibitor_id': 'ex1',
+                    'section_id': 's1',
+                    'is_show_addon_carrier': true,
+                    'tattoo': 'SHOW-ADDON',
+                  },
+                ]
+              : feeOnly
               ? [
                   {
                     'id': 'carrier',
@@ -133,6 +183,7 @@ void main() {
   setUp(() {
     entitled = true;
     feeOnly = false;
+    addonMode = 'none';
     saved = null;
   });
   Future<void> size(WidgetTester tester, {double width = 1200}) async {
@@ -229,6 +280,39 @@ void main() {
     expect(find.textContaining('EXHIBITOR-FEE'), findsNothing);
     expect(find.text(r'Total due at show: $7.50'), findsOneWidget);
     expect(find.text('Confirm Fee (Pay at Show)'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+  testWidgets('mixed cart includes contest and quantity-priced extras once', (
+    tester,
+  ) async {
+    addonMode = 'mixed';
+    await size(tester);
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: CartScreen(cartId: 'cart', showId: 'show', showName: 'Test Show'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text(r'Total due at show: $74.00'), findsOneWidget);
+    expect(find.text('Contests & Add-Ons: USD 19.00'), findsOneWidget);
+    expect(find.text('Showmanship × 1'), findsOneWidget);
+    expect(find.text('Banquet Ticket × 2'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+  testWidgets('free contest has a payment-free action on an online-only show', (
+    tester,
+  ) async {
+    addonMode = 'free';
+    await size(tester, width: 430);
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: CartScreen(cartId: 'cart', showId: 'show', showName: 'Test Show'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.textContaining('SHOW-ADDON'), findsNothing);
+    expect(find.text('Showmanship × 1'), findsOneWidget);
+    expect(find.text('Confirm Free Registration'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

@@ -34,7 +34,8 @@ def main():
         else:
             run('bash',str(ROOT/'tool/local_supabase_e2e.sh'),str(RUNTIME))
             config=RUNTIME/'supabase/config.toml'
-            text=config.read_text().replace('project_id = "ringmaster-show-full-e2e"',f'project_id = "{PROJECT}"')
+            import re
+            text=re.sub(r'^project_id = .*$', f'project_id = "{PROJECT}"', config.read_text(), flags=re.MULTILINE)
             for port in (54321,54322,54323,54324,54327,54328,54329):text=text.replace(str(port),str(port+1000))
             text=text.replace('8083','8183')
             config.write_text(text)

@@ -14,6 +14,17 @@ data and do not modify stored PDFs, generate certificates, finalize shows, or
 send email. Print pack exports require the same generated source reports as the
 PDF pack, and include separate Result and Leg records.
 
+**Add-On Purchases** and **Contest Registrations** also appear in Other Reports.
+Both generate current whole-show PDF or CSV downloads at any time, including
+before finalization and before any report artifacts exist. Purchases include
+item, exhibitor name/number/email, quantity, saved price, total, and order payment
+status. Contest registrations include the exhibitor, division, category, session,
+entry/team/project, animals, team members, approval, check-in, and payment status.
+Submitted pay-at-show orders and previously deleted add-ons remain included;
+unsubmitted cart drafts are excluded. Totals represent ordered amounts, with
+currencies kept separate. Private contest answers, birthdates, and uploads are
+not included. Downloads use the existing show-staff permission check.
+
 Each CSV is a rectangular UTF-8 table with a BOM, quoted fields, and numeric
 amounts in currency units. Section details replace repeated aggregate totals
 where appropriate to avoid double-counting. Labels honor the selected contents,
@@ -24,3 +35,6 @@ deduplication, exact section scope, permission failures, and currency units.
 `other_reports_csv_web_test.dart` checks actual browser download bytes and
 ordinary-user button visibility. Existing closeout screen and special CSV
 tests also pass. No database or report-worker deployment is required.
+`show_addon_reports_test.dart` covers current reads, saved prices, currencies,
+deleted-item history, permission failures, CSV escaping, and PDF pagination.
+The browser tests also exercise both new downloads without closeout artifacts.

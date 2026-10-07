@@ -24,5 +24,5 @@ def main():
     status=json.loads(subprocess.check_output(['supabase','status','--workdir','/tmp/ringmaster-convention-demo','-o','json'],stderr=subprocess.DEVNULL))
     if status['API_URL']!='http://127.0.0.1:55321':raise RuntimeError('Unexpected demo API')
     run('flutter','build','web','--release','--no-web-resources-cdn','--pwa-strategy=none','--dart-define=CONVENTION_DEMO=true','--dart-define=SUPABASE_URL='+status['API_URL'],'--dart-define=SUPABASE_ANON_KEY='+status['ANON_KEY'],cwd=ROOT)
-    (STATE/'built.json').write_text(json.dumps({'api':status['API_URL'],'convention_demo':True}))
+    (STATE/'built.json').write_text(json.dumps({'api':status['API_URL'],'convention_demo':True,'source_commit':subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,env=ENV,text=True).strip(),'app_generation':(ROOT/'lib/config/release_config.dart').read_text().split("'")[1]}))
 if __name__=='__main__':main()

@@ -85,7 +85,7 @@ def seed(test):
     # Snapshot contains fictional data and local Auth credentials only.
     (test.output/'personas.json').write_text(json.dumps(people))
     with (test.output/'baseline.dump').open('wb') as f:
-        subprocess.run(['docker','exec','-e','PGPASSWORD=postgres',lab.container,'pg_dump','-U','supabase_admin','-d','postgres','-Fc','--data-only','--schema=public','--schema=auth','--exclude-table=auth.schema_migrations'],stdout=f,check=True)
+        subprocess.run(['docker','exec','-e','PGPASSWORD=postgres',lab.container,'pg_dump','-U','supabase_admin','-d','postgres','-Fc','--data-only','--schema=public','--schema=auth','--schema=show_addons_private','--exclude-table=auth.schema_migrations'],stdout=f,check=True)
     (test.output/'ready').write_text('Synthetic demo initialized\n')
 
 
@@ -109,6 +109,7 @@ def main():
     import run
     original_prepare=run.prepare_functions
     def prepare(lab,output):
+        shutil.copytree(ROOT/'supabase/functions', lab.workspace/'supabase/functions', dirs_exist_ok=True)
         result=original_prepare(lab,output);patch_runtime(lab);return result
     run.prepare_functions=prepare
     def stop_demo(*_):
@@ -177,7 +178,7 @@ def main():
             def do_POST(self):
                 if self.path!='/reset' or self.headers.get('Origin')!=f'http://127.0.0.1:{PORT}':self.send_error(403);return
                 # One transaction, local project is checked above; never touch hosted data.
-                tables=lab.rows("select schemaname,tablename from pg_tables where schemaname in ('public','auth') and tablename <> 'schema_migrations'")
+                tables=lab.rows("select schemaname,tablename from pg_tables where schemaname in ('public','auth','show_addons_private') and tablename <> 'schema_migrations'")
                 trunc='truncate '+','.join('"'+r['schemaname']+'"."'+r['tablename']+'"' for r in tables)+' cascade;'
                 dump=subprocess.run(['pg_restore','--data-only','--disable-triggers','--file=-',str(args.output/'baseline.dump')],capture_output=True,check=True).stdout.decode()
                 subprocess.run(['docker','exec','-i','-e','PGPASSWORD=postgres',lab.container,'psql','-X','-v','ON_ERROR_STOP=1','-U','supabase_admin','-d','postgres'],input='begin; set session_replication_role=replica;'+trunc+dump+f"update public.shows set start_date=current_date+7,end_date=current_date+7,entry_close_at=now()+interval '6 days' where id='{SHOW}';"+'commit;',text=True,capture_output=True,check=True)

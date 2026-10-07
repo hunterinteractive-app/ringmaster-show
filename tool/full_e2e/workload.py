@@ -3,6 +3,9 @@ from copy import deepcopy
 
 
 def staff_counts(manifest):
+    if manifest.get('fixture_kind') == 'registration_only':
+        return dict(judges=0, admins=4, superintendents=8,
+                    checkin=0, support=12, total=12)
     if manifest.get('fixture_kind') == 'smoke':
         assert manifest['totals'] == dict(entries=120, exhibitors=24)
         return dict(judges=2, admins=1, superintendents=1,
