@@ -1,3 +1,5 @@
+import '../../services/show_addon_report_service.dart';
+import '../../widgets/show_addon_report_downloads.dart';
 import 'package:ringmaster_show/services/final_award_format.dart';
 import 'package:ringmaster_show/reporting_core/network/transient_retry.dart';
 import 'closeout/data/loaders/delivery_status_loader.dart';
@@ -4540,6 +4542,7 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
 
   static const _groupOrder = ['arba', 'exhibitor', 'club', 'other'];
   static const _manualOtherReports = {
+    ...ShowAddonReportService.reportNames,
     'exhibitor_mailing_labels',
     'breed_awards_overview',
     'unpaid_balances_report',
@@ -5549,6 +5552,8 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
   }
 
   String _friendlyReportName(String reportName) => switch (reportName) {
+    ShowAddonReportService.purchases => 'Add-On Purchases',
+    ShowAddonReportService.registrations => 'Contest Registrations',
     _printPackReportName => 'Exhibitor Reports & Legs Print Pack',
     'exhibitor_mailing_labels' => 'Exhibitor Labels',
     'arba_report' => 'ARBA Report',
@@ -5785,184 +5790,196 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
               _selectedScope = null;
             }),
           ),
-        if (_needsExhibitor) ...[
-          const SizedBox(height: 12),
-          _metadataDropdown(
-            label: 'Exhibitor',
-            value: _selectedExhibitorId,
-            values: _exhibitorsByLastName(_exhibitorNames),
-            display: (id) => _exhibitorNames[id] ?? id,
-            onChanged: (value) =>
-                _updateSelection(() => _selectedExhibitorId = value),
+        if (ShowAddonReportService.reportNames.contains(
+          _selectedReportName,
+        )) ...[
+          const SizedBox(height: 16),
+          ShowAddonReportDownloads(
+            key: ValueKey(_selectedReportName),
+            showId: widget.showId,
+            showName: widget.showName,
+            reportName: _selectedReportName!,
           ),
-        ],
-        if (_needsBreed || _needsClub) ...[
-          const SizedBox(height: 12),
-          _metadataDropdown(
-            label: 'Show Letter',
-            value: _selectedShowLetter,
-            values: _metadataValues('show_letter'),
-            onChanged: (value) =>
-                _updateSelection(() => _selectedShowLetter = value),
-          ),
-          const SizedBox(height: 12),
-          _metadataDropdown(
-            label: _needsBreed ? 'Breed Name' : 'Club Name',
-            value: _needsBreed ? _selectedBreedName : _selectedClubName,
-            values: _metadataValues(_needsBreed ? 'breed_name' : 'club_name'),
-            onChanged: (value) => _updateSelection(() {
-              if (_needsBreed) {
-                _selectedBreedName = value;
-              } else {
-                _selectedClubName = value;
-              }
-            }),
-          ),
-          const SizedBox(height: 12),
-          _metadataDropdown(
-            label: 'Scope',
-            value: _selectedScope,
-            values: _metadataValues(
-              'scope',
-            ).map((v) => v.toUpperCase()).toSet().toList(),
-            onChanged: (value) =>
-                _updateSelection(() => _selectedScope = value),
-          ),
-        ],
-        const SizedBox(height: 16),
-        TextField(
-          controller: _additionalMessageController,
-          maxLines: 3,
-          decoration: const InputDecoration(
-            labelText: 'Optional message from the show secretary',
-            hintText: 'Add a note to include when emailing this report.',
-            border: OutlineInputBorder(),
-          ),
-        ),
-        if (_selectedReportName == 'exhibitor_mailing_labels') ...[
-          const SizedBox(height: 12),
-          DropdownButtonFormField<MailingLabelMode>(
-            initialValue: _mailingLabelMode,
+        ] else ...[
+          if (_needsExhibitor) ...[
+            const SizedBox(height: 12),
+            _metadataDropdown(
+              label: 'Exhibitor',
+              value: _selectedExhibitorId,
+              values: _exhibitorsByLastName(_exhibitorNames),
+              display: (id) => _exhibitorNames[id] ?? id,
+              onChanged: (value) =>
+                  _updateSelection(() => _selectedExhibitorId = value),
+            ),
+          ],
+          if (_needsBreed || _needsClub) ...[
+            const SizedBox(height: 12),
+            _metadataDropdown(
+              label: 'Show Letter',
+              value: _selectedShowLetter,
+              values: _metadataValues('show_letter'),
+              onChanged: (value) =>
+                  _updateSelection(() => _selectedShowLetter = value),
+            ),
+            const SizedBox(height: 12),
+            _metadataDropdown(
+              label: _needsBreed ? 'Breed Name' : 'Club Name',
+              value: _needsBreed ? _selectedBreedName : _selectedClubName,
+              values: _metadataValues(_needsBreed ? 'breed_name' : 'club_name'),
+              onChanged: (value) => _updateSelection(() {
+                if (_needsBreed) {
+                  _selectedBreedName = value;
+                } else {
+                  _selectedClubName = value;
+                }
+              }),
+            ),
+            const SizedBox(height: 12),
+            _metadataDropdown(
+              label: 'Scope',
+              value: _selectedScope,
+              values: _metadataValues(
+                'scope',
+              ).map((v) => v.toUpperCase()).toSet().toList(),
+              onChanged: (value) =>
+                  _updateSelection(() => _selectedScope = value),
+            ),
+          ],
+          const SizedBox(height: 16),
+          TextField(
+            controller: _additionalMessageController,
+            maxLines: 3,
             decoration: const InputDecoration(
-              labelText: 'Label contents',
+              labelText: 'Optional message from the show secretary',
+              hintText: 'Add a note to include when emailing this report.',
               border: OutlineInputBorder(),
             ),
-            items: const [
-              DropdownMenuItem(
-                value: MailingLabelMode.address,
-                child: Text('Full name and mailing address'),
-              ),
-              DropdownMenuItem(
-                value: MailingLabelMode.exhibitorNumber,
-                child: Text('Full name and exhibitor number'),
-              ),
-            ],
-            onChanged: _queueingSelectedReport
-                ? null
-                : (value) {
-                    if (value != null) {
-                      setState(() => _mailingLabelMode = value);
-                    }
-                  },
           ),
-          const SizedBox(height: 12),
-          DropdownButtonFormField<MailingLabelSort>(
-            initialValue: _mailingLabelSort,
-            decoration: const InputDecoration(
-              labelText: 'Sort labels by',
-              border: OutlineInputBorder(),
+          if (_selectedReportName == 'exhibitor_mailing_labels') ...[
+            const SizedBox(height: 12),
+            DropdownButtonFormField<MailingLabelMode>(
+              initialValue: _mailingLabelMode,
+              decoration: const InputDecoration(
+                labelText: 'Label contents',
+                border: OutlineInputBorder(),
+              ),
+              items: const [
+                DropdownMenuItem(
+                  value: MailingLabelMode.address,
+                  child: Text('Full name and mailing address'),
+                ),
+                DropdownMenuItem(
+                  value: MailingLabelMode.exhibitorNumber,
+                  child: Text('Full name and exhibitor number'),
+                ),
+              ],
+              onChanged: _queueingSelectedReport
+                  ? null
+                  : (value) {
+                      if (value != null) {
+                        setState(() => _mailingLabelMode = value);
+                      }
+                    },
             ),
-            items: const [
-              DropdownMenuItem(
-                value: MailingLabelSort.lastName,
-                child: Text('Last name'),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<MailingLabelSort>(
+              initialValue: _mailingLabelSort,
+              decoration: const InputDecoration(
+                labelText: 'Sort labels by',
+                border: OutlineInputBorder(),
               ),
-              DropdownMenuItem(
-                value: MailingLabelSort.exhibitorNumber,
-                child: Text('Exhibitor number'),
-              ),
-            ],
-            onChanged: _queueingSelectedReport
+              items: const [
+                DropdownMenuItem(
+                  value: MailingLabelSort.lastName,
+                  child: Text('Last name'),
+                ),
+                DropdownMenuItem(
+                  value: MailingLabelSort.exhibitorNumber,
+                  child: Text('Exhibitor number'),
+                ),
+              ],
+              onChanged: _queueingSelectedReport
+                  ? null
+                  : (value) {
+                      if (value != null) {
+                        setState(() => _mailingLabelSort = value);
+                      }
+                    },
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Avery 5160/8160 · 30 labels per US Letter sheet. Print at Actual size / 100%, with scaling disabled. Generate again after changing options. Exhibitors missing required address or number details are omitted.',
+            ),
+          ],
+          const SizedBox(height: 16),
+          if (_selectedReportName == _printPackReportName) ...[
+            const Text(
+              'One PDF for this show, sorted by exhibitor last name. Each exhibitor’s report is followed by their legs. Finish Step 5 first, and regenerate this pack after changing the source reports. Generation runs in the background; you can leave this page.',
+            ),
+            if (_selectedArtifact?.metadata['page_count'] != null)
+              Text('${_selectedArtifact!.metadata['page_count']} pages'),
+            if (_selectedArtifact?.metadata['error_message'] != null)
+              Text(_selectedArtifact!.metadata['error_message'].toString()),
+            const SizedBox(height: 12),
+          ],
+          _SelectedReportStatus(
+            artifact: _selectedArtifact,
+            reportName: _selectedReportName,
+            friendlyReportName: _friendlyReportName,
+            downloading:
+                _downloadingArtifactId != null &&
+                _downloadingArtifactId == _selectedArtifact?.id,
+            downloadingCsv: _downloadingCsv,
+            onDownloadCsv:
+                _selectedGroup == 'other' &&
+                    OtherReportsCsvBuilder.reportNames.contains(
+                      _selectedReportName,
+                    )
+                ? _downloadSelectedCsv
+                : null,
+            queueing: _queueingSelectedReport,
+            onDownload: _selectedArtifact?.artifactStatus == 'generated'
+                ? () => _download(_selectedArtifact!)
+                : null,
+            onQueue: _selectedReportName == null ? null : _queueSelectedReport,
+            sending: _sendingSelectedReport,
+            onEmailThisShow: _selectedArtifact == null
                 ? null
-                : (value) {
-                    if (value != null) {
-                      setState(() => _mailingLabelSort = value);
-                    }
-                  },
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'Avery 5160/8160 · 30 labels per US Letter sheet. Print at Actual size / 100%, with scaling disabled. Generate again after changing options. Exhibitors missing required address or number details are omitted.',
+                : () => _emailSelectedReport(
+                    allShows: false,
+                    includeReports: _selectedReportName != 'legs',
+                    includeLegs: _selectedReportName == 'legs',
+                  ),
+            onEmailAllShows:
+                _selectedArtifact == null ||
+                    _selectedReportName == 'checkin_sheet'
+                ? null
+                : () => _emailSelectedReport(
+                    allShows: true,
+                    includeReports: _selectedReportName != 'legs',
+                    includeLegs: _selectedReportName == 'legs',
+                  ),
+            onEmailReportsAndLegs:
+                _selectedArtifact == null ||
+                    !const {
+                      'exhibitor_report',
+                      'legs',
+                    }.contains(_selectedReportName)
+                ? null
+                : () => _emailSelectedReport(
+                    allShows: false,
+                    includeReports: true,
+                    includeLegs: true,
+                  ),
+            onEmailArbaAgain:
+                _selectedReportName == 'arba_report' &&
+                    _selectedArtifact != null &&
+                    _isGenerated(_selectedArtifact!) &&
+                    _arbaReportsHaveBeenSent
+                ? _emailSelectedArbaReportAgain
+                : null,
           ),
         ],
-        const SizedBox(height: 16),
-        if (_selectedReportName == _printPackReportName) ...[
-          const Text(
-            'One PDF for this show, sorted by exhibitor last name. Each exhibitor’s report is followed by their legs. Finish Step 5 first, and regenerate this pack after changing the source reports. Generation runs in the background; you can leave this page.',
-          ),
-          if (_selectedArtifact?.metadata['page_count'] != null)
-            Text('${_selectedArtifact!.metadata['page_count']} pages'),
-          if (_selectedArtifact?.metadata['error_message'] != null)
-            Text(_selectedArtifact!.metadata['error_message'].toString()),
-          const SizedBox(height: 12),
-        ],
-        _SelectedReportStatus(
-          artifact: _selectedArtifact,
-          reportName: _selectedReportName,
-          friendlyReportName: _friendlyReportName,
-          downloading:
-              _downloadingArtifactId != null &&
-              _downloadingArtifactId == _selectedArtifact?.id,
-          downloadingCsv: _downloadingCsv,
-          onDownloadCsv:
-              _selectedGroup == 'other' &&
-                  OtherReportsCsvBuilder.reportNames.contains(
-                    _selectedReportName,
-                  )
-              ? _downloadSelectedCsv
-              : null,
-          queueing: _queueingSelectedReport,
-          onDownload: _selectedArtifact?.artifactStatus == 'generated'
-              ? () => _download(_selectedArtifact!)
-              : null,
-          onQueue: _selectedReportName == null ? null : _queueSelectedReport,
-          sending: _sendingSelectedReport,
-          onEmailThisShow: _selectedArtifact == null
-              ? null
-              : () => _emailSelectedReport(
-                  allShows: false,
-                  includeReports: _selectedReportName != 'legs',
-                  includeLegs: _selectedReportName == 'legs',
-                ),
-          onEmailAllShows:
-              _selectedArtifact == null ||
-                  _selectedReportName == 'checkin_sheet'
-              ? null
-              : () => _emailSelectedReport(
-                  allShows: true,
-                  includeReports: _selectedReportName != 'legs',
-                  includeLegs: _selectedReportName == 'legs',
-                ),
-          onEmailReportsAndLegs:
-              _selectedArtifact == null ||
-                  !const {
-                    'exhibitor_report',
-                    'legs',
-                  }.contains(_selectedReportName)
-              ? null
-              : () => _emailSelectedReport(
-                  allShows: false,
-                  includeReports: true,
-                  includeLegs: true,
-                ),
-          onEmailArbaAgain:
-              _selectedReportName == 'arba_report' &&
-                  _selectedArtifact != null &&
-                  _isGenerated(_selectedArtifact!) &&
-                  _arbaReportsHaveBeenSent
-              ? _emailSelectedArbaReportAgain
-              : null,
-        ),
       ],
     ],
   );
