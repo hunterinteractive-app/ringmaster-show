@@ -1,3 +1,4 @@
+import 'cod_eligibility.dart';
 import '../results_entry_validation.dart';
 
 List<ResultsEntryBlockingIssue> validateCavyResults({
@@ -18,6 +19,19 @@ List<ResultsEntryBlockingIssue> validateCavyResults({
   required String Function(Map<String, dynamic>) sex,
 }) {
   final issues = <ResultsEntryBlockingIssue>[];
+  for (final entry in entries.where(isCodEntry)) {
+    if (awardCodes(entry).isNotEmpty) {
+      issues.add(
+        ResultsEntryBlockingIssue(
+          code: 'cod_special_award',
+          title: 'COD entry has higher awards',
+          message: '${entryLabel(entry)}: $codAwardIneligibilityReason',
+          entry: entry,
+        ),
+      );
+    }
+  }
+
   final requiresVarietyAwards = requireVarietyAwards || requireGroupAwards;
   final varietyValue =
       variety ??
@@ -41,7 +55,7 @@ List<ResultsEntryBlockingIssue> validateCavyResults({
   }
 
   final normal = entries
-      .where((entry) => !isExcludedFromSpecials(entry))
+      .where((entry) => !isExcludedFromSpecials(entry) && !isCodEntry(entry))
       .toList();
 
   Map<String, List<Map<String, dynamic>>> buckets(

@@ -1,3 +1,4 @@
+import 'cod_eligibility.dart';
 import '../final_award_format.dart';
 import 'rabbit_results_structure.dart';
 import 'results_rules.dart';
@@ -218,6 +219,11 @@ class RabbitResultsRules implements ResultsRules {
     required Set<String> selectedAwards,
   }) {
     final awards = normalizeStoredAwards(selectedAwards);
+    if (isCodEntry(entry) && awards.isNotEmpty) {
+      return const AwardCompatibilityResult.invalid(
+        codAwardIneligibilityReason,
+      );
+    }
     if (awards.contains(bestOppositeAwardCode) && !awards.contains('BOSB')) {
       return const AwardCompatibilityResult.invalid(
         'Best of the Best Opposite requires Best Opposite Sex of Breed (BOS) first.',
@@ -248,6 +254,7 @@ class RabbitResultsRules implements ResultsRules {
   }
 
   bool _eligible(String status, Map<String, dynamic> entry) {
+    if (isCodEntry(entry)) return false;
     if (resultsRuleText(entry, const ['scratched_at']).isNotEmpty) return false;
     final value = status.trim().toLowerCase();
     return value != 'no show' &&
@@ -355,6 +362,7 @@ class RabbitResultsRules implements ResultsRules {
     required Map<String, dynamic> entry,
     required String award,
   }) {
+    if (isCodEntry(entry)) return codAwardIneligibilityReason;
     final code = _canonical(award);
     if (code == bestOppositeAwardCode) {
       return 'Requires Best Opposite Sex of Breed (BOS) first.';

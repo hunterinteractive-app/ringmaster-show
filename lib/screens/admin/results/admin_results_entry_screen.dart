@@ -1,3 +1,4 @@
+import 'package:ringmaster_show/services/results/cod_eligibility.dart';
 import 'package:ringmaster_show/services/final_award_format.dart';
 import 'package:ringmaster_show/screens/admin/closeout/data/results_entry_reader.dart';
 import 'package:ringmaster_show/screens/admin/closeout/data/manual_judging_reader.dart';
@@ -294,6 +295,7 @@ String _entrySexKey(Map<String, dynamic> entry) {
 }
 
 bool _entryIsEligibleForSpecialAward(Map<String, dynamic> entry) {
+  if (isCodEntry(entry)) return false;
   final scratched = (entry['scratched_at'] ?? '').toString().trim().isNotEmpty;
   if (scratched) return false;
 
@@ -1764,6 +1766,7 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
     }
 
     bool isEligibleForAwards(Map<String, dynamic> e) {
+      if (isCodEntry(e)) return false;
       final scratched = (e['scratched_at'] ?? '').toString().trim().isNotEmpty;
       if (scratched) return false;
 
@@ -1920,7 +1923,7 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
         );
       }
 
-      if (!isEligibleForAwards(e) && entryAwards.isNotEmpty) {
+      if (!isCodEntry(e) && !isEligibleForAwards(e) && entryAwards.isNotEmpty) {
         final className = (e['class_name'] ?? '').toString().trim();
         final isPreJunior = _isPreJuniorClassName(className);
 
@@ -6694,6 +6697,7 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
   }
 
   bool _isEligibleForAwards(Map<String, dynamic> e) {
+    if (isCodEntry(e)) return false;
     final scratched = _isScratched(e);
     if (scratched) return false;
 
@@ -6814,6 +6818,9 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
       return UnsupportedResultsSpecies(
         (widget.entry['species'] ?? '').toString(),
       ).toString();
+    }
+    if (isCodEntry(widget.entry) && _selectedAwards.isNotEmpty) {
+      return codAwardIneligibilityReason;
     }
     if (!_isEligibleForAwards(widget.entry) && _selectedAwards.isNotEmpty) {
       return 'This ${rules.speciesName.toLowerCase()} cannot receive awards because it is scratched, disqualified, not shown, or unworthy of award.';
@@ -7123,6 +7130,7 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
   }
 
   String _awardDisabledReason(String award) {
+    if (isCodEntry(widget.entry)) return codAwardIneligibilityReason;
     if (!_placedFirst(widget.entry)) {
       return _isCavyEntry(widget.entry)
           ? 'Only first-place cavies can receive awards.'
