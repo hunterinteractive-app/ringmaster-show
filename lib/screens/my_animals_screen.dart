@@ -1,3 +1,4 @@
+import '../services/breeder_sync_service.dart';
 // lib/screens/my_animals_screen.dart
 
 import 'package:flutter/material.dart';
@@ -29,6 +30,23 @@ class _MyAnimalsScreenState extends State<MyAnimalsScreen> {
   Future<List<Map<String, dynamic>>> _loadAnimals() async {
     final userId = AppSession.householdOwnerUserId;
     if (userId == null) return [];
+    try {
+      await BreederSyncService.refresh(userId);
+    } catch (_) {
+      if (mounted) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                  'Breeder sync unavailable. Showing previously saved animals; refresh to retry.',
+                ),
+              ),
+            );
+          }
+        });
+      }
+    }
 
     final res = await supabase
         .from('animals')
