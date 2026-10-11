@@ -63,7 +63,7 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
   Future<_AdminShowsPageData> _loadPage() async {
     final shows = await _loadShows();
     final license = await _loadLicenseStatus();
-    final entryCounts = await _loadEntryCounts(shows);
+    final entryCounts = _loadEntryCounts(shows);
 
     return _AdminShowsPageData(
       shows: shows,
@@ -200,70 +200,47 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
     return (res as List).cast<Map<String, dynamic>>();
   }
 
-  Future<Map<String, _ShowEntryCounts>> _loadEntryCounts(
+  Map<String, Future<_ShowEntryCounts?>> _loadEntryCounts(
     List<Map<String, dynamic>> shows,
-  ) async {
-    if (shows.isEmpty) return {};
+  ) {
+    // Two workers keep requests bounded while each card updates independently.
+    final workers = [Future<void>.value(), Future<void>.value()];
+    final result = <String, Future<_ShowEntryCounts?>>{};
+    for (var i = 0; i < shows.length; i++) {
+      final showId = shows[i]['id'].toString();
+      final worker = i % workers.length;
+      final pending = workers[worker].then((_) => _loadShowEntryCounts(showId));
+      result[showId] = pending;
+      workers[worker] = pending.then((_) {});
+    }
+    return result;
+  }
 
-    final showIds = shows.map((s) => s['id'].toString()).toList();
-
-    final rows = await supabase
-        .from('show_sections')
-        .select('''
-          show_id,
-          kind,
-          letter,
-          display_name,
-          sort_order,
-          entries!left(id, status, scratched_at)
-        ''')
-        .inFilter('show_id', showIds)
-        .eq('is_enabled', true)
-        .order('show_id')
-        .order('sort_order');
-
-    final countsByShow = <String, _ShowEntryCounts>{};
-
-    for (final raw in (rows as List)) {
-      final row = Map<String, dynamic>.from(raw as Map);
-
-      final showId = row['show_id']?.toString();
-      if (showId == null || showId.isEmpty) continue;
-
-      final displayName = (row['display_name'] ?? '').toString().trim();
-      if (displayName.isEmpty) continue;
-
-      final kind = (row['kind'] ?? '').toString().trim();
-      final letter = (row['letter'] ?? '').toString().trim();
-      final sortOrder = (row['sort_order'] as num?)?.toInt() ?? 999999;
-
-      final entriesRaw = row['entries'];
-      // Match Judging Line-Up: scratched entries remain in the secretary's
-      // records, but are not eligible to be placed before a judge.
-      final entryCount = entriesRaw is List
-          ? entriesRaw.where((entry) {
-              if (entry is! Map) return false;
-              final status = (entry['status'] ?? '').toString().toLowerCase();
-              return entry['scratched_at'] == null && status != 'scratched';
-            }).length
-          : 0;
-
-      final counts = countsByShow.putIfAbsent(showId, _ShowEntryCounts.new);
-      counts.addCount(
-        displayName,
-        entryCount,
-        kind: kind,
-        letter: letter,
-        sortOrder: sortOrder,
+  Future<_ShowEntryCounts?> _loadShowEntryCounts(String showId) async {
+    try {
+      final rows = await supabase.rpc(
+        'secretary_show_entry_counts',
+        params: {'p_show_id': showId},
       );
+      final counts = _ShowEntryCounts();
+      for (final raw in rows as List) {
+        final row = Map<String, dynamic>.from(raw as Map);
+        final displayName = (row['display_name'] ?? '').toString().trim();
+        if (displayName.isEmpty) continue;
+        counts.addCount(
+          displayName,
+          (row['entry_count'] as num).toInt(),
+          kind: (row['kind'] ?? '').toString(),
+          letter: (row['letter'] ?? '').toString(),
+          sortOrder: (row['sort_order'] as num?)?.toInt() ?? 999999,
+        );
+      }
+      return counts;
+    } catch (error) {
+      debugPrint('Show entry counts unavailable: $error');
+      // Unavailable is distinct from zero; do not block access to the show.
+      return null;
     }
-
-    for (final s in shows) {
-      final showId = s['id'].toString();
-      countsByShow.putIfAbsent(showId, _ShowEntryCounts.new);
-    }
-
-    return countsByShow;
   }
 
   Future<_ShowCreationStatus> _loadLicenseStatus() async {
@@ -654,7 +631,10 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
     );
   }
 
-  Widget _buildShowCard(Map<String, dynamic> show, _ShowEntryCounts counts) {
+  Widget _buildShowCard(
+    Map<String, dynamic> show,
+    Future<_ShowEntryCounts?> countsFuture,
+  ) {
     final showId = show['id'].toString();
     final name = (show['name'] ?? '').toString();
     final start = _fmtDate((show['start_date'] ?? '').toString());
@@ -728,7 +708,29 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
               ],
             ),
             const SizedBox(height: AppSpacing.md),
-            _buildShowCounts(counts),
+            FutureBuilder<_ShowEntryCounts?>(
+              future: countsFuture,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState != ConnectionState.done) {
+                  return const Text('Loading entry counts…');
+                }
+                final counts = snapshot.data;
+                if (counts != null) return _buildShowCounts(counts);
+                return Wrap(
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: AppSpacing.sm,
+                  children: [
+                    const Text(
+                      'Entry counts unavailable. You can still open this show.',
+                    ),
+                    TextButton(
+                      onPressed: _reload,
+                      child: const Text('Retry counts'),
+                    ),
+                  ],
+                );
+              },
+            ),
           ],
         ),
       ),
@@ -784,7 +786,27 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
               child: snap.connectionState != ConnectionState.done
                   ? const Center(child: CircularProgressIndicator())
                   : snap.hasError
-                  ? Center(child: Text('Error: ${snap.error}'))
+                  ? Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(AppSpacing.lg),
+                        child: RMCard(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Text(
+                                'Unable to load your shows. Please try again.',
+                              ),
+                              const SizedBox(height: AppSpacing.md),
+                              FilledButton.icon(
+                                onPressed: _reload,
+                                icon: const Icon(Icons.refresh),
+                                label: const Text('Retry'),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    )
                   : Padding(
                       padding: const EdgeInsets.all(AppSpacing.lg),
                       child: Column(
@@ -863,8 +885,7 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
                                       _buildShowCard(
                                         show,
                                         page!.entryCounts[show['id']
-                                                .toString()] ??
-                                            _ShowEntryCounts(),
+                                            .toString()]!,
                                       ),
                                   ],
                                 ],
@@ -1178,7 +1199,7 @@ class _ShowDashboardSection {
 class _AdminShowsPageData {
   final List<Map<String, dynamic>> shows;
   final _ShowCreationStatus license;
-  final Map<String, _ShowEntryCounts> entryCounts;
+  final Map<String, Future<_ShowEntryCounts?>> entryCounts;
 
   const _AdminShowsPageData({
     required this.shows,
