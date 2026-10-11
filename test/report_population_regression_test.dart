@@ -10,6 +10,27 @@ import 'package:ringmaster_show/screens/admin/closeout/data/loaders/legs_report_
 import 'package:ringmaster_show/screens/admin/closeout/models/base/report_request.dart';
 
 void main() {
+  for (final award in ['FIRST', 'BOV', 'BOB']) {
+    for (final markerField in ['breed_name', 'variety_name']) {
+      test(
+        'COD $markerField never earns a $award leg or exhibitor leg credit',
+        () async {
+          final rows = _qualificationRows();
+          for (final row in rows) {
+            row[markerField] = '${row[markerField]} (COD)';
+          }
+          final fixture = _Fixture(rows, award: award);
+          addTearDown(fixture.client.dispose);
+          expect(await LegsReportLoader(fixture.repo).load(_request), isEmpty);
+          final report = await ExhibitorReportLoader(
+            fixture.repo,
+          ).load(_request);
+          expect(report.entries.every((entry) => !entry.earnedLeg), isTrue);
+        },
+      );
+    }
+  }
+
   test(
     'specialty RIS falls back to qualifying BOB rather than printing RIS',
     () async {

@@ -295,7 +295,6 @@ String _entrySexKey(Map<String, dynamic> entry) {
 }
 
 bool _entryIsEligibleForSpecialAward(Map<String, dynamic> entry) {
-  if (isCodEntry(entry)) return false;
   final scratched = (entry['scratched_at'] ?? '').toString().trim().isNotEmpty;
   if (scratched) return false;
 
@@ -1766,7 +1765,6 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
     }
 
     bool isEligibleForAwards(Map<String, dynamic> e) {
-      if (isCodEntry(e)) return false;
       final scratched = (e['scratched_at'] ?? '').toString().trim().isNotEmpty;
       if (scratched) return false;
 
@@ -1923,7 +1921,7 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
         );
       }
 
-      if (!isCodEntry(e) && !isEligibleForAwards(e) && entryAwards.isNotEmpty) {
+      if (!isEligibleForAwards(e) && entryAwards.isNotEmpty) {
         final className = (e['class_name'] ?? '').toString().trim();
         final isPreJunior = _isPreJuniorClassName(className);
 
@@ -6697,7 +6695,6 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
   }
 
   bool _isEligibleForAwards(Map<String, dynamic> e) {
-    if (isCodEntry(e)) return false;
     final scratched = _isScratched(e);
     if (scratched) return false;
 
@@ -6819,7 +6816,7 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
         (widget.entry['species'] ?? '').toString(),
       ).toString();
     }
-    if (isCodEntry(widget.entry) && _selectedAwards.isNotEmpty) {
+    if (isCodEntry(widget.entry) && codAwardsDisallowed(_selectedAwards)) {
       return codAwardIneligibilityReason;
     }
     if (!_isEligibleForAwards(widget.entry) && _selectedAwards.isNotEmpty) {
@@ -7130,7 +7127,9 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
   }
 
   String _awardDisabledReason(String award) {
-    if (isCodEntry(widget.entry)) return codAwardIneligibilityReason;
+    if (isCodEntry(widget.entry) && _canonicalAwardCode(award) != 'BOV') {
+      return codAwardIneligibilityReason;
+    }
     if (!_placedFirst(widget.entry)) {
       return _isCavyEntry(widget.entry)
           ? 'Only first-place cavies can receive awards.'

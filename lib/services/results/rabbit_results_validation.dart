@@ -19,7 +19,7 @@ List<ResultsEntryBlockingIssue> validateRabbitResults({
 }) {
   final issues = <ResultsEntryBlockingIssue>[];
   for (final entry in entries.where(isCodEntry)) {
-    if (awardCodes(entry).isNotEmpty) {
+    if (codAwardsDisallowed(awardCodes(entry))) {
       issues.add(
         ResultsEntryBlockingIssue(
           code: 'cod_special_award',

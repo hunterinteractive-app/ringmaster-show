@@ -160,7 +160,7 @@ class CavyResultsRules implements ResultsRules {
     required Set<String> selectedAwards,
   }) {
     final awards = normalizeStoredAwards(selectedAwards);
-    if (isCodEntry(entry) && awards.isNotEmpty) {
+    if (isCodEntry(entry) && codAwardsDisallowed(awards)) {
       return const AwardCompatibilityResult.invalid(
         codAwardIneligibilityReason,
       );
@@ -196,7 +196,6 @@ class CavyResultsRules implements ResultsRules {
   }
 
   bool _eligible(String status, Map<String, dynamic> entry) {
-    if (isCodEntry(entry)) return false;
     if (resultsRuleText(entry, const ['scratched_at']).isNotEmpty) return false;
     final value = status.trim().toLowerCase();
     return value != 'no show' &&
@@ -217,6 +216,7 @@ class CavyResultsRules implements ResultsRules {
     if (!_eligible(effectiveStatus, entry) || effectivePlacement != '1') {
       return false;
     }
+    if (isCodEntry(entry) && _canonical(award) != 'BOV') return false;
     final selected = normalizeStoredAwards(selectedAwards);
     if (_canonical(award) == bestOppositeAwardCode) {
       return finalAwardMode == bestOppositeFinalAwardMode &&
@@ -288,7 +288,9 @@ class CavyResultsRules implements ResultsRules {
     required Map<String, dynamic> entry,
     required String award,
   }) {
-    if (isCodEntry(entry)) return codAwardIneligibilityReason;
+    if (isCodEntry(entry) && _canonical(award) != 'BOV') {
+      return codAwardIneligibilityReason;
+    }
     final code = _canonical(award);
     if (code == bestOppositeAwardCode) {
       return 'Requires Best Opposite Sex of Breed (BOS) first.';

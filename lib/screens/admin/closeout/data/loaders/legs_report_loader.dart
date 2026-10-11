@@ -1,6 +1,7 @@
 // lib/screens/admin/closeout/data/loaders/legs_report_loader.dart
 
 import 'package:ringmaster_show/utils/species_sex.dart';
+import 'package:ringmaster_show/services/results/cod_eligibility.dart';
 
 import '../../models/base/report_request.dart';
 import '../../models/legs/legs_certificate_data.dart';
@@ -709,6 +710,9 @@ class LegsReportLoader {
     final byEntryId = <String, _EntryLegContext>{};
 
     for (final row in targetRows) {
+      // COD animals never earn a leg, including FIRST and BOV. Keep the
+      // report population intact; exclude only certificate candidates.
+      if (isCodEntry(row)) continue;
       final entryId = _str(row['entry_id']);
       if (entryId.isEmpty) continue;
 

@@ -13,6 +13,7 @@ Map<String, dynamic> rabbit(
 }) => {
   'id': id,
   'species': 'rabbit',
+  'uses_variety_awards': true,
   'section_id': 'youth-b',
   'breed': breed,
   'variety': variety,
@@ -56,7 +57,6 @@ void main() {
   test('COD cannot receive any higher award even when first place', () {
     final entry = rabbit('cod', 'Blue (COD)', 'Doe');
     for (final award in [
-      'BOV',
       'BOSV',
       'BOG',
       'BOSG',
@@ -108,6 +108,40 @@ void main() {
       );
     },
   );
+  test('COD BOV saves while class eligibility still applies', () {
+    final entry = rabbit('cod', 'Blue (COD)', 'Doe', awards: ['BOV']);
+    expect(
+      rules.validateAwardSelection(entry: entry, selectedAwards: {'BOV'}).valid,
+      isTrue,
+    );
+    expect(validate([entry]), isEmpty);
+    for (final placement in ['1', '2']) {
+      expect(
+        rules.canUseAward(
+          entry: entry,
+          award: 'BOV',
+          selectedAwards: {},
+          effectiveStatus: 'Shown',
+          effectivePlacement: placement,
+          classSystem: 'six',
+          finalAwardMode: 'bis_ris',
+        ),
+        placement == '1',
+      );
+    }
+    expect(
+      rules.canUseAward(
+        entry: entry,
+        award: 'BOV',
+        selectedAwards: {},
+        effectiveStatus: 'Disqualified',
+        effectivePlacement: '1',
+        classSystem: 'six',
+        finalAwardMode: 'bis_ris',
+      ),
+      isFalse,
+    );
+  });
   test('COD-only results still require class placements but no specials', () {
     expect(validate([rabbit('cod', 'Blue (COD)', 'Doe')]), isEmpty);
     expect(
