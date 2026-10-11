@@ -47,14 +47,16 @@ List<ResultsEntryBlockingIssue> validateRabbitResults({
   }
 
   final normal = entries
-      .where((entry) => !isExcludedFromSpecials(entry) && !isCodEntry(entry))
+      .where((entry) => !isExcludedFromSpecials(entry))
       .toList();
 
   Map<String, List<Map<String, dynamic>>> buckets(
-    String Function(Map<String, dynamic>) scope,
-  ) {
+    String Function(Map<String, dynamic>) scope, {
+    bool includeCod = false,
+  }) {
     final result = <String, List<Map<String, dynamic>>>{};
     for (final entry in normal) {
+      if (!includeCod && isCodEntry(entry)) continue;
       final key = scope(entry);
       if (key.isNotEmpty) result.putIfAbsent(key, () => []).add(entry);
     }
@@ -145,7 +147,7 @@ List<ResultsEntryBlockingIssue> validateRabbitResults({
       values: buckets((entry) {
         final scope = [sectionId(entry), breed(entry), variety(entry)];
         return scope.any((value) => value.isEmpty) ? '' : scope.join('|');
-      }).values,
+      }, includeCod: true).values,
       requiredAwards: const ['BOV', 'BOSV'],
       scopeLabel: 'variety',
       level: ResultsValidationIssueLevel.variety,

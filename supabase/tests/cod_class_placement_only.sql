@@ -22,17 +22,19 @@ select ok(not public.is_cod_entry('Codsworth','Chocolate'),'whole COD marker req
 select lives_ok($$update public.entries set placement='2' where id=(select id from cod_fixture where key='cod')$$,'COD class placement saves');
 select throws_ok($$insert into public.entry_awards(show_id,entry_id,award_code)
  values ((select id from cod_fixture where key='show'),(select id from cod_fixture where key='cod'),'BOSB')$$,
- '23514','COD entries may receive class placements and BOV only, and cannot earn legs.','COD BOS rejected');
-select throws_ok($$update public.entries set special_awards='BOSV' where id=(select id from cod_fixture where key='cod')$$,
- '23514','COD entries may receive class placements and BOV only, and cannot earn legs.','legacy special awards rejected');
+ '23514','COD entries may receive class placements, BOV, and BOSV only, and cannot earn legs.','COD BOS rejected');
+select throws_ok($$update public.entries set special_awards='BOG' where id=(select id from cod_fixture where key='cod')$$,
+ '23514','COD entries may receive class placements, BOV, and BOSV only, and cannot earn legs.','legacy special awards rejected');
 select is((public.show_results_readiness_scoped((select id from cod_fixture where key='show'),array[(select id from cod_fixture where key='section')])->>'missing_final_award_count')::int,0,'COD only section needs no finals');
 
 select lives_ok($$insert into public.entry_awards(show_id,entry_id,award_code)
  values ((select id from cod_fixture where key='show'),(select id from cod_fixture where key='cod'),'BOV')$$,'COD BOV saves');
+select lives_ok($$update public.entry_awards set award_code='BOSV' where entry_id=(select id from cod_fixture where key='cod')$$,'COD BOSV saves');
+select lives_ok($$update public.entries set special_awards='BOSV' where id=(select id from cod_fixture where key='cod')$$,'legacy COD BOSV saves');
 select lives_ok($$update public.entries set special_awards='BOV' where id=(select id from cod_fixture where key='cod')$$,'legacy COD BOV saves');
 select is((public.show_results_readiness_scoped((select id from cod_fixture where key='show'),array[(select id from cod_fixture where key='section')])->>'invalid_final_award_count')::int,0,'COD BOV is not a readiness error');
 select throws_ok($$update public.entries set special_awards='BOV,BOSB' where id=(select id from cod_fixture where key='cod')$$,
- '23514','COD entries may receive class placements and BOV only, and cannot earn legs.','mixed COD BOV and higher awards rejected');
+ '23514','COD entries may receive class placements, BOV, and BOSV only, and cannot earn legs.','mixed COD BOV and higher awards rejected');
 delete from public.entry_awards where entry_id=(select id from cod_fixture where key='cod');
 update public.entries set special_awards=null where id=(select id from cod_fixture where key='cod');
 update public.entries set placement=null where id=(select id from cod_fixture where key='cod');
@@ -41,7 +43,7 @@ update public.entries set variety='Black',placement='1' where id=(select id from
 select lives_ok($$insert into public.entry_awards(show_id,entry_id,award_code)
  values ((select id from cod_fixture where key='show'),(select id from cod_fixture where key='cod'),'BOB')$$,'recognized variety may receive BOB');
 select throws_ok($$update public.entries set variety='Blue (COD)' where id=(select id from cod_fixture where key='cod')$$,
- '23514','COD entries may receive class placements and BOV only, and cannot earn legs.','cannot reclassify awarded entry as COD');
+ '23514','COD entries may receive class placements, BOV, and BOSV only, and cannot earn legs.','cannot reclassify awarded entry as COD');
 -- Simulate a historical error predating the safeguard, then verify reporting
 -- and an atomic correction without modifying historical records in migration.
 alter table public.entries disable trigger validate_cod_entry_results;

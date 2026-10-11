@@ -57,7 +57,6 @@ void main() {
   test('COD cannot receive any higher award even when first place', () {
     final entry = rabbit('cod', 'Blue (COD)', 'Doe');
     for (final award in [
-      'BOSV',
       'BOG',
       'BOSG',
       'BOB',
@@ -99,7 +98,7 @@ void main() {
     'Youth B Silver Fox does not require BOS for only a COD opposite sex',
     () {
       final black = rabbit('black', 'Black', 'Buck', awards: ['BOV', 'BOB']);
-      final blue = rabbit('blue', 'Blue (COD)', 'Doe');
+      final blue = rabbit('blue', 'Blue (COD)', 'Doe', awards: ['BOV']);
       expect(validate([black, blue]), isEmpty);
       final recognizedDoe = rabbit('doe', 'Black', 'Doe');
       expect(
@@ -142,8 +141,11 @@ void main() {
       isFalse,
     );
   });
-  test('COD-only results still require class placements but no specials', () {
-    expect(validate([rabbit('cod', 'Blue (COD)', 'Doe')]), isEmpty);
+  test('COD-only results require variety awards and placements', () {
+    expect(
+      validate([rabbit('cod', 'Blue (COD)', 'Doe')]).single.code,
+      'missing_bov',
+    );
     expect(
       validate([
         rabbit('cod', 'Blue (COD)', 'Doe', placement: null),
@@ -151,12 +153,43 @@ void main() {
       'missing_basic_outcome',
     );
   });
+  test(
+    'COD opposite-sex pair requires one BOV and one BOSV, not breed awards',
+    () {
+      final buck = rabbit('SUM', 'Blue (COD)', 'Buck', awards: ['BOV']);
+      final doe = rabbit('BLU1', 'Blue (COD)', 'Doe', awards: ['BOV']);
+      expect(
+        validate([buck, doe]).map((issue) => issue.code),
+        containsAll(['duplicate_bov', 'missing_bosv']),
+      );
+      doe['_awards'] = ['BOSV'];
+      expect(validate([buck, doe]), isEmpty);
+      expect(
+        rules.canUseAward(
+          entry: doe,
+          award: 'BOSV',
+          selectedAwards: {},
+          effectiveStatus: 'Shown',
+          effectivePlacement: '1',
+          classSystem: 'six',
+          finalAwardMode: 'bis_ris',
+        ),
+        isTrue,
+      );
+      expect(
+        rules
+            .validateAwardSelection(entry: doe, selectedAwards: {'BOSV'})
+            .valid,
+        isTrue,
+      );
+    },
+  );
   test('existing incorrect COD awards are flagged for correction', () {
     expect(
       validate([
         rabbit('cod', 'Blue (COD)', 'Doe', awards: ['BOSB']),
-      ]).single.code,
-      'cod_special_award',
+      ]).map((issue) => issue.code),
+      contains('cod_special_award'),
     );
   });
 }

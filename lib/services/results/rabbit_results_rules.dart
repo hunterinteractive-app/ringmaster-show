@@ -290,7 +290,10 @@ class RabbitResultsRules implements ResultsRules {
     if (!_eligible(effectiveStatus, entry) || effectivePlacement != '1') {
       return false;
     }
-    if (isCodEntry(entry) && _canonical(award) != 'BOV') return false;
+    if (isCodEntry(entry) &&
+        !const {'BOV', 'BOSV'}.contains(_canonical(award))) {
+      return false;
+    }
     final selected = normalizeStoredAwards(selectedAwards);
     if (_canonical(award) == bestOppositeAwardCode) {
       return finalAwardMode == bestOppositeFinalAwardMode &&
@@ -362,7 +365,8 @@ class RabbitResultsRules implements ResultsRules {
     required Map<String, dynamic> entry,
     required String award,
   }) {
-    if (isCodEntry(entry) && _canonical(award) != 'BOV') {
+    if (isCodEntry(entry) &&
+        !const {'BOV', 'BOSV'}.contains(_canonical(award))) {
       return codAwardIneligibilityReason;
     }
     final code = _canonical(award);

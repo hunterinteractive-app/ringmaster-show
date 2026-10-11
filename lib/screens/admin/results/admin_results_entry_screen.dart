@@ -7127,7 +7127,8 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
   }
 
   String _awardDisabledReason(String award) {
-    if (isCodEntry(widget.entry) && _canonicalAwardCode(award) != 'BOV') {
+    if (isCodEntry(widget.entry) &&
+        !const {'BOV', 'BOSV'}.contains(_canonicalAwardCode(award))) {
       return codAwardIneligibilityReason;
     }
     if (!_placedFirst(widget.entry)) {

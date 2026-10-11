@@ -10,7 +10,7 @@ import 'package:ringmaster_show/screens/admin/closeout/data/loaders/legs_report_
 import 'package:ringmaster_show/screens/admin/closeout/models/base/report_request.dart';
 
 void main() {
-  for (final award in ['FIRST', 'BOV', 'BOB']) {
+  for (final award in ['FIRST', 'BOV', 'BOSV', 'BOB']) {
     for (final markerField in ['breed_name', 'variety_name']) {
       test(
         'COD $markerField never earns a $award leg or exhibitor leg credit',
