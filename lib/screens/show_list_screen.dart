@@ -124,6 +124,85 @@ class _ShowListScreenState extends State<ShowListScreen> {
 
   late Future<_ShowListBundle> _bundleFuture;
 
+  final Set<String> _favorites = {};
+  final Set<String> _favoriteBusy = {};
+
+  Future<void> _loadFavorites() async {
+    if (widget.demoMode || SupportImpersonationSession.isActive) return;
+    final user = supabase.auth.currentUser;
+    if (user == null) return;
+    try {
+      final rows = await supabase
+          .from('show_favorites')
+          .select('show_id')
+          .eq('user_id', user.id);
+      if (mounted) {
+        setState(() {
+          _favorites
+            ..clear()
+            ..addAll(rows.map((r) => r['show_id'].toString()));
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Unable to load favorite shows. Refresh to retry.'),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _toggleFavorite(String id) async {
+    final user = supabase.auth.currentUser;
+    if (user == null || _favoriteBusy.contains(id)) return;
+    final remove = _favorites.contains(id);
+    setState(() => _favoriteBusy.add(id));
+    try {
+      if (remove) {
+        await supabase
+            .from('show_favorites')
+            .delete()
+            .eq('user_id', user.id)
+            .eq('show_id', id);
+      } else {
+        await supabase.from('show_favorites').insert({
+          'user_id': user.id,
+          'show_id': id,
+        });
+      }
+      if (mounted) {
+        setState(() {
+          if (remove) {
+            _favorites.remove(id);
+          } else {
+            _favorites.add(id);
+          }
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              remove
+                  ? 'Show removed from favorites.'
+                  : 'Show favorited. Its entry deadline syncs to your linked Breeder calendar, with reminders 1 day and 2 hours before.',
+            ),
+          ),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Unable to save favorite. Please retry.'),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _favoriteBusy.remove(id));
+    }
+  }
+
   String _searchQuery = '';
   String _sortMode = 'date';
   String _stateFilter = 'All';
@@ -606,6 +685,7 @@ class _ShowListScreenState extends State<ShowListScreen> {
       ),
     );
     _verifyLegalAcceptance();
+    _loadFavorites();
     SupportImpersonationSession.current.addListener(_handleSupportModeChanged);
   }
 
@@ -1931,15 +2011,59 @@ class _ShowListScreenState extends State<ShowListScreen> {
                                               crossAxisAlignment:
                                                   CrossAxisAlignment.start,
                                               children: [
-                                                Text(
-                                                  showName,
-                                                  style: Theme.of(context)
-                                                      .textTheme
-                                                      .titleMedium
-                                                      ?.copyWith(
-                                                        fontWeight:
-                                                            FontWeight.w700,
+                                                Row(
+                                                  children: [
+                                                    Expanded(
+                                                      child: Text(
+                                                        showName,
+                                                        style: Theme.of(context)
+                                                            .textTheme
+                                                            .titleMedium
+                                                            ?.copyWith(
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .w700,
+                                                            ),
                                                       ),
+                                                    ),
+                                                    if (!widget.demoMode &&
+                                                        !SupportImpersonationSession
+                                                            .isActive)
+                                                      IconButton(
+                                                        tooltip:
+                                                            _favorites.contains(
+                                                              showId,
+                                                            )
+                                                            ? 'Remove favorite show'
+                                                            : 'Favorite show and remind me about entries',
+                                                        onPressed:
+                                                            _favoriteBusy
+                                                                .contains(
+                                                                  showId,
+                                                                )
+                                                            ? null
+                                                            : () =>
+                                                                  _toggleFavorite(
+                                                                    showId,
+                                                                  ),
+                                                        icon: Icon(
+                                                          _favorites.contains(
+                                                                showId,
+                                                              )
+                                                              ? Icons.star
+                                                              : Icons
+                                                                    .star_border,
+                                                        ),
+                                                        color:
+                                                            _favorites.contains(
+                                                              showId,
+                                                            )
+                                                            ? const Color(
+                                                                0xFFB77900,
+                                                              )
+                                                            : null,
+                                                      ),
+                                                  ],
                                                 ),
                                                 const SizedBox(
                                                   height: AppSpacing.sm,
