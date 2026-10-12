@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import '../lib/widgets/show_favorite_button.dart';
+import 'package:ringmaster_show/widgets/show_favorite_button.dart';
 
 void main() {
   testWidgets('Favorite is visible without an icon font and responds to taps', (
