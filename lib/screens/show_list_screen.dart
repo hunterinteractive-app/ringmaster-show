@@ -1,3 +1,4 @@
+import '../widgets/show_favorite_button.dart';
 import '../services/show_assistant_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../widgets/household_access_announcement.dart';
@@ -2029,13 +2030,9 @@ class _ShowListScreenState extends State<ShowListScreen> {
                                                     if (!widget.demoMode &&
                                                         !SupportImpersonationSession
                                                             .isActive)
-                                                      IconButton(
-                                                        tooltip:
-                                                            _favorites.contains(
-                                                              showId,
-                                                            )
-                                                            ? 'Remove favorite show'
-                                                            : 'Favorite show and remind me about entries',
+                                                      ShowFavoriteButton(
+                                                        selected: _favorites
+                                                            .contains(showId),
                                                         onPressed:
                                                             _favoriteBusy
                                                                 .contains(
@@ -2046,22 +2043,6 @@ class _ShowListScreenState extends State<ShowListScreen> {
                                                                   _toggleFavorite(
                                                                     showId,
                                                                   ),
-                                                        icon: Icon(
-                                                          _favorites.contains(
-                                                                showId,
-                                                              )
-                                                              ? Icons.star
-                                                              : Icons
-                                                                    .star_border,
-                                                        ),
-                                                        color:
-                                                            _favorites.contains(
-                                                              showId,
-                                                            )
-                                                            ? const Color(
-                                                                0xFFB77900,
-                                                              )
-                                                            : null,
                                                       ),
                                                   ],
                                                 ),
