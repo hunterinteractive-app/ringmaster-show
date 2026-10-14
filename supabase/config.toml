@@ -44,3 +44,7 @@ verify_jwt = true
 
 [functions.show-assistant]
 verify_jwt = true
+
+[functions.send-breeder-pedigree]
+# Server-only relay: handler verifies the service credential in constant time.
+verify_jwt = false
