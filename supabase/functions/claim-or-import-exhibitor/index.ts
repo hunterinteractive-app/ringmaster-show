@@ -1,4 +1,10 @@
-import { budgetedFetch, authErrorStatus, isUpstreamUnavailable, UpstreamUnavailable } from "../_shared/request_fetch.ts";
+import { importCandidates } from "./import_source.ts";
+import {
+  authErrorStatus,
+  budgetedFetch,
+  isUpstreamUnavailable,
+  UpstreamUnavailable,
+} from "../_shared/request_fetch.ts";
 // supabase/functions/claim-or-import-exhibitor/index.ts
 
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
@@ -98,8 +104,8 @@ function buildName(values: {
 
   return (
     clean(values.displayName) ??
-    clean(values.showingName) ??
-    clean(generated)
+      clean(values.showingName) ??
+      clean(generated)
   );
 }
 
@@ -139,14 +145,12 @@ serve(async (req) => {
 
   const showUrl = Deno.env.get("SUPABASE_URL") ?? "";
   const showAnonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
-  const showServiceRoleKey =
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+  const showServiceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 
-  const clubUrl =
-    Deno.env.get("CLUB_SUPABASE_URL") ?? "";
+  const clubUrl = Deno.env.get("CLUB_SUPABASE_URL") ?? "";
 
-  const clubServiceRoleKey =
-    Deno.env.get("CLUB_SUPABASE_SERVICE_ROLE_KEY") ?? "";
+  const clubServiceRoleKey = Deno.env.get("CLUB_SUPABASE_SERVICE_ROLE_KEY") ??
+    "";
 
   if (
     !showUrl ||
@@ -158,8 +162,7 @@ serve(async (req) => {
     return json(
       {
         status: "error",
-        message:
-          "Required Supabase environment variables are missing.",
+        message: "Required Supabase environment variables are missing.",
       },
       500,
     );
@@ -240,8 +243,7 @@ serve(async (req) => {
       return json(
         {
           status: "unauthorized",
-          message:
-            userError?.message ??
+          message: userError?.message ??
             "No authenticated RingMaster Show user was found.",
         },
         authErrorStatus(userError),
@@ -330,8 +332,7 @@ serve(async (req) => {
         return json(
           {
             status: "invalid_claim",
-            message:
-              "A valid exhibitor record ID is required.",
+            message: "A valid exhibitor record ID is required.",
           },
           400,
         );
@@ -351,8 +352,7 @@ serve(async (req) => {
         throw matchingClaimError;
       }
 
-      const claimMatches =
-        (matchingClaimRows ?? []) as ShowExhibitorMatch[];
+      const claimMatches = (matchingClaimRows ?? []) as ShowExhibitorMatch[];
 
       const selectedMatch = claimMatches.find(
         (row) => row.id === body.exhibitor_id,
@@ -362,8 +362,7 @@ serve(async (req) => {
         return json(
           {
             status: "claim_not_allowed",
-            message:
-              "That exhibitor record is not available to this account.",
+            message: "That exhibitor record is not available to this account.",
           },
           403,
         );
@@ -396,8 +395,7 @@ serve(async (req) => {
         return json(
           {
             status: "claim_unavailable",
-            message:
-              "That exhibitor record has already been claimed.",
+            message: "That exhibitor record has already been claimed.",
           },
           409,
         );
@@ -457,8 +455,7 @@ serve(async (req) => {
       throw unclaimedError;
     }
 
-    const unclaimed =
-      (unclaimedRows ?? []) as ShowExhibitorMatch[];
+    const unclaimed = (unclaimedRows ?? []) as ShowExhibitorMatch[];
 
     if (unclaimed.length === 1) {
       const match = unclaimed[0];
@@ -492,8 +489,7 @@ serve(async (req) => {
             lastName: match.last_name,
           }),
           city: clean(match.city),
-          state:
-            clean(match.state)?.toUpperCase() ?? null,
+          state: clean(match.state)?.toUpperCase() ?? null,
           phone_last_four: maskPhone(match.phone),
         })),
       });
@@ -517,8 +513,41 @@ serve(async (req) => {
       throw clubError;
     }
 
-    const clubMatches =
-      (clubRows ?? []) as ClubExhibitor[];
+    const candidates = await importCandidates(
+      clubRows ?? [],
+      verifiedEmail,
+      async () => {
+        const breederUrl = Deno.env.get("BREEDER_SUPABASE_URL");
+        const breederKey = Deno.env.get("BREEDER_SUPABASE_SERVICE_ROLE_KEY");
+        if (!breederUrl || !breederKey) return [];
+        const breeder = createClient(breederUrl, breederKey, {
+          auth: { persistSession: false, autoRefreshToken: false },
+          global: { fetch: budgetedFetch("account_breeder", upstreamDeadline) },
+        });
+        const exported = await breeder.rpc(
+          "find_exhibitors_for_breeder_export",
+          { p_email: verifiedEmail },
+        );
+        if (exported.error) throw exported.error;
+        return exported.data ?? [];
+      },
+      async (ownerId) => {
+        const breederUrl = Deno.env.get("BREEDER_SUPABASE_URL");
+        const breederKey = Deno.env.get("BREEDER_SUPABASE_SERVICE_ROLE_KEY");
+        if (!breederUrl || !breederKey) return null;
+        const breeder = createClient(breederUrl, breederKey, {
+          auth: { persistSession: false, autoRefreshToken: false },
+          global: {
+            fetch: budgetedFetch("account_breeder_auth", upstreamDeadline),
+          },
+        });
+        const result = await breeder.auth.admin.getUserById(ownerId);
+        if (result.error) throw result.error;
+        return result.data.user;
+      },
+    );
+    const clubMatches = candidates.matches as ClubExhibitor[];
+    const importSource = candidates.source;
 
     if (clubMatches.length === 0) {
       return json({
@@ -547,13 +576,11 @@ serve(async (req) => {
       .join(" ")
       .trim();
 
-    const showingName =
-      clean(source.showing_name) ??
+    const showingName = clean(source.showing_name) ??
       clean(source.display_name) ??
       clean(generatedName);
 
-    const displayName =
-      clean(source.display_name) ??
+    const displayName = clean(source.display_name) ??
       clean(source.showing_name) ??
       clean(generatedName);
 
@@ -562,14 +589,12 @@ serve(async (req) => {
       last_name: lastName,
       showing_name: showingName,
       display_name: displayName,
-      email:
-        normalizeEmail(source.email) ??
+      email: normalizeEmail(source.email) ??
         verifiedEmail,
       phone: clean(source.phone),
       address_line1: clean(source.address_line1),
       city: clean(source.city),
-      state:
-        clean(source.state)?.toUpperCase() ?? null,
+      state: clean(source.state)?.toUpperCase() ?? null,
       zip: clean(source.zip),
     };
 
@@ -588,8 +613,7 @@ serve(async (req) => {
       return json({
         status: "incomplete_club_match",
         missing_fields: ["state"],
-        message:
-          "The Club account must use a two-letter state abbreviation.",
+        message: "The source account must use a two-letter state abbreviation.",
       });
     }
 
@@ -618,20 +642,13 @@ serve(async (req) => {
       birth_date: clean(source.birth_date),
       arba_number: clean(source.arba_number),
 
-      is_public_entry:
-        source.is_public_entry ?? false,
-
-      print_phone_on_reports:
-        source.print_phone_on_reports ?? false,
-
-      group_members:
-        source.group_members ?? null,
+      group_members: source.group_members ?? null,
 
       is_active: true,
       is_test: false,
       is_merged: false,
 
-      imported_from: "ringmaster_club",
+      imported_from: importSource,
       imported_source_id: source.id,
       imported_at: now,
 
@@ -720,10 +737,7 @@ serve(async (req) => {
     }
 
     return json({
-      status:
-        duplicateImport
-          ? "already_exists"
-          : "imported",
+      status: duplicateImport ? "already_exists" : "imported",
       exhibitor_id: imported.id,
       display_name: finalDisplayName,
     });
@@ -742,10 +756,7 @@ serve(async (req) => {
     return json(
       {
         status: "error",
-        message:
-          error instanceof Error
-            ? error.message
-            : String(error),
+        message: error instanceof Error ? error.message : String(error),
       },
       500,
     );
