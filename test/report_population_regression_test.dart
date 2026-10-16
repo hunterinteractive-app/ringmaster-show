@@ -10,6 +10,26 @@ import 'package:ringmaster_show/screens/admin/closeout/data/loaders/legs_report_
 import 'package:ringmaster_show/screens/admin/closeout/models/base/report_request.dart';
 
 void main() {
+  for (final showingName in ['Danny & Tracy Jarvis', '']) {
+    test(
+      'leg name prefers showing name with personal-name fallback: $showingName',
+      () async {
+        final rows = _qualificationRows();
+        rows.first.addAll({
+          'exhibitor_showing_name': showingName,
+          'exhibitor_first_name': 'Danny',
+          'exhibitor_last_name': 'Jarvis',
+        });
+        final fixture = _Fixture(rows, award: 'BOB');
+        addTearDown(fixture.client.dispose);
+        final legs = await LegsReportLoader(fixture.repo).load(_request);
+        expect(
+          legs.single.exhibitorName,
+          showingName.isEmpty ? 'Danny Jarvis' : showingName,
+        );
+      },
+    );
+  }
   for (final award in ['FIRST', 'BOV', 'BOSV', 'BOB']) {
     for (final markerField in ['breed_name', 'variety_name']) {
       test(

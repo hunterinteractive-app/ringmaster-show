@@ -1326,8 +1326,8 @@ class LegsReportLoader {
     ].where((e) => e.trim().isNotEmpty).join(' ').trim();
 
     return _firstNonEmpty([
-      memberName,
       ctx.exhibitorShowingName,
+      memberName,
       ctx.exhibitorLabel,
       'UNKNOWN EXHIBITOR',
     ]);
