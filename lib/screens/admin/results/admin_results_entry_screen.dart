@@ -1428,6 +1428,10 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
       showId: widget.showId,
       sectionId: sectionId,
     );
+    if (_breedIndex.isEmpty) {
+      _selectedBreed = null;
+      return;
+    }
     if (_selectedBreed != null && _selectedBreed != _allBreeds) {
       final selected = _selectedBreed!.trim().toLowerCase();
       final matches = _breedIndex.where(
@@ -1437,7 +1441,7 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
           ? null
           : matches.first['breed'] as String;
     }
-    if (_selectedBreed == null) return;
+    _selectedBreed ??= _allBreeds;
     _entries = await _fetchHydratedEntries(
       sectionId: sectionId,
       breed: _selectedBreed == _allBreeds ? null : _selectedBreed,
