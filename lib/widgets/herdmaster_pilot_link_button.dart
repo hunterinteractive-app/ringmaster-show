@@ -10,8 +10,10 @@ class HerdMasterPilotLinkButton extends StatelessWidget {
     required this.ownerUserId,
     required this.supportMode,
     required this.onPressed,
+    this.partnerName = 'HerdMaster',
   });
 
+  final String partnerName;
   final User? user;
   final String? ownerUserId;
   final bool supportMode;
@@ -34,7 +36,7 @@ class HerdMasterPilotLinkButton extends StatelessWidget {
       child: OutlinedButton.icon(
         onPressed: onPressed,
         icon: const Icon(Icons.link),
-        label: const Text('Link HerdMaster'),
+        label: Text('Link $partnerName'),
       ),
     );
   }

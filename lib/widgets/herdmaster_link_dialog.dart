@@ -5,12 +5,17 @@ import '../services/app_session.dart';
 import 'herdmaster_pilot_link_button.dart';
 
 class HerdMasterLinkDialog extends StatefulWidget {
-  const HerdMasterLinkDialog({super.key});
+  const HerdMasterLinkDialog({super.key, this.pedigreeHQ = false});
+
+  final bool pedigreeHQ;
   @override
   State<HerdMasterLinkDialog> createState() => _HerdMasterLinkDialogState();
 }
 
 class _HerdMasterLinkDialogState extends State<HerdMasterLinkDialog> {
+  String get _partner => widget.pedigreeHQ ? 'PedigreeHQ' : 'HerdMaster';
+  String get _provider => widget.pedigreeHQ ? 'pedigreehq' : 'herdmaster';
+
   StreamSubscription<AuthState>? _authChanges;
   final _account = TextEditingController();
   bool _consent = false;
@@ -49,7 +54,7 @@ class _HerdMasterLinkDialogState extends State<HerdMasterLinkDialog> {
       AppSession.isSupportMode,
     )) {
       setState(
-        () => _error = 'Sign in to your pilot account to link HerdMaster.',
+        () => _error = 'Sign in to your pilot account to link $_partner.',
       );
       return;
     }
@@ -62,8 +67,8 @@ class _HerdMasterLinkDialogState extends State<HerdMasterLinkDialog> {
     });
     try {
       final result = await client.functions.invoke(
-        'herdmaster-api/v1/connections',
-        body: {'herdmaster_account_id': id, 'consent': true},
+        '$_provider-api/v1/connections',
+        body: {'${_provider}_account_id': id, 'consent': true},
       );
       if (result.status != 201 ||
           result.data is! Map ||
@@ -104,8 +109,8 @@ class _HerdMasterLinkDialogState extends State<HerdMasterLinkDialog> {
       child: AlertDialog(
         title: Text(
           credentials == null
-              ? 'Link HerdMaster'
-              : 'HerdMaster pilot credentials',
+              ? 'Link $_partner'
+              : '$_partner pilot credentials',
         ),
         content: SizedBox(
           width: 480,
@@ -115,16 +120,16 @@ class _HerdMasterLinkDialogState extends State<HerdMasterLinkDialog> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 if (credentials == null) ...[
-                  const Text(
-                    'Enter the HerdMaster account ID supplied for your pilot setup. Linking again replaces that account connection’s credentials while preserving animal links.',
+                  Text(
+                    'Enter the $_partner account ID supplied for your pilot setup. Linking again replaces that account connection’s credentials while preserving animal links.',
                   ),
                   const SizedBox(height: 12),
                   TextField(
                     controller: _account,
                     enabled: !_saving,
                     maxLength: 200,
-                    decoration: const InputDecoration(
-                      labelText: 'HerdMaster account ID',
+                    decoration: InputDecoration(
+                      labelText: '$_partner account ID',
                     ),
                     onChanged: (_) => setState(() {}),
                   ),
@@ -134,13 +139,13 @@ class _HerdMasterLinkDialogState extends State<HerdMasterLinkDialog> {
                     onChanged: _saving
                         ? null
                         : (value) => setState(() => _consent = value == true),
-                    title: const Text(
-                      'Allow HerdMaster to view my existing Show animals for match review, send animal updates, and retrieve my results and exhibitor and leg reports.',
+                    title: Text(
+                      'Allow $_partner to view my existing Show animals for match review, send animal updates, and retrieve my results and exhibitor and leg reports.',
                     ),
                   ),
                 ] else ...[
-                  const Text(
-                    'The connection is authorized. Save these credentials for the agreed secure handoff to HerdMaster; they are shown only now. The automatic refresh integration still requires HerdMaster setup.',
+                  Text(
+                    'The connection is authorized. Save these credentials for the agreed secure handoff to $_partner; they are shown only now. The automatic refresh integration still requires $_partner setup.',
                   ),
                   const SizedBox(height: 12),
                   SelectableText(

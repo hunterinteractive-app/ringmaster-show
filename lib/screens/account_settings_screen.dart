@@ -323,15 +323,23 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
               children: [
                 StreamBuilder<AuthState>(
                   stream: supabase.auth.onAuthStateChange,
-                  builder: (context, snapshot) => HerdMasterPilotLinkButton(
-                    user: supabase.auth.currentUser,
-                    ownerUserId: AppSession.householdOwnerUserId,
-                    supportMode: AppSession.isSupportMode,
-                    onPressed: () => showDialog<void>(
-                      context: context,
-                      barrierDismissible: false,
-                      builder: (_) => const HerdMasterLinkDialog(),
-                    ),
+                  builder: (context, snapshot) => Wrap(
+                    alignment: WrapAlignment.center,
+                    children: [
+                      for (final pedigreeHQ in [false, true])
+                        HerdMasterPilotLinkButton(
+                          partnerName: pedigreeHQ ? 'PedigreeHQ' : 'HerdMaster',
+                          user: supabase.auth.currentUser,
+                          ownerUserId: AppSession.householdOwnerUserId,
+                          supportMode: AppSession.isSupportMode,
+                          onPressed: () => showDialog<void>(
+                            context: context,
+                            barrierDismissible: false,
+                            builder: (_) =>
+                                HerdMasterLinkDialog(pedigreeHQ: pedigreeHQ),
+                          ),
+                        ),
+                    ],
                   ),
                 ),
                 if (AppSession.isSupportMode)

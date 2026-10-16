@@ -22,6 +22,7 @@ void main() {
       MaterialApp(
         home: Scaffold(
           body: HerdMasterPilotLinkButton(
+            partnerName: 'PedigreeHQ',
             user: user('ZayneTort2@gmail.com'),
             ownerUserId: 'pilot-owner',
             supportMode: false,
@@ -30,8 +31,8 @@ void main() {
         ),
       ),
     );
-    expect(find.text('Link HerdMaster'), findsOneWidget);
-    await tester.tap(find.text('Link HerdMaster'));
+    expect(find.text('Link PedigreeHQ'), findsOneWidget);
+    await tester.tap(find.text('Link PedigreeHQ'));
     expect(opened, true);
   });
 
@@ -47,6 +48,7 @@ void main() {
         MaterialApp(
           home: Scaffold(
             body: HerdMasterPilotLinkButton(
+              partnerName: 'PedigreeHQ',
               user: actor,
               ownerUserId: 'pilot-owner',
               supportMode: false,
@@ -55,7 +57,7 @@ void main() {
           ),
         ),
       );
-      expect(find.text('Link HerdMaster'), findsNothing);
+      expect(find.text('Link PedigreeHQ'), findsNothing);
     }
   });
 
@@ -67,6 +69,7 @@ void main() {
         MaterialApp(
           home: Scaffold(
             body: HerdMasterPilotLinkButton(
+              partnerName: 'PedigreeHQ',
               user: user('zaynetort2@gmail.com'),
               ownerUserId: mode ? 'pilot-owner' : 'someone-else',
               supportMode: mode,
@@ -75,7 +78,7 @@ void main() {
           ),
         ),
       );
-      expect(find.text('Link HerdMaster'), findsNothing);
+      expect(find.text('Link PedigreeHQ'), findsNothing);
     }
   });
 }
