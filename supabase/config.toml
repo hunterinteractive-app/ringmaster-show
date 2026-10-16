@@ -45,6 +45,18 @@ verify_jwt = true
 [functions.show-assistant]
 verify_jwt = true
 
+[functions.herdmaster-api]
+# The handler validates user JWTs for connection management and hashed,
+# account-scoped partner tokens for data exchange.
+verify_jwt = false
+
 [functions.send-breeder-pedigree]
 # Server-only relay: handler verifies the service credential in constant time.
+verify_jwt = false
+
+[functions.animal-sync]
+verify_jwt = false
+
+[functions.pedigreehq-api]
+# Handler validates verified user sessions or provider-scoped connection credentials.
 verify_jwt = false

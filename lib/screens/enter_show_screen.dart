@@ -1,4 +1,4 @@
-import '../services/breeder_sync_service.dart';
+import '../widgets/animal_sync_panel.dart';
 import 'package:ringmaster_show/services/registration_write.dart';
 import 'package:ringmaster_show/reporting_core/network/transient_retry.dart';
 // lib/screens/enter_show_screen.dart
@@ -186,9 +186,11 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
   }
 
   Future<void> _reloadAll() async {
+    final next = _loadAll();
     setState(() {
-      _loadFuture = _loadAll();
+      _loadFuture = next;
     });
+    await next;
   }
 
   bool get _hasUnsubmittedCart =>
@@ -934,25 +936,6 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
   Future<List<Map<String, dynamic>>> _loadAnimals() async {
     final userId = AppSession.householdOwnerUserId;
     if (userId == null) return [];
-    try {
-      await BreederSyncService.refresh(userId);
-    } catch (_) {
-      if (mounted) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text(
-                  'Breeder sync unavailable. Showing previously saved animals; refresh to retry.',
-                ),
-              ),
-            );
-          }
-        });
-      }
-    }
-
-
     final res = await supabase
         .from('animals')
         .select(
@@ -2652,6 +2635,10 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
                       child: ListView(
                         padding: const EdgeInsets.only(bottom: 12),
                         children: [
+                          AnimalSyncPanel(
+                            ownerId: AppSession.householdOwnerUserId,
+                            onRefreshed: _reloadAll,
+                          ),
                           if (_hasShowAddons)
                             Padding(
                               padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),

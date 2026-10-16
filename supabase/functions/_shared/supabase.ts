@@ -3,7 +3,7 @@ import {
   createClient,
   SupabaseClient,
   User,
-} from "npm:@supabase/supabase-js@2";
+} from "npm:@supabase/supabase-js@2.95.0";
 
 function requiredEnv(name: string): string {
   const value = Deno.env.get(name)?.trim();

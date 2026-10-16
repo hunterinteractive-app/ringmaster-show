@@ -1,3 +1,5 @@
+import '../widgets/herdmaster_pilot_link_button.dart';
+import '../widgets/herdmaster_link_dialog.dart';
 import 'household_access_screen.dart';
 // lib/screens/account_settings_screen.dart
 
@@ -319,6 +321,19 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
           ? const Center(child: CircularProgressIndicator())
           : Column(
               children: [
+                StreamBuilder<AuthState>(
+                  stream: supabase.auth.onAuthStateChange,
+                  builder: (context, snapshot) => HerdMasterPilotLinkButton(
+                    user: supabase.auth.currentUser,
+                    ownerUserId: AppSession.householdOwnerUserId,
+                    supportMode: AppSession.isSupportMode,
+                    onPressed: () => showDialog<void>(
+                      context: context,
+                      barrierDismissible: false,
+                      builder: (_) => const HerdMasterLinkDialog(),
+                    ),
+                  ),
+                ),
                 if (AppSession.isSupportMode)
                   Padding(
                     padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),

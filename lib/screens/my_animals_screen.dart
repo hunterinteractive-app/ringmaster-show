@@ -1,4 +1,4 @@
-import '../services/breeder_sync_service.dart';
+import '../widgets/animal_sync_panel.dart';
 // lib/screens/my_animals_screen.dart
 
 import 'package:flutter/material.dart';
@@ -27,27 +27,26 @@ class MyAnimalsScreen extends StatefulWidget {
 }
 
 class _MyAnimalsScreenState extends State<MyAnimalsScreen> {
+  late Future<List<Map<String, dynamic>>> _animalsFuture;
+  String? _animalsOwnerId;
+  @override
+  void initState() {
+    super.initState();
+    _animalsOwnerId = AppSession.householdOwnerUserId;
+    _animalsFuture = _loadAnimals();
+  }
+
+  Future<void> _reloadAnimals() async {
+    final next = _loadAnimals();
+    setState(() {
+      _animalsFuture = next;
+    });
+    await next;
+  }
+
   Future<List<Map<String, dynamic>>> _loadAnimals() async {
     final userId = AppSession.householdOwnerUserId;
     if (userId == null) return [];
-    try {
-      await BreederSyncService.refresh(userId);
-    } catch (_) {
-      if (mounted) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text(
-                  'Breeder sync unavailable. Showing previously saved animals; refresh to retry.',
-                ),
-              ),
-            );
-          }
-        });
-      }
-    }
-
     final res = await supabase
         .from('animals')
         .select(
@@ -74,7 +73,8 @@ class _MyAnimalsScreenState extends State<MyAnimalsScreen> {
       }
 
       if (!mounted) return;
-      setState(() {});
+      await _reloadAnimals();
+      if (!mounted) return;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Animal deleted.')));
@@ -122,7 +122,7 @@ class _MyAnimalsScreenState extends State<MyAnimalsScreen> {
     final saved = await openAnimalEditorDialog(context, existing: existing);
 
     if (saved == true && mounted) {
-      setState(() {});
+      await _reloadAnimals();
     }
   }
 
@@ -169,6 +169,10 @@ class _MyAnimalsScreenState extends State<MyAnimalsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_animalsOwnerId != AppSession.householdOwnerUserId) {
+      _animalsOwnerId = AppSession.householdOwnerUserId;
+      _animalsFuture = _loadAnimals();
+    }
     return RingMasterPageShell(
       title: 'RingMaster Show',
       subtitle: 'My Animals',
@@ -197,128 +201,145 @@ class _MyAnimalsScreenState extends State<MyAnimalsScreen> {
           onPressed: () => _openAnimalEditor(),
         ),
       ],
-      body: FutureBuilder<List<Map<String, dynamic>>>(
-        future: _loadAnimals(),
-        builder: (context, snap) {
-          if (snap.connectionState != ConnectionState.done) {
-            return const Center(child: CircularProgressIndicator());
-          }
+      body: Column(
+        children: [
+          AnimalSyncPanel(
+            ownerId: AppSession.householdOwnerUserId,
+            onRefreshed: _reloadAnimals,
+          ),
+          Expanded(
+            child: FutureBuilder<List<Map<String, dynamic>>>(
+              future: _animalsFuture,
+              builder: (context, snap) {
+                if (snap.connectionState != ConnectionState.done) {
+                  return const Center(child: CircularProgressIndicator());
+                }
 
-          if (snap.hasError) {
-            return Center(child: Text('Error: ${snap.error}'));
-          }
+                if (snap.hasError) {
+                  return Center(child: Text('Error: ${snap.error}'));
+                }
 
-          final animals = snap.data ?? [];
+                final animals = snap.data ?? [];
 
-          if (animals.isEmpty) {
-            return const RMEmptyState(
-              title: 'No animals yet',
-              subtitle:
-                  'Add your animals here so they are ready when entering shows.',
-              icon: Icons.pets_outlined,
-            );
-          }
+                if (animals.isEmpty) {
+                  return const RMEmptyState(
+                    title: 'No animals yet',
+                    subtitle:
+                        'Add your animals here so they are ready when entering shows.',
+                    icon: Icons.pets_outlined,
+                  );
+                }
 
-          return ListView.builder(
-            padding: const EdgeInsets.all(AppSpacing.lg),
-            itemCount: animals.length,
-            itemBuilder: (context, i) {
-              final a = animals[i];
-              final species = (a['species'] ?? '').toString();
-              final breed = (a['breed'] ?? '').toString();
-              final variety = (a['variety'] ?? '').toString();
-              final sex = displaySexForSpecies(
-                species: a['species'],
-                sex: a['sex'],
-              );
-              final tattoo = (a['tattoo'] ?? '')
-                  .toString()
-                  .trim()
-                  .toUpperCase();
-              final name = (a['name'] ?? '').toString().trim();
+                return ListView.builder(
+                  padding: const EdgeInsets.all(AppSpacing.lg),
+                  itemCount: animals.length,
+                  itemBuilder: (context, i) {
+                    final a = animals[i];
+                    final species = (a['species'] ?? '').toString();
+                    final breed = (a['breed'] ?? '').toString();
+                    final variety = (a['variety'] ?? '').toString();
+                    final sex = displaySexForSpecies(
+                      species: a['species'],
+                      sex: a['sex'],
+                    );
+                    final tattoo = (a['tattoo'] ?? '')
+                        .toString()
+                        .trim()
+                        .toUpperCase();
+                    final name = (a['name'] ?? '').toString().trim();
 
-              final title = name.isEmpty
-                  ? '$breed${tattoo.isNotEmpty ? ' ($tattoo)' : ''}'
-                  : '$name${tattoo.isNotEmpty ? ' ($tattoo)' : ''}';
+                    final title = name.isEmpty
+                        ? '$breed${tattoo.isNotEmpty ? ' ($tattoo)' : ''}'
+                        : '$name${tattoo.isNotEmpty ? ' ($tattoo)' : ''}';
 
-              return Padding(
-                padding: const EdgeInsets.only(bottom: AppSpacing.md),
-                child: RMCard(
-                  onTap: () => _openAnimalEditor(existing: a),
-                  child: AppTheme.surfaceTextScope(
-                    context,
-                    child: Builder(
-                      builder: (context) => Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  title,
-                                  style: Theme.of(context).textTheme.titleMedium
-                                      ?.copyWith(fontWeight: FontWeight.w700),
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                      child: RMCard(
+                        onTap: () => _openAnimalEditor(existing: a),
+                        child: AppTheme.surfaceTextScope(
+                          context,
+                          child: Builder(
+                            builder: (context) => Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        title,
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .titleMedium
+                                            ?.copyWith(
+                                              fontWeight: FontWeight.w700,
+                                            ),
+                                      ),
+                                    ),
+                                    PopupMenuButton<String>(
+                                      tooltip: AppSession.isSupportMode
+                                          ? 'Actions while viewing as this user'
+                                          : 'Actions',
+                                      color: AppColors.surface,
+                                      iconColor: AppColors.text,
+                                      onSelected: (value) {
+                                        if (value == 'edit') {
+                                          _openAnimalEditor(existing: a);
+                                        } else if (value == 'delete') {
+                                          _confirmDeleteAnimal(a);
+                                        }
+                                      },
+                                      itemBuilder: (_) => const [
+                                        PopupMenuItem(
+                                          value: 'edit',
+                                          child: Text('Edit'),
+                                        ),
+                                        PopupMenuItem(
+                                          value: 'delete',
+                                          child: Text('Delete'),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
                                 ),
-                              ),
-                              PopupMenuButton<String>(
-                                tooltip: AppSession.isSupportMode
-                                    ? 'Actions while viewing as this user'
-                                    : 'Actions',
-                                color: AppColors.surface,
-                                iconColor: AppColors.text,
-                                onSelected: (value) {
-                                  if (value == 'edit') {
-                                    _openAnimalEditor(existing: a);
-                                  } else if (value == 'delete') {
-                                    _confirmDeleteAnimal(a);
-                                  }
-                                },
-                                itemBuilder: (_) => const [
-                                  PopupMenuItem(
-                                    value: 'edit',
-                                    child: Text('Edit'),
-                                  ),
-                                  PopupMenuItem(
-                                    value: 'delete',
-                                    child: Text('Delete'),
-                                  ),
-                                ],
-                              ),
-                            ],
+                                const SizedBox(height: AppSpacing.sm),
+                                Wrap(
+                                  spacing: AppSpacing.sm,
+                                  runSpacing: AppSpacing.sm,
+                                  children: [
+                                    RMBadge(
+                                      text: _speciesLabel(species),
+                                      icon: Icons.category_outlined,
+                                    ),
+                                    if (sex.isNotEmpty)
+                                      RMBadge(
+                                        text: sex,
+                                        icon: Icons.info_outline,
+                                      ),
+                                    RMBadge(
+                                      text: _dobBadgeText(a),
+                                      icon: Icons.cake_outlined,
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: AppSpacing.md),
+                                Text(
+                                  '$breed • $variety',
+                                  style: Theme.of(context).textTheme.bodyMedium
+                                      ?.copyWith(color: AppColors.muted),
+                                ),
+                              ],
+                            ),
                           ),
-                          const SizedBox(height: AppSpacing.sm),
-                          Wrap(
-                            spacing: AppSpacing.sm,
-                            runSpacing: AppSpacing.sm,
-                            children: [
-                              RMBadge(
-                                text: _speciesLabel(species),
-                                icon: Icons.category_outlined,
-                              ),
-                              if (sex.isNotEmpty)
-                                RMBadge(text: sex, icon: Icons.info_outline),
-                              RMBadge(
-                                text: _dobBadgeText(a),
-                                icon: Icons.cake_outlined,
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: AppSpacing.md),
-                          Text(
-                            '$breed • $variety',
-                            style: Theme.of(context).textTheme.bodyMedium
-                                ?.copyWith(color: AppColors.muted),
-                          ),
-                        ],
+                        ),
                       ),
-                    ),
-                  ),
-                ),
-              );
-            },
-          );
-        },
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
