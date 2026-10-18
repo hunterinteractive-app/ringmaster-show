@@ -94,6 +94,7 @@ class _ShowRoleAssignmentsDialogState
   bool _saving = false;
   bool _searching = false;
   String? _msg;
+  String? _ownerUserId;
 
   final _searchController = TextEditingController();
   Timer? _searchDebounce;
@@ -138,6 +139,11 @@ class _ShowRoleAssignmentsDialogState
     }
   }
 
+  String _assignmentRoleLabel(_RoleAssignmentRow assignment) =>
+      assignment.userId == _ownerUserId && assignment.role == 'admin'
+      ? 'Account Owner / Administrator'
+      : _roleLabel(assignment.role);
+
   Future<void> _load() async {
     setState(() {
       _loading = true;
@@ -145,9 +151,15 @@ class _ShowRoleAssignmentsDialogState
     });
 
     try {
+      final show = await supabase
+          .from('shows')
+          .select('owner_user_id')
+          .eq('id', widget.showId)
+          .single();
+      _ownerUserId = show['owner_user_id']?.toString();
       final rows = await supabase
           .from('role_assignments')
-          .select('id,user_id,role')
+          .select('id,user_id,role,staff_name')
           .eq('show_id', widget.showId)
           .inFilter('role', _allowedRoles)
           .order('role')
@@ -173,7 +185,10 @@ class _ShowRoleAssignmentsDialogState
           userId: userId,
           role: row['role']?.toString() ?? '',
           email: user?.email ?? '',
-          displayName: user?.displayName ?? '',
+          displayName:
+              (row['staff_name']?.toString().trim().isNotEmpty ?? false)
+              ? row['staff_name'].toString()
+              : user?.displayName ?? '',
         );
       }).toList();
 
@@ -348,6 +363,7 @@ class _ShowRoleAssignmentsDialogState
           .select('id,role')
           .eq('show_id', widget.showId)
           .eq('user_id', user.id)
+          .eq('role', _selectedRole)
           .maybeSingle();
 
       final wasUpdate = existing != null;
@@ -368,11 +384,12 @@ class _ShowRoleAssignmentsDialogState
 
       final assignmentId =
           (await supabase.rpc(
-            'assign_show_staff_role',
+            'assign_show_staff_person',
             params: {
               'p_show_id': widget.showId,
               'p_user_id': user.id,
               'p_role': _selectedRole,
+              'p_exhibitor_id': user.exhibitorId,
             },
           ))?.toString() ??
           '';
@@ -387,7 +404,8 @@ class _ShowRoleAssignmentsDialogState
 
       final nextAssignments = [..._assignments];
       final existingIndex = nextAssignments.indexWhere(
-        (assignment) => assignment.userId == user.id,
+        (assignment) =>
+            assignment.userId == user.id && assignment.role == _selectedRole,
       );
 
       if (existingIndex >= 0) {
@@ -430,7 +448,7 @@ class _ShowRoleAssignmentsDialogState
       builder: (context) => AlertDialog(
         title: const Text('Remove role assignment?'),
         content: Text(
-          'Remove ${assignment.personLabel} as ${_roleLabel(assignment.role)}?',
+          'Remove ${assignment.personLabel} as ${_assignmentRoleLabel(assignment)}?',
         ),
         actions: [
           TextButton(
@@ -522,7 +540,7 @@ class _ShowRoleAssignmentsDialogState
       child: ListTile(
         leading: const Icon(Icons.assignment_ind),
         title: Text(assignment.personLabel),
-        subtitle: Text(_roleLabel(assignment.role)),
+        subtitle: Text(_assignmentRoleLabel(assignment)),
         trailing: IconButton(
           tooltip: 'Remove',
           onPressed: _saving ? null : () => _removeAssignment(assignment),
