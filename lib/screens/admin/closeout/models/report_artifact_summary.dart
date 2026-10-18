@@ -26,6 +26,15 @@ class ReportArtifactSummary {
   final int errorCount;
   final Map<String, dynamic> metadata;
 
+  String get statusLabel {
+    if (reportName == 'arba_report' &&
+        artifactStatus.trim().toLowerCase() == 'warning' &&
+        metadata['deferred_until_report_delivery'] == true) {
+      return 'Not generated yet — awaiting report delivery';
+    }
+    return closeoutReportStatusLabel(closeoutReportUiStatus(artifactStatus));
+  }
+
   ReportArtifactSummary({
     required this.id,
     this.showId,

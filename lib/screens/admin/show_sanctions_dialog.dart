@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:ringmaster_show/theme/app_theme.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ringmaster_show/services/show_lock_service.dart';
+import 'package:ringmaster_show/services/sanction_save_policy.dart';
 import 'sanction_directory_screen.dart';
 
 final supabase = Supabase.instance.client;
@@ -926,9 +927,20 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
           final existingId = _existingRecordIds[key];
 
           if (value.isEmpty) {
+            if (preserveSanctionWithoutNumber(_requestStatusByCellKey[key])) {
+              continue;
+            }
             if (existingId != null && existingId.isNotEmpty) {
-              await supabase.from(_table).delete().eq('id', existingId);
-              _existingRecordIds.remove(key);
+              // Also protect flags added since this dialog loaded.
+              final deleted = await supabase
+                  .from(_table)
+                  .delete()
+                  .eq('id', existingId)
+                  .or(
+                    'request_status.is.null,request_status.eq.received,request_status.eq.',
+                  )
+                  .select('id');
+              if (deleted.isNotEmpty) _existingRecordIds.remove(key);
             }
             continue;
           }
@@ -995,6 +1007,7 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
         }
       }
 
+      await _loadSavedSanctions();
       if (!mounted) return;
       setState(() {
         _saving = false;

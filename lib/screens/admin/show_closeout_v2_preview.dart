@@ -4366,7 +4366,7 @@ class _ArbaReportActionsState extends State<_ArbaReportActions> {
     final section = arbaSectionDisplayName(metadata: report.metadata);
     if (report.artifactStatus != 'failed') {
       return '$section — '
-          '${closeoutReportStatusLabel(closeoutReportUiStatus(report.artifactStatus))}';
+          '${report.statusLabel}';
     }
 
     final failure = closeoutFailureDisplay(
@@ -6091,9 +6091,9 @@ class _SelectedReportStatus extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final selectedReportName = reportName;
-    final status = closeoutReportStatusLabel(
-      closeoutReportUiStatus(artifact?.artifactStatus),
-    );
+    final status =
+        artifact?.statusLabel ??
+        closeoutReportStatusLabel(closeoutReportUiStatus(null));
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(14),

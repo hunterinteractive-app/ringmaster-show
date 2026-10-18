@@ -25,6 +25,30 @@ ReportArtifactSummary artifact({
 );
 
 void main() {
+  test('deferred ARBA is not shown as failed', () {
+    final report = artifact(
+      reportName: 'arba_report',
+      status: 'warning',
+      metadata: {'deferred_until_report_delivery': true},
+    );
+    expect(report.statusLabel, 'Not generated yet — awaiting report delivery');
+    expect(
+      artifact(
+        reportName: 'arba_report',
+        status: 'failed',
+        metadata: {'deferred_until_report_delivery': true},
+      ).statusLabel,
+      'Failed',
+    );
+    expect(
+      artifact(
+        reportName: 'arba_report',
+        status: 'generated',
+        metadata: {'deferred_until_report_delivery': true},
+      ).statusLabel,
+      'Generated',
+    );
+  });
   group('Closeout artifact parsing', () {
     test(
       'retains every dashboard identity, scope, status, and storage field',
