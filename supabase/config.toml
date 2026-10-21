@@ -60,3 +60,7 @@ verify_jwt = false
 [functions.pedigreehq-api]
 # Handler validates verified user sessions or provider-scoped connection credentials.
 verify_jwt = false
+
+[functions.send-breeder-billing]
+# Server-only relay authorized with existing Breeder integration key.
+verify_jwt = false
