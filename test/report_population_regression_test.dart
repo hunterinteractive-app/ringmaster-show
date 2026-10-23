@@ -51,6 +51,29 @@ void main() {
     }
   }
 
+  for (final (award, code) in [
+    ('BEST 4-CLASS', 'B4C'),
+    ('BEST 6-CLASS', 'B6C'),
+  ]) {
+    for (final awards in ['$award,BOB,BOV', 'BOV,BOB,$award']) {
+      test('$awards prints the class-size win on the leg', () async {
+        final fixture = _Fixture(_qualificationRows(), award: awards);
+        addTearDown(fixture.client.dispose);
+        final legs = await LegsReportLoader(fixture.repo).load(_request);
+        expect(legs.single.winCode, code);
+      });
+    }
+    test('BIS remains above $award on the leg', () async {
+      final fixture = _Fixture(
+        _qualificationRows(),
+        award: '$award,BOB,BIS',
+      );
+      addTearDown(fixture.client.dispose);
+      final legs = await LegsReportLoader(fixture.repo).load(_request);
+      expect(legs.single.winCode, 'BIS');
+    });
+  }
+
   test(
     'specialty RIS falls back to qualifying BOB rather than printing RIS',
     () async {

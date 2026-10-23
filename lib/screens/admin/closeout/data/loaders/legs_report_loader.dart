@@ -1207,7 +1207,7 @@ class LegsReportLoader {
         ctx.breedExhibitors >= 3) {
       return _LegRuleMatch(
         rule: 2,
-        priority: 3,
+        priority: 4,
         animalsCount: ctx.breedAnimals,
         exhibitorsCount: ctx.breedExhibitors,
       );
@@ -1218,7 +1218,7 @@ class LegsReportLoader {
         ctx.breedSameSexExhibitors >= 3) {
       return _LegRuleMatch(
         rule: 3,
-        priority: 4,
+        priority: 5,
         animalsCount: ctx.breedSameSexAnimals,
         exhibitorsCount: ctx.breedSameSexExhibitors,
       );
@@ -1229,7 +1229,7 @@ class LegsReportLoader {
         ctx.groupExhibitors >= 3) {
       return _LegRuleMatch(
         rule: 4,
-        priority: 5,
+        priority: 6,
         animalsCount: ctx.groupAnimals,
         exhibitorsCount: ctx.groupExhibitors,
       );
@@ -1240,7 +1240,7 @@ class LegsReportLoader {
         ctx.groupSameSexExhibitors >= 3) {
       return _LegRuleMatch(
         rule: 5,
-        priority: 6,
+        priority: 7,
         animalsCount: ctx.groupSameSexAnimals,
         exhibitorsCount: ctx.groupSameSexExhibitors,
       );
@@ -1251,7 +1251,7 @@ class LegsReportLoader {
         ctx.varietyExhibitors >= 3) {
       return _LegRuleMatch(
         rule: 6,
-        priority: 7,
+        priority: 8,
         animalsCount: ctx.varietyAnimals,
         exhibitorsCount: ctx.varietyExhibitors,
       );
@@ -1262,12 +1262,13 @@ class LegsReportLoader {
         ctx.varietySameSexExhibitors >= 3) {
       return _LegRuleMatch(
         rule: 7,
-        priority: 8,
+        priority: 9,
         animalsCount: ctx.varietySameSexAnimals,
         exhibitorsCount: ctx.varietySameSexExhibitors,
       );
     }
 
+    // Class-size winners outrank breed awards on the single leg certificate.
     if ((normalized == 'BEST_4_CLASS' ||
             normalized == 'BEST_6_CLASS' ||
             normalized == 'BEST4CLASS' ||
@@ -1278,7 +1279,7 @@ class LegsReportLoader {
         ctx.showExhibitors >= 3) {
       return _LegRuleMatch(
         rule: 9,
-        priority: 9,
+        priority: 3,
         animalsCount: ctx.showAnimals,
         exhibitorsCount: ctx.showExhibitors,
       );
