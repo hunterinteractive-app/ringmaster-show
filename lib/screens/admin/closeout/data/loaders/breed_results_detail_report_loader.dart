@@ -4,6 +4,7 @@ import 'package:ringmaster_show/utils/cavy/cavy_awards.dart';
 import 'package:ringmaster_show/utils/species_sex.dart';
 
 import '../report_data_reader.dart';
+import '../../../../../services/results/cod_eligibility.dart';
 import '../../models/base/report_request.dart';
 import '../../models/clubs/breed_results_detail_report_data.dart';
 import '../../utils/club_report_grouping.dart';
@@ -359,7 +360,7 @@ class BreedResultsDetailReportLoader {
     final counts = _buildAwardCounts(reportRows, overallRows: overallRows);
     final totalAnimalsShown = reportRows
         .where((row) => !_isFurOrWoolRow(row))
-        .where(breedResultsDetailIsCountableJudgedEntry)
+        .where(breedResultsDetailIsSweepstakesCountable)
         .length;
     final resultRowsForAwardLookup = _mergeResultRows(reportRows, overallRows);
     final sweepstakesPoints = await _loadSweepstakesPointsLookup(
@@ -926,16 +927,21 @@ class BreedResultsDetailReportLoader {
         .where((row) => !_isFurOrWoolRow(row))
         .toList();
     final counts = <String, _JudgedCount>{};
-    counts['BREED'] = countFor(regularRows);
+    final recognizedRows = regularRows.where(
+      breedResultsDetailIsSweepstakesCountable,
+    );
+    counts['BREED'] = countFor(recognizedRows);
     for (final age in const ['junior', 'intermediate', 'senior']) {
       counts['BREED_AGE::$age'] = countFor(
-        regularRows.where(
+        recognizedRows.where(
           (row) => _breedAgeKey(_safe(row['class_name'])) == age,
         ),
       );
     }
     if (regularOverallRows.isNotEmpty) {
-      counts['OVERALL'] = countFor(regularOverallRows);
+      counts['OVERALL'] = countFor(
+        regularOverallRows.where(breedResultsDetailIsSweepstakesCountable),
+      );
     } else {
       counts['OVERALL'] = counts['BREED'] ?? const _JudgedCount();
     }
@@ -946,7 +952,9 @@ class BreedResultsDetailReportLoader {
         .toSet();
 
     for (final sex in sexes) {
-      final sexRows = regularRows.where((r) => _sexKey(_safe(r['sex'])) == sex);
+      final sexRows = recognizedRows.where(
+        (r) => _sexKey(_safe(r['sex'])) == sex,
+      );
       counts['BREED_SEX::$sex'] = countFor(sexRows);
     }
 
@@ -2348,6 +2356,11 @@ Map<String, dynamic> breedResultsDetailWithoutFurOrWoolFields(
     'entry_fur_placement': null,
   };
 }
+
+// COD placements remain visible in their own classes, but do not increase
+// recognized breed/show sweepstakes totals or breed award populations.
+bool breedResultsDetailIsSweepstakesCountable(Map<String, dynamic> row) =>
+    !isCodEntry(row) && breedResultsDetailIsCountableJudgedEntry(row);
 
 bool breedResultsDetailIsCountableJudgedEntry(Map<String, dynamic> row) {
   if (_detailSafe(row['scratched_at']).isNotEmpty ||

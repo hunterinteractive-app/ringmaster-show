@@ -1,6 +1,7 @@
 // lib/screens/admin/closeout/pdf/builders/breed_results_detail_report_pdf.dart
 
 import 'dart:typed_data';
+import '../../../../../services/results/cod_eligibility.dart';
 
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -70,7 +71,10 @@ class BreedResultsDetailReportPdf {
             BreedResultsDetailSection(
               showLetter: data.showLetter,
               judgeName: data.judgeName,
-              totalAnimalsShown: _totalAnimalsShown(data.varieties),
+              totalAnimalsShown: _totalAnimalsShown(
+                data.varieties,
+                data.breedName,
+              ),
               breedAwards: data.breedAwards,
               varieties: data.varieties,
               noResultsFound: data.noResultsFound,
@@ -307,8 +311,12 @@ class BreedResultsDetailReportPdf {
     );
   }
 
-  int _totalAnimalsShown(List<VarietySection> varieties) {
+  int _totalAnimalsShown(List<VarietySection> varieties, String breedName) {
     return varieties
+        .where(
+          (variety) =>
+              !isCodEntry({'breed': breedName, 'variety': variety.varietyName}),
+        )
         .expand((variety) => variety.sexSections)
         .expand((sexSection) => sexSection.classes)
         .where(
