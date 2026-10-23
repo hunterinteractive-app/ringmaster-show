@@ -4,7 +4,7 @@ import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { supabase } from "@/lib/supabase";
 
-const PORTAL_VERSION = "v0.1.22";
+const PORTAL_VERSION = "v0.1.23";
 const portalCacheKey = (email: string) =>
   `ringmaster-sweepstakes-portal:${email.toLowerCase()}`;
 
@@ -729,14 +729,14 @@ function Shows({
       value: { completed: 0, total: 0, phase: "queued", estimated_seconds_remaining: null },
     });
     let downloads = await getReports(show, refresh);
-    for (let attempt = 0; !downloads && attempt < 30; attempt += 1) {
-      setMessage("Waiting for the latest report changes to finish…");
-      await new Promise((resolve) => window.setTimeout(resolve, 2000));
+    for (let attempt = 0; !downloads && attempt < 60; attempt += 1) {
+      setMessage("Reports are being prepared on the server. Waiting for them to finish…");
+      await new Promise((resolve) => window.setTimeout(resolve, 5000));
       downloads = await getReports(show, false);
     }
     if (!downloads) {
       throw new Error(
-        "The latest reports are still being generated. Please try again in a moment.",
+        "Reports are still being generated on the server. You can return later and select Download to check again; this will not restart generation.",
       );
     }
     return downloads;

@@ -42,6 +42,38 @@ Dispatch responses keep report-render `failed` counts separate from internal
 HTTP `request_failures`. `remaining` is the minimum successful global queue
 snapshot from the final observed round; it is never summed across workers.
 
+### Immediate Sweepstakes portal downloads
+
+The `sweepstakes-download-reports` Edge Function queues fresh artifacts before
+invoking the private report worker's `/dispatch` endpoint directly. The existing
+scheduler identity has `roles/run.invoker` only on this service. No Scheduler
+run permission is required, and no refund scheduler is invoked.
+
+The Edge Function uses `EdgeRuntime.waitUntil` to keep the authenticated HTTP
+request alive after returning the queued response. `/dispatch` holds its response
+until the bounded render batch finishes. A wake-up is attempted for every committed
+request, with a 120-second bound and sanitized failure logging. The database queue
+is durable; the one-minute scheduled worker recovers work if the Edge instance
+shuts down or direct invocation fails. Polling does not reset or requeue work.
+
+Deployment order:
+
+1. Apply `20261023091948_deduplicate_portal_report_regeneration.sql`.
+2. Reuse the approved scheduler identity's service-specific `roles/run.invoker`.
+   Do not grant Scheduler run permissions or project Editor/Owner.
+3. Set server-only Edge secrets `CLOSEOUT_WORKER_URL` to the private Cloud Run
+   service origin, `CLOSEOUT_WORKER_TRIGGER_TOKEN` to its application work token,
+   and `CLOSEOUT_WORKER_GOOGLE_CREDENTIALS` to the approved account's JSON key.
+   Transfer through protected temporary files, delete them afterward, and never
+   expose credentials in browser variables, logs, source control or arguments.
+4. Deploy the Edge Function and portal. Keep the scheduled backup enabled.
+5. Verify fresh artifact generations finish after Download, including concurrent
+   requests. `worker_trigger: requested` means a background wake-up was initiated,
+   not that rendering has completed. Verify actual artifact status before download.
+
+Cloud Run remains private and requires both Google OIDC and the application token.
+Full show generation and the individual PDF build timeout are unchanged.
+
 Required environment variables outside `--dry-run` are `SUPABASE_URL` and
 `SUPABASE_SERVICE_ROLE_KEY`. Optional variables are `WORKER_ID`,
 `TASK_BATCH_SIZE`, `POLL_INTERVAL_SECONDS`, `MAX_CONCURRENT_RENDERS`,
