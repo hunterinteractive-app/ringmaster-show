@@ -4,7 +4,7 @@ import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { supabase } from "@/lib/supabase";
 
-const PORTAL_VERSION = "v0.1.23";
+const PORTAL_VERSION = "v0.1.24";
 const portalCacheKey = (email: string) =>
   `ringmaster-sweepstakes-portal:${email.toLowerCase()}`;
 
@@ -42,10 +42,11 @@ export default function Home() {
   const [clubId, setClubId] = useState("");
   const [loading, setLoading] = useState(true);
   const loadingPortalRef = useRef(false);
+  const loadedPortalEmailRef = useRef<string | null>(null);
 
   useEffect(() => {
     async function openPortal(userEmail: string) {
-      if (loadingPortalRef.current) return;
+      if (loadingPortalRef.current || loadedPortalEmailRef.current === userEmail) return;
       loadingPortalRef.current = true;
       setEmail(userEmail);
       let displayedCachedPortal = false;
@@ -108,6 +109,7 @@ export default function Home() {
             ? currentClubId
             : (shows[0]?.portal_club_id ?? ""),
         );
+        loadedPortalEmailRef.current = userEmail;
         if (!displayedCachedPortal) setScreen("shows");
         try {
           window.sessionStorage.setItem(
@@ -133,8 +135,13 @@ export default function Home() {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === "SIGNED_IN" && session)
-        void openPortal(session.user.email ?? "");
+      if (event === "SIGNED_IN" && session) {
+        // Supabase also emits SIGNED_IN on tab focus. Keep the current view
+        // for the same loaded account, and avoid auth work inside its callback.
+        const userEmail = session.user.email ?? "";
+        if (loadedPortalEmailRef.current !== userEmail)
+          window.setTimeout(() => { void openPortal(userEmail); }, 0);
+      }
     });
     return () => subscription.unsubscribe();
   }, []);
@@ -196,6 +203,7 @@ export default function Home() {
   }
 
   async function signOut() {
+    loadedPortalEmailRef.current = null;
     await supabase.auth.signOut();
     setScreen("sign-in");
     setPortalShows([]);
