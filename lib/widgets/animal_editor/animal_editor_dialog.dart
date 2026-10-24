@@ -8,6 +8,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ringmaster_show/services/app_session.dart';
 import 'package:ringmaster_show/theme/app_theme.dart';
 import 'package:ringmaster_show/utils/species_sex.dart';
+import 'package:ringmaster_show/utils/catalog_label.dart';
 import 'animal_breed_service.dart';
 
 import 'focus_open_autocomplete.dart';
@@ -74,20 +75,17 @@ class _AnimalEditorDialogState extends State<AnimalEditorDialog> {
 
   bool get _hasValidBreedSelection {
     if (_breedId == null) return false;
-    final breedName = _breedText.text.trim().toLowerCase();
-    return _breedOptions.any((b) {
-      return (b['id']?.toString() == _breedId) &&
-          ((b['name'] ?? '').toString().trim().toLowerCase() == breedName);
-    });
+    return canonicalCatalogLabel(
+          _breedText.text,
+          _breedOptions,
+          selectedId: _breedId,
+        ) !=
+        null;
   }
 
   bool get _hasValidVarietySelection {
     if (!_hasValidBreedSelection) return false;
-    final varietyName = _varietyText.text.trim().toLowerCase();
-    if (varietyName.isEmpty) return false;
-    return _varietyOptions.any((v) {
-      return ((v['name'] ?? '').toString().trim().toLowerCase() == varietyName);
-    });
+    return canonicalCatalogLabel(_varietyText.text, _varietyOptions) != null;
   }
 
   bool get _hasValidSexSelection {
@@ -380,8 +378,12 @@ class _AnimalEditorDialogState extends State<AnimalEditorDialog> {
       'species': _species,
       'name': _name.text.trim().isEmpty ? null : _name.text.trim(),
       'tattoo': _tattoo.text.trim().toUpperCase(),
-      'breed': _breedText.text.trim(),
-      'variety': _varietyText.text.trim(),
+      'breed': canonicalCatalogLabel(
+        _breedText.text,
+        _breedOptions,
+        selectedId: _breedId,
+      )!,
+      'variety': canonicalCatalogLabel(_varietyText.text, _varietyOptions)!,
       'sex': _sexValue,
       'birth_date': _isDobUnknown
           ? null
