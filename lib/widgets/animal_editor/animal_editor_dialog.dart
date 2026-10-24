@@ -1,3 +1,4 @@
+import 'package:ringmaster_show/widgets/keep_focused_field_visible.dart';
 import 'package:ringmaster_show/services/registration_write.dart';
 import 'package:ringmaster_show/reporting_core/network/transient_retry.dart';
 // lib/widgets/animal_editor/animal_editor_dialog.dart
@@ -428,277 +429,279 @@ class _AnimalEditorDialogState extends State<AnimalEditorDialog> {
         ? 'Choose a sex from the list.'
         : null;
 
-    return AppTheme.surfaceTextScope(
-      context,
-      child: AlertDialog(
-        backgroundColor: AppColors.surface,
-        surfaceTintColor: Colors.transparent,
-        titleTextStyle: Theme.of(context).textTheme.titleLarge?.copyWith(
-          color: AppColors.text,
-          fontWeight: FontWeight.w800,
-        ),
-        contentTextStyle: Theme.of(
-          context,
-        ).textTheme.bodyMedium?.copyWith(color: AppColors.text),
-        title: Text(_isEdit ? 'Edit Animal' : 'Add Animal'),
-        content: Builder(
-          builder: (context) => SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                DropdownButtonFormField<String>(
-                  initialValue: _species,
-                  items: const [
-                    DropdownMenuItem(value: 'rabbit', child: Text('Rabbit')),
-                    DropdownMenuItem(value: 'cavy', child: Text('Cavy')),
-                  ],
-                  onChanged: (v) async {
-                    final newSpecies = v ?? 'rabbit';
+    return KeepFocusedFieldVisible(
+      child: AppTheme.surfaceTextScope(
+        context,
+        child: AlertDialog(
+          backgroundColor: AppColors.surface,
+          surfaceTintColor: Colors.transparent,
+          titleTextStyle: Theme.of(context).textTheme.titleLarge?.copyWith(
+            color: AppColors.text,
+            fontWeight: FontWeight.w800,
+          ),
+          contentTextStyle: Theme.of(
+            context,
+          ).textTheme.bodyMedium?.copyWith(color: AppColors.text),
+          title: Text(_isEdit ? 'Edit Animal' : 'Add Animal'),
+          content: Builder(
+            builder: (context) => SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  DropdownButtonFormField<String>(
+                    initialValue: _species,
+                    items: const [
+                      DropdownMenuItem(value: 'rabbit', child: Text('Rabbit')),
+                      DropdownMenuItem(value: 'cavy', child: Text('Cavy')),
+                    ],
+                    onChanged: (v) async {
+                      final newSpecies = v ?? 'rabbit';
 
-                    setState(() {
-                      _species = newSpecies;
-                      _sexValue = newSpecies == 'rabbit' ? 'Buck' : 'Boar';
-                      _sexText.text = _sexValue ?? '';
-                      _breedId = null;
-                      _breedOptions = [];
-                      _varietyOptions = [];
-                      _breedText.clear();
-                      _varietyText.clear();
-                      _msg = null;
-                    });
+                      setState(() {
+                        _species = newSpecies;
+                        _sexValue = newSpecies == 'rabbit' ? 'Buck' : 'Boar';
+                        _sexText.text = _sexValue ?? '';
+                        _breedId = null;
+                        _breedOptions = [];
+                        _varietyOptions = [];
+                        _breedText.clear();
+                        _varietyText.clear();
+                        _msg = null;
+                      });
 
-                    await _loadBreedsForSpecies();
-                  },
-                  decoration: const InputDecoration(
-                    labelText: 'Species (required)',
-                  ),
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: _name,
-                  focusNode: _nameFocus,
-                  textInputAction: TextInputAction.next,
-                  onSubmitted: (_) =>
-                      FocusScope.of(context).requestFocus(_tattooFocus),
-                  decoration: const InputDecoration(
-                    labelText: 'Name (optional)',
-                  ),
-                ),
-                TextField(
-                  controller: _tattoo,
-                  focusNode: _tattooFocus,
-                  textInputAction: TextInputAction.next,
-                  textCapitalization: TextCapitalization.characters,
-                  inputFormatters: [UpperCaseTextFormatter()],
-                  onSubmitted: (_) =>
-                      FocusScope.of(context).requestFocus(_breedFocus),
-                  decoration: const InputDecoration(
-                    labelText: 'Tattoo / ID (required)',
-                  ),
-                ),
-                const SizedBox(height: 12),
-                if (_loadingBreeds) const LinearProgressIndicator(),
-                FocusOpenAutocomplete(
-                  textController: _breedText,
-                  focusNode: _breedFocus,
-                  labelText: 'Breed (required)',
-                  hintText: 'Type to search and select a breed…',
-                  options: _breedOptions,
-                  displayStringForOption: (opt) =>
-                      (opt['name'] ?? '').toString(),
-                  onSelectedAsync: (opt) async {
-                    setState(() {
-                      _breedId = (opt['id'] ?? '').toString();
-                      _breedText.text = (opt['name'] as String);
-                      _varietyText.clear();
-                      _msg = null;
-                    });
-                    await _loadVarietiesForBreed(_breedId!);
-                    if (!context.mounted) return;
-                    FocusScope.of(context).requestFocus(_varietyFocus);
-                  },
-                ),
-                if (invalidBreedWarning != null) ...[
-                  const SizedBox(height: 6),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Semantics(
-                      liveRegion: true,
-                      child: Text(
-                        invalidBreedWarning,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: AppColors.danger,
-                        ),
-                      ),
+                      await _loadBreedsForSpecies();
+                    },
+                    decoration: const InputDecoration(
+                      labelText: 'Species (required)',
                     ),
                   ),
-                ],
-                const SizedBox(height: 12),
-                if (_breedId != null && _loadingVarieties)
-                  const LinearProgressIndicator(),
-                FocusOpenAutocomplete(
-                  textController: _varietyText,
-                  focusNode: _varietyFocus,
-                  labelText: 'Variety (required)',
-                  hintText: _breedId == null
-                      ? 'Select a breed first'
-                      : 'Type to search and select a variety…',
-                  options: _breedId == null ? const [] : _varietyOptions,
-                  displayStringForOption: (opt) =>
-                      (opt['name'] ?? '').toString(),
-                  enabled: _breedId != null,
-                  readOnly: _breedId == null,
-                  suffixIcon: _varietyText.text.trim().isEmpty
-                      ? null
-                      : IconButton(
-                          tooltip: 'Clear variety',
-                          onPressed: _saving
-                              ? null
-                              : () {
-                                  setState(() {
-                                    _varietyText.clear();
-                                    _msg = null;
-                                  });
-                                },
-                          icon: const Icon(Icons.clear),
-                        ),
-                  onSelected: (opt) {
-                    setState(() {
-                      _varietyText.text = (opt['name'] as String);
-                      _msg = null;
-                    });
-                    FocusScope.of(context).requestFocus(_sexFocus);
-                  },
-                ),
-                if (invalidVarietyWarning != null) ...[
-                  const SizedBox(height: 6),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Semantics(
-                      liveRegion: true,
-                      child: Text(
-                        invalidVarietyWarning,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: AppColors.danger,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-                const SizedBox(height: 12),
-                DropdownButtonFormField<String>(
-                  initialValue:
-                      _sexValue != null && _sexOptions.contains(_sexValue)
-                      ? _sexValue
-                      : null,
-                  decoration: const InputDecoration(
-                    labelText: 'Sex (required)',
-                  ),
-                  items: _sexOptions
-                      .map(
-                        (sex) => DropdownMenuItem<String>(
-                          value: sex,
-                          child: Text(sex),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: _saving
-                      ? null
-                      : (value) {
-                          setState(() {
-                            _sexValue = value;
-                            _sexText.text = value ?? '';
-                            _msg = null;
-                          });
-                        },
-                ),
-                if (invalidSexWarning != null) ...[
-                  const SizedBox(height: 6),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Semantics(
-                      liveRegion: true,
-                      child: Text(
-                        invalidSexWarning,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: AppColors.danger,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-                const SizedBox(height: 12),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    'Exact date not required. This is only used to help project the correct class when entering shows.',
-                    style: Theme.of(
-                      context,
-                    ).textTheme.bodySmall?.copyWith(color: AppColors.muted),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        _isDobUnknown
-                            ? 'Birth date: Unknown'
-                            : 'Birth date: ${_birthDate == null ? "(optional)" : _birthDate!.toString().substring(0, 10)}',
-                        style: const TextStyle(
-                          color: AppColors.text,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                    TextButton(
-                      onPressed: (_saving || _isDobUnknown)
-                          ? null
-                          : _pickBirthDate,
-                      child: const Text('Pick'),
-                    ),
-                  ],
-                ),
-                CheckboxListTile(
-                  contentPadding: EdgeInsets.zero,
-                  activeColor: AppColors.header,
-                  checkColor: AppColors.text,
-                  title: const Text(
-                    'Unknown DOB',
-                    style: TextStyle(color: AppColors.text),
-                  ),
-                  value: _isDobUnknown,
-                  onChanged: _saving
-                      ? null
-                      : (v) => _toggleUnknownDob(v ?? false),
-                ),
-                if (_msg != null) ...[
                   const SizedBox(height: 8),
-                  Semantics(
-                    liveRegion: true,
-                    child: Text(
-                      _msg!,
-                      style: const TextStyle(color: AppColors.danger),
+                  TextField(
+                    controller: _name,
+                    focusNode: _nameFocus,
+                    textInputAction: TextInputAction.next,
+                    onSubmitted: (_) =>
+                        FocusScope.of(context).requestFocus(_tattooFocus),
+                    decoration: const InputDecoration(
+                      labelText: 'Name (optional)',
                     ),
                   ),
+                  TextField(
+                    controller: _tattoo,
+                    focusNode: _tattooFocus,
+                    textInputAction: TextInputAction.next,
+                    textCapitalization: TextCapitalization.characters,
+                    inputFormatters: [UpperCaseTextFormatter()],
+                    onSubmitted: (_) =>
+                        FocusScope.of(context).requestFocus(_breedFocus),
+                    decoration: const InputDecoration(
+                      labelText: 'Tattoo / ID (required)',
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  if (_loadingBreeds) const LinearProgressIndicator(),
+                  FocusOpenAutocomplete(
+                    textController: _breedText,
+                    focusNode: _breedFocus,
+                    labelText: 'Breed (required)',
+                    hintText: 'Type to search and select a breed…',
+                    options: _breedOptions,
+                    displayStringForOption: (opt) =>
+                        (opt['name'] ?? '').toString(),
+                    onSelectedAsync: (opt) async {
+                      setState(() {
+                        _breedId = (opt['id'] ?? '').toString();
+                        _breedText.text = (opt['name'] as String);
+                        _varietyText.clear();
+                        _msg = null;
+                      });
+                      await _loadVarietiesForBreed(_breedId!);
+                      if (!context.mounted) return;
+                      FocusScope.of(context).requestFocus(_varietyFocus);
+                    },
+                  ),
+                  if (invalidBreedWarning != null) ...[
+                    const SizedBox(height: 6),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Semantics(
+                        liveRegion: true,
+                        child: Text(
+                          invalidBreedWarning,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AppColors.danger,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 12),
+                  if (_breedId != null && _loadingVarieties)
+                    const LinearProgressIndicator(),
+                  FocusOpenAutocomplete(
+                    textController: _varietyText,
+                    focusNode: _varietyFocus,
+                    labelText: 'Variety (required)',
+                    hintText: _breedId == null
+                        ? 'Select a breed first'
+                        : 'Type to search and select a variety…',
+                    options: _breedId == null ? const [] : _varietyOptions,
+                    displayStringForOption: (opt) =>
+                        (opt['name'] ?? '').toString(),
+                    enabled: _breedId != null,
+                    readOnly: _breedId == null,
+                    suffixIcon: _varietyText.text.trim().isEmpty
+                        ? null
+                        : IconButton(
+                            tooltip: 'Clear variety',
+                            onPressed: _saving
+                                ? null
+                                : () {
+                                    setState(() {
+                                      _varietyText.clear();
+                                      _msg = null;
+                                    });
+                                  },
+                            icon: const Icon(Icons.clear),
+                          ),
+                    onSelected: (opt) {
+                      setState(() {
+                        _varietyText.text = (opt['name'] as String);
+                        _msg = null;
+                      });
+                      FocusScope.of(context).requestFocus(_sexFocus);
+                    },
+                  ),
+                  if (invalidVarietyWarning != null) ...[
+                    const SizedBox(height: 6),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Semantics(
+                        liveRegion: true,
+                        child: Text(
+                          invalidVarietyWarning,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AppColors.danger,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    initialValue:
+                        _sexValue != null && _sexOptions.contains(_sexValue)
+                        ? _sexValue
+                        : null,
+                    decoration: const InputDecoration(
+                      labelText: 'Sex (required)',
+                    ),
+                    items: _sexOptions
+                        .map(
+                          (sex) => DropdownMenuItem<String>(
+                            value: sex,
+                            child: Text(sex),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: _saving
+                        ? null
+                        : (value) {
+                            setState(() {
+                              _sexValue = value;
+                              _sexText.text = value ?? '';
+                              _msg = null;
+                            });
+                          },
+                  ),
+                  if (invalidSexWarning != null) ...[
+                    const SizedBox(height: 6),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Semantics(
+                        liveRegion: true,
+                        child: Text(
+                          invalidSexWarning,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AppColors.danger,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 12),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'Exact date not required. This is only used to help project the correct class when entering shows.',
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodySmall?.copyWith(color: AppColors.muted),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          _isDobUnknown
+                              ? 'Birth date: Unknown'
+                              : 'Birth date: ${_birthDate == null ? "(optional)" : _birthDate!.toString().substring(0, 10)}',
+                          style: const TextStyle(
+                            color: AppColors.text,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: (_saving || _isDobUnknown)
+                            ? null
+                            : _pickBirthDate,
+                        child: const Text('Pick'),
+                      ),
+                    ],
+                  ),
+                  CheckboxListTile(
+                    contentPadding: EdgeInsets.zero,
+                    activeColor: AppColors.header,
+                    checkColor: AppColors.text,
+                    title: const Text(
+                      'Unknown DOB',
+                      style: TextStyle(color: AppColors.text),
+                    ),
+                    value: _isDobUnknown,
+                    onChanged: _saving
+                        ? null
+                        : (v) => _toggleUnknownDob(v ?? false),
+                  ),
+                  if (_msg != null) ...[
+                    const SizedBox(height: 8),
+                    Semantics(
+                      liveRegion: true,
+                      child: Text(
+                        _msg!,
+                        style: const TextStyle(color: AppColors.danger),
+                      ),
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
+          actions: [
+            TextButton(
+              onPressed: _saving ? null : () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: _saving ? null : _save,
+              child: Text(_saving ? 'Saving…' : 'Save'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: _saving ? null : () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: _saving ? null : _save,
-            child: Text(_saving ? 'Saving…' : 'Save'),
-          ),
-        ],
       ),
     );
   }

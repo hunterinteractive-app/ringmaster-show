@@ -1,3 +1,4 @@
+import 'package:ringmaster_show/widgets/keep_focused_field_visible.dart';
 import '../services/household_session.dart';
 import '../utils/household_eligibility.dart';
 import '../services/app_session.dart';
@@ -815,361 +816,367 @@ class _ExhibitorBuilderDialogState extends State<ExhibitorBuilderDialog> {
     final dialogWidth = math.min(screenSize.width - 48, 760.0);
     final dialogMaxHeight = math.min(screenSize.height * .78, 760.0);
 
-    return AppTheme.gradientTextScope(
-      context,
-      child: Builder(
-        builder: (context) => AlertDialog(
-          backgroundColor: AppColors.pageBackground,
-          surfaceTintColor: Colors.transparent,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppRadius.lg),
-            side: BorderSide(color: AppColors.header.withValues(alpha: .35)),
-          ),
-          insetPadding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.xxl,
-            vertical: AppSpacing.xxl,
-          ),
-          titlePadding: const EdgeInsets.fromLTRB(28, 24, 28, 14),
-          contentPadding: const EdgeInsets.fromLTRB(28, 0, 28, 0),
-          actionsPadding: const EdgeInsets.fromLTRB(28, 12, 28, 24),
-          clipBehavior: Clip.antiAlias,
-          titleTextStyle: Theme.of(context).textTheme.titleLarge?.copyWith(
-            color: AppColors.headerForeground,
-            fontWeight: FontWeight.w800,
-          ),
-          contentTextStyle: Theme.of(
-            context,
-          ).textTheme.bodyMedium?.copyWith(color: AppColors.headerForeground),
-          title: Text(_isEdit ? 'Edit Exhibitor' : 'Add Exhibitor'),
-          content: SizedBox(
-            width: dialogWidth,
-            height: dialogMaxHeight,
-            child: _loading
-                ? const Padding(
-                    padding: EdgeInsets.all(24),
-                    child: Center(child: CircularProgressIndicator()),
-                  )
-                : ScrollbarTheme(
-                    data: ScrollbarTheme.of(context).copyWith(
-                      thumbColor: WidgetStateProperty.all(
-                        AppColors.headerForeground.withValues(alpha: .85),
+    return KeepFocusedFieldVisible(
+      child: AppTheme.gradientTextScope(
+        context,
+        child: Builder(
+          builder: (context) => AlertDialog(
+            backgroundColor: AppColors.pageBackground,
+            surfaceTintColor: Colors.transparent,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppRadius.lg),
+              side: BorderSide(color: AppColors.header.withValues(alpha: .35)),
+            ),
+            insetPadding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.xxl,
+              vertical: AppSpacing.xxl,
+            ),
+            titlePadding: const EdgeInsets.fromLTRB(28, 24, 28, 14),
+            contentPadding: const EdgeInsets.fromLTRB(28, 0, 28, 0),
+            actionsPadding: const EdgeInsets.fromLTRB(28, 12, 28, 24),
+            clipBehavior: Clip.antiAlias,
+            titleTextStyle: Theme.of(context).textTheme.titleLarge?.copyWith(
+              color: AppColors.headerForeground,
+              fontWeight: FontWeight.w800,
+            ),
+            contentTextStyle: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: AppColors.headerForeground),
+            title: Text(_isEdit ? 'Edit Exhibitor' : 'Add Exhibitor'),
+            content: SizedBox(
+              width: dialogWidth,
+              height: dialogMaxHeight,
+              child: _loading
+                  ? const Padding(
+                      padding: EdgeInsets.all(24),
+                      child: Center(child: CircularProgressIndicator()),
+                    )
+                  : ScrollbarTheme(
+                      data: ScrollbarTheme.of(context).copyWith(
+                        thumbColor: WidgetStateProperty.all(
+                          AppColors.headerForeground.withValues(alpha: .85),
+                        ),
+                        trackColor: WidgetStateProperty.all(
+                          AppColors.headerForeground.withValues(alpha: .16),
+                        ),
                       ),
-                      trackColor: WidgetStateProperty.all(
-                        AppColors.headerForeground.withValues(alpha: .16),
-                      ),
-                    ),
-                    child: Scrollbar(
-                      thumbVisibility: true,
-                      child: SingleChildScrollView(
-                        padding: const EdgeInsets.only(right: AppSpacing.sm),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            if (_msg != null)
-                              Container(
-                                width: double.infinity,
-                                margin: const EdgeInsets.only(bottom: 16),
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color: AppColors.dangerBg,
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(
-                                    color: AppColors.danger.withValues(
-                                      alpha: .25,
+                      child: Scrollbar(
+                        thumbVisibility: true,
+                        child: SingleChildScrollView(
+                          padding: const EdgeInsets.only(right: AppSpacing.sm),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (_msg != null)
+                                Container(
+                                  width: double.infinity,
+                                  margin: const EdgeInsets.only(bottom: 16),
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.dangerBg,
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                      color: AppColors.danger.withValues(
+                                        alpha: .25,
+                                      ),
+                                    ),
+                                  ),
+                                  child: Text(
+                                    _msg!,
+                                    style: const TextStyle(
+                                      color: AppColors.danger,
+                                      fontWeight: FontWeight.w600,
                                     ),
                                   ),
                                 ),
-                                child: Text(
-                                  _msg!,
-                                  style: const TextStyle(
-                                    color: AppColors.danger,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ),
-                            _buildSectionCard(
-                              title: 'Exhibitor Type',
-                              children: [
-                                DropdownButtonFormField<String>(
-                                  initialValue: _type,
-                                  items: const [
-                                    DropdownMenuItem(
-                                      value: 'adult',
-                                      child: Text('Adult'),
-                                    ),
-                                    DropdownMenuItem(
-                                      value: 'youth',
-                                      child: Text('Youth (under 19)'),
-                                    ),
-                                    DropdownMenuItem(
-                                      value: 'group',
-                                      child: Text('Group / Family'),
-                                    ),
-                                  ],
-                                  onChanged: _saving
-                                      ? null
-                                      : (v) => _setType(v ?? 'adult'),
-                                  decoration: const InputDecoration(
-                                    labelText: 'Type',
-                                    border: OutlineInputBorder(),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            _buildSectionCard(
-                              title: 'Birth Date & Status',
-                              children: [
-                                if (_isGroup)
-                                  SwitchListTile(
-                                    contentPadding: EdgeInsets.zero,
-                                    activeThumbColor: AppColors.secondaryButton,
-                                    activeTrackColor: AppColors.header
-                                        .withValues(alpha: .65),
-                                    title: const Text('Youth Showing Group'),
-                                    subtitle: const Text(
-                                      'Turn this on when all members of this group/family are youth exhibitors.',
-                                    ),
-                                    value: _groupShowsAsYouth,
+                              _buildSectionCard(
+                                title: 'Exhibitor Type',
+                                children: [
+                                  DropdownButtonFormField<String>(
+                                    initialValue: _type,
+                                    items: const [
+                                      DropdownMenuItem(
+                                        value: 'adult',
+                                        child: Text('Adult'),
+                                      ),
+                                      DropdownMenuItem(
+                                        value: 'youth',
+                                        child: Text('Youth (under 19)'),
+                                      ),
+                                      DropdownMenuItem(
+                                        value: 'group',
+                                        child: Text('Group / Family'),
+                                      ),
+                                    ],
                                     onChanged: _saving
                                         ? null
-                                        : (v) => setState(() {
-                                            _groupShowsAsYouth = v;
-                                          }),
+                                        : (v) => _setType(v ?? 'adult'),
+                                    decoration: const InputDecoration(
+                                      labelText: 'Type',
+                                      border: OutlineInputBorder(),
+                                    ),
                                   ),
-                                if (!_isGroup) ...[
-                                  Row(
-                                    children: [
-                                      Expanded(
-                                        child: Text(
-                                          _birthDate == null
-                                              ? 'Birth date: (not set)'
-                                              : 'Birth date: ${_birthDate!.toIso8601String().substring(0, 10)}',
-                                          style: const TextStyle(
-                                            color: AppColors.text,
-                                            fontWeight: FontWeight.w600,
+                                ],
+                              ),
+                              _buildSectionCard(
+                                title: 'Birth Date & Status',
+                                children: [
+                                  if (_isGroup)
+                                    SwitchListTile(
+                                      contentPadding: EdgeInsets.zero,
+                                      activeThumbColor:
+                                          AppColors.secondaryButton,
+                                      activeTrackColor: AppColors.header
+                                          .withValues(alpha: .65),
+                                      title: const Text('Youth Showing Group'),
+                                      subtitle: const Text(
+                                        'Turn this on when all members of this group/family are youth exhibitors.',
+                                      ),
+                                      value: _groupShowsAsYouth,
+                                      onChanged: _saving
+                                          ? null
+                                          : (v) => setState(() {
+                                              _groupShowsAsYouth = v;
+                                            }),
+                                    ),
+                                  if (!_isGroup) ...[
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: Text(
+                                            _birthDate == null
+                                                ? 'Birth date: (not set)'
+                                                : 'Birth date: ${_birthDate!.toIso8601String().substring(0, 10)}',
+                                            style: const TextStyle(
+                                              color: AppColors.text,
+                                              fontWeight: FontWeight.w600,
+                                            ),
                                           ),
                                         ),
-                                      ),
-                                      TextButton(
-                                        onPressed: _saving
-                                            ? null
-                                            : _pickBirthDate,
-                                        child: const Text('Pick'),
-                                      ),
-                                      if (_isYouth)
                                         TextButton(
                                           onPressed: _saving
                                               ? null
-                                              : () => setState(
-                                                  () => _birthDate = null,
-                                                ),
-                                          child: const Text('Clear'),
+                                              : _pickBirthDate,
+                                          child: const Text('Pick'),
                                         ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 8),
-                                ],
-                                Align(
-                                  alignment: Alignment.centerLeft,
-                                  child: Text(
-                                    _isGroup && _groupShowsAsYouth
-                                        ? 'Each youth group/family member must have their own birth date.'
-                                        : _isYouth
-                                        ? 'Birth date is required for Youth.'
-                                        : 'Birth date is only required for youth exhibitors. Youth groups require a birth date for each member.',
-                                    style: Theme.of(context).textTheme.bodySmall
-                                        ?.copyWith(color: AppColors.muted),
-                                  ),
-                                ),
-                                const SizedBox(height: 12),
-                                SwitchListTile(
-                                  activeThumbColor: AppColors.secondaryButton,
-                                  activeTrackColor: AppColors.header.withValues(
-                                    alpha: .65,
-                                  ),
-                                  title: const Text('Active'),
-                                  subtitle: const Text(
-                                    'Inactive exhibitors won’t show in entry pickers.',
-                                  ),
-                                  value: _active,
-                                  onChanged: _saving
-                                      ? null
-                                      : (v) => setState(() => _active = v),
-                                  contentPadding: EdgeInsets.zero,
-                                ),
-                              ],
-                            ),
-                            if (_isGroup)
-                              _buildSectionCard(
-                                title: 'Group Members',
-                                children: [
-                                  ...List.generate(
-                                    _groupMembers.length,
-                                    (index) => _buildGroupMemberBlock(
-                                      index,
-                                      _groupMembers[index],
+                                        if (_isYouth)
+                                          TextButton(
+                                            onPressed: _saving
+                                                ? null
+                                                : () => setState(
+                                                    () => _birthDate = null,
+                                                  ),
+                                            child: const Text('Clear'),
+                                          ),
+                                      ],
                                     ),
-                                  ),
-                                ],
-                              )
-                            else
-                              _buildSectionCard(
-                                title: 'Names',
-                                children: [
-                                  TextField(
-                                    controller: _firstName,
-                                    enabled: !_saving,
-                                    decoration: const InputDecoration(
-                                      labelText: 'First name *',
-                                      border: OutlineInputBorder(),
+                                    const SizedBox(height: 8),
+                                  ],
+                                  Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: Text(
+                                      _isGroup && _groupShowsAsYouth
+                                          ? 'Each youth group/family member must have their own birth date.'
+                                          : _isYouth
+                                          ? 'Birth date is required for Youth.'
+                                          : 'Birth date is only required for youth exhibitors. Youth groups require a birth date for each member.',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodySmall
+                                          ?.copyWith(color: AppColors.muted),
                                     ),
                                   ),
                                   const SizedBox(height: 12),
-                                  TextField(
-                                    controller: _lastName,
-                                    enabled: !_saving,
-                                    decoration: const InputDecoration(
-                                      labelText: 'Last name *',
-                                      border: OutlineInputBorder(),
+                                  SwitchListTile(
+                                    activeThumbColor: AppColors.secondaryButton,
+                                    activeTrackColor: AppColors.header
+                                        .withValues(alpha: .65),
+                                    title: const Text('Active'),
+                                    subtitle: const Text(
+                                      'Inactive exhibitors won’t show in entry pickers.',
                                     ),
+                                    value: _active,
+                                    onChanged: _saving
+                                        ? null
+                                        : (v) => setState(() => _active = v),
+                                    contentPadding: EdgeInsets.zero,
                                   ),
-                                  const SizedBox(height: 12),
+                                ],
+                              ),
+                              if (_isGroup)
+                                _buildSectionCard(
+                                  title: 'Group Members',
+                                  children: [
+                                    ...List.generate(
+                                      _groupMembers.length,
+                                      (index) => _buildGroupMemberBlock(
+                                        index,
+                                        _groupMembers[index],
+                                      ),
+                                    ),
+                                  ],
+                                )
+                              else
+                                _buildSectionCard(
+                                  title: 'Names',
+                                  children: [
+                                    TextField(
+                                      controller: _firstName,
+                                      enabled: !_saving,
+                                      decoration: const InputDecoration(
+                                        labelText: 'First name *',
+                                        border: OutlineInputBorder(),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    TextField(
+                                      controller: _lastName,
+                                      enabled: !_saving,
+                                      decoration: const InputDecoration(
+                                        labelText: 'Last name *',
+                                        border: OutlineInputBorder(),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    TextField(
+                                      controller: _arba,
+                                      enabled: !_saving,
+                                      decoration: const InputDecoration(
+                                        labelText: 'ARBA number',
+                                        border: OutlineInputBorder(),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              _buildSectionCard(
+                                title: 'Showing Name',
+                                children: [
                                   TextField(
-                                    controller: _arba,
+                                    controller: _showingName,
                                     enabled: !_saving,
                                     decoration: const InputDecoration(
-                                      labelText: 'ARBA number',
+                                      labelText: 'Showing name',
+                                      helperText:
+                                          'Auto-generated unless you change it.',
                                       border: OutlineInputBorder(),
                                     ),
                                   ),
                                 ],
                               ),
-                            _buildSectionCard(
-                              title: 'Showing Name',
-                              children: [
-                                TextField(
-                                  controller: _showingName,
-                                  enabled: !_saving,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Showing name',
-                                    helperText:
-                                        'Auto-generated unless you change it.',
-                                    border: OutlineInputBorder(),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            _buildSectionCard(
-                              title: 'Contact Information',
-                              children: [
-                                if (!_isEdit)
-                                  Align(
-                                    alignment: Alignment.centerLeft,
-                                    child: Padding(
-                                      padding: const EdgeInsets.only(
-                                        bottom: 12,
-                                      ),
-                                      child: Text(
-                                        'For additional exhibitors, contact and address fields may be prefilled from the primary profile. You can still change them.',
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .bodySmall
-                                            ?.copyWith(color: AppColors.muted),
+                              _buildSectionCard(
+                                title: 'Contact Information',
+                                children: [
+                                  if (!_isEdit)
+                                    Align(
+                                      alignment: Alignment.centerLeft,
+                                      child: Padding(
+                                        padding: const EdgeInsets.only(
+                                          bottom: 12,
+                                        ),
+                                        child: Text(
+                                          'For additional exhibitors, contact and address fields may be prefilled from the primary profile. You can still change them.',
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .bodySmall
+                                              ?.copyWith(
+                                                color: AppColors.muted,
+                                              ),
+                                        ),
                                       ),
                                     ),
+                                  TextField(
+                                    controller: _email,
+                                    enabled: !_saving,
+                                    keyboardType: TextInputType.emailAddress,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Email',
+                                      helperMaxLines: 6,
+                                      helperText:
+                                          'When the household owner saves a new email for an adult or youth aged 14 or older, we send an invitation to access the entire household with their own login. They must verify their email and accept. Show Secretary and admin rights are not shared. Younger youth use a parent’s login.',
+                                      border: OutlineInputBorder(),
+                                    ),
                                   ),
-                                TextField(
-                                  controller: _email,
-                                  enabled: !_saving,
-                                  keyboardType: TextInputType.emailAddress,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Email',
-                                    helperMaxLines: 6,
-                                    helperText:
-                                        'When the household owner saves a new email for an adult or youth aged 14 or older, we send an invitation to access the entire household with their own login. They must verify their email and accept. Show Secretary and admin rights are not shared. Younger youth use a parent’s login.',
-                                    border: OutlineInputBorder(),
+                                  const SizedBox(height: 12),
+                                  TextField(
+                                    controller: _phone,
+                                    enabled: !_saving,
+                                    keyboardType: TextInputType.phone,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Phone',
+                                      border: OutlineInputBorder(),
+                                    ),
                                   ),
-                                ),
-                                const SizedBox(height: 12),
-                                TextField(
-                                  controller: _phone,
-                                  enabled: !_saving,
-                                  keyboardType: TextInputType.phone,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Phone',
-                                    border: OutlineInputBorder(),
+                                ],
+                              ),
+                              _buildSectionCard(
+                                title: 'Address',
+                                children: [
+                                  TextField(
+                                    controller: _address1,
+                                    enabled: !_saving,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Address line 1',
+                                      border: OutlineInputBorder(),
+                                    ),
                                   ),
-                                ),
-                              ],
-                            ),
-                            _buildSectionCard(
-                              title: 'Address',
-                              children: [
-                                TextField(
-                                  controller: _address1,
-                                  enabled: !_saving,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Address line 1',
-                                    border: OutlineInputBorder(),
+                                  const SizedBox(height: 12),
+                                  TextField(
+                                    controller: _address2,
+                                    enabled: !_saving,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Address line 2',
+                                      border: OutlineInputBorder(),
+                                    ),
                                   ),
-                                ),
-                                const SizedBox(height: 12),
-                                TextField(
-                                  controller: _address2,
-                                  enabled: !_saving,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Address line 2',
-                                    border: OutlineInputBorder(),
+                                  const SizedBox(height: 12),
+                                  TextField(
+                                    controller: _city,
+                                    enabled: !_saving,
+                                    decoration: const InputDecoration(
+                                      labelText: 'City',
+                                      border: OutlineInputBorder(),
+                                    ),
                                   ),
-                                ),
-                                const SizedBox(height: 12),
-                                TextField(
-                                  controller: _city,
-                                  enabled: !_saving,
-                                  decoration: const InputDecoration(
-                                    labelText: 'City',
-                                    border: OutlineInputBorder(),
+                                  const SizedBox(height: 12),
+                                  TextField(
+                                    controller: _state,
+                                    enabled: !_saving,
+                                    decoration: const InputDecoration(
+                                      labelText: 'State',
+                                      border: OutlineInputBorder(),
+                                    ),
                                   ),
-                                ),
-                                const SizedBox(height: 12),
-                                TextField(
-                                  controller: _state,
-                                  enabled: !_saving,
-                                  decoration: const InputDecoration(
-                                    labelText: 'State',
-                                    border: OutlineInputBorder(),
+                                  const SizedBox(height: 12),
+                                  TextField(
+                                    controller: _zip,
+                                    enabled: !_saving,
+                                    decoration: const InputDecoration(
+                                      labelText: 'ZIP',
+                                      border: OutlineInputBorder(),
+                                    ),
                                   ),
-                                ),
-                                const SizedBox(height: 12),
-                                TextField(
-                                  controller: _zip,
-                                  enabled: !_saving,
-                                  decoration: const InputDecoration(
-                                    labelText: 'ZIP',
-                                    border: OutlineInputBorder(),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
+                                ],
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
-                  ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: _saving ? null : () => Navigator.pop(context),
-              style: TextButton.styleFrom(
-                foregroundColor: AppColors.headerForeground,
+            ),
+            actions: [
+              TextButton(
+                onPressed: _saving ? null : () => Navigator.pop(context),
+                style: TextButton.styleFrom(
+                  foregroundColor: AppColors.headerForeground,
+                ),
+                child: const Text('Cancel'),
               ),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: _saving ? null : _save,
-              child: Text(_saving ? 'Saving…' : 'Save Exhibitor'),
-            ),
-          ],
+              FilledButton(
+                onPressed: _saving ? null : _save,
+                child: Text(_saving ? 'Saving…' : 'Save Exhibitor'),
+              ),
+            ],
+          ),
         ),
       ),
     );

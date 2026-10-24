@@ -34,7 +34,9 @@ class _HelpReportDialogState extends State<HelpReportDialog> {
 
     if (message.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter a quick description first.')),
+        const SnackBar(
+          content: Text('Please enter a quick description first.'),
+        ),
       );
       return;
     }
@@ -62,9 +64,9 @@ class _HelpReportDialogState extends State<HelpReportDialog> {
 
       setState(() => _sending = false);
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not send help report: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Could not send help report: $e')));
     }
   }
 
@@ -72,6 +74,7 @@ class _HelpReportDialogState extends State<HelpReportDialog> {
   Widget build(BuildContext context) {
     return AlertDialog(
       title: const Text('Report an Issue'),
+      scrollable: true,
       content: SizedBox(
         width: 520,
         child: Column(
@@ -87,7 +90,8 @@ class _HelpReportDialogState extends State<HelpReportDialog> {
               minLines: 4,
               decoration: const InputDecoration(
                 labelText: 'What is wrong?',
-                hintText: 'Example: I clicked Print Control Sheets and got a red error...',
+                hintText:
+                    'Example: I clicked Print Control Sheets and got a red error...',
                 border: OutlineInputBorder(),
               ),
             ),
