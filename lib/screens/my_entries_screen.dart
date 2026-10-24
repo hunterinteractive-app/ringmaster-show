@@ -7,6 +7,8 @@ import 'dart:html' as html;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
 
+import 'admin/closeout/data/report_catalog_order.dart';
+import 'admin/closeout/utils/report_entry_order.dart';
 import 'my_animals_screen.dart';
 import 'show_addon_registrations_screen.dart';
 import 'account_settings_screen.dart';
@@ -178,6 +180,19 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
             for (final s in (sections as List).cast<Map<String, dynamic>>())
               s['id'].toString(): s,
           });
+      }
+
+      _entries = await withReportCatalogOrder(
+        supabase,
+        '',
+        _entries,
+        additionalShowIds: showIds,
+      );
+      for (final entry in _entries) {
+        final section = _sectionsById[entry['section_id']];
+        entry['section_kind'] = section?['kind'];
+        entry['section_letter'] = section?['letter'];
+        entry['section_sort_order'] = section?['sort_order'];
       }
 
       final exhibitorIds = _entries
@@ -720,56 +735,6 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
 
     String esc(dynamic value) => htmlEscape.convert((value ?? '').toString());
 
-    int classRank(dynamic value) {
-      final v = (value ?? '').toString().trim().toLowerCase();
-      if (v.contains('senior') || v.contains('sr')) return 0;
-      if (v.contains('intermediate') || v.contains('int')) return 1;
-      if (v.contains('junior') || v.contains('jr')) return 2;
-      return 99;
-    }
-
-    int sexRank(dynamic value) {
-      final v = (value ?? '').toString().trim().toLowerCase();
-      if (v == 'buck' || v == 'boar') return 0;
-      if (v == 'doe' || v == 'sow') return 1;
-      return 99;
-    }
-
-    int compareText(dynamic a, dynamic b) {
-      return (a ?? '').toString().trim().toLowerCase().compareTo(
-        (b ?? '').toString().trim().toLowerCase(),
-      );
-    }
-
-    int compareEntries(Map<String, dynamic> a, Map<String, dynamic> b) {
-      final sectionCmp = _sectionLabel(
-        a['section_id'],
-      ).toLowerCase().compareTo(_sectionLabel(b['section_id']).toLowerCase());
-      if (sectionCmp != 0) return sectionCmp;
-
-      final breedCmp = compareText(a['breed'], b['breed']);
-      if (breedCmp != 0) return breedCmp;
-
-      final varietyCmp = compareText(a['variety'], b['variety']);
-      if (varietyCmp != 0) return varietyCmp;
-
-      final classRankCmp = classRank(
-        a['class_name'],
-      ).compareTo(classRank(b['class_name']));
-      if (classRankCmp != 0) return classRankCmp;
-
-      final classCmp = compareText(a['class_name'], b['class_name']);
-      if (classCmp != 0) return classCmp;
-
-      final sexRankCmp = sexRank(a['sex']).compareTo(sexRank(b['sex']));
-      if (sexRankCmp != 0) return sexRankCmp;
-
-      final sexCmp = compareText(a['sex'], b['sex']);
-      if (sexCmp != 0) return sexCmp;
-
-      return compareText(a['tattoo'], b['tattoo']);
-    }
-
     final exhibitorIds = exhibitorBuckets.keys.toList()
       ..sort(
         (a, b) => _exhibitorLabelById(
@@ -942,7 +907,7 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
       final exhibitorName = _exhibitorLabelById(exhibitorId);
       final entries = List<Map<String, dynamic>>.from(
         exhibitorBuckets[exhibitorId] ?? const [],
-      )..sort(compareEntries);
+      )..sort(compareReportEntryRows);
 
       buffer.writeln('''
   <section class="exhibitor">
@@ -1203,106 +1168,6 @@ class _ShowExpansionCard extends StatelessWidget {
     required this.onExpandedChanged,
   });
 
-  String _safeLower(dynamic value) {
-    return (value ?? '').toString().trim().toLowerCase();
-  }
-
-  int _toInt(dynamic value, [int fallback = 9999]) {
-    if (value == null) return fallback;
-    if (value is int) return value;
-    return int.tryParse(value.toString()) ?? fallback;
-  }
-
-  int _sectionKindRank(dynamic value) {
-    switch (_safeLower(value)) {
-      case 'open':
-        return 0;
-      case 'youth':
-        return 1;
-      default:
-        return 99;
-    }
-  }
-
-  int _classRank(dynamic value) {
-    final v = _safeLower(value);
-    if (v.contains('senior') || v.contains('sr')) return 0;
-    if (v.contains('intermediate') || v.contains('int')) return 1;
-    if (v.contains('junior') || v.contains('jr')) return 2;
-    return 99;
-  }
-
-  int _sexRank(dynamic value) {
-    final v = _safeLower(value);
-    if (v == 'buck' || v == 'boar') return 0;
-    if (v == 'doe' || v == 'sow') return 1;
-    return 99;
-  }
-
-  int _compareEntriesForShowOrder(
-    Map<String, dynamic> a,
-    Map<String, dynamic> b,
-  ) {
-    final sectionA = sectionLabel(a['section_id']);
-    final sectionB = sectionLabel(b['section_id']);
-
-    final sectionKindCmp = _sectionKindRank(
-      sectionA,
-    ).compareTo(_sectionKindRank(sectionB));
-    if (sectionKindCmp != 0) return sectionKindCmp;
-
-    final sectionLabelCmp = sectionA.toLowerCase().compareTo(
-      sectionB.toLowerCase(),
-    );
-    if (sectionLabelCmp != 0) return sectionLabelCmp;
-
-    final breedSortCmp = _toInt(
-      a['breed_sort_order'],
-    ).compareTo(_toInt(b['breed_sort_order']));
-    if (breedSortCmp != 0) return breedSortCmp;
-
-    final breedCmp = _safeLower(a['breed']).compareTo(_safeLower(b['breed']));
-    if (breedCmp != 0) return breedCmp;
-
-    final groupSortCmp = _toInt(
-      a['group_sort_order'],
-    ).compareTo(_toInt(b['group_sort_order']));
-    if (groupSortCmp != 0) return groupSortCmp;
-
-    final varietySortCmp = _toInt(
-      a['variety_sort_order'],
-    ).compareTo(_toInt(b['variety_sort_order']));
-    if (varietySortCmp != 0) return varietySortCmp;
-
-    final varietyCmp = _safeLower(
-      a['variety'],
-    ).compareTo(_safeLower(b['variety']));
-    if (varietyCmp != 0) return varietyCmp;
-
-    final classSortCmp = _toInt(
-      a['class_sort_order'],
-    ).compareTo(_toInt(b['class_sort_order']));
-    if (classSortCmp != 0) return classSortCmp;
-
-    final classRankCmp = _classRank(
-      a['class_name'],
-    ).compareTo(_classRank(b['class_name']));
-    if (classRankCmp != 0) return classRankCmp;
-
-    final classCmp = _safeLower(
-      a['class_name'],
-    ).compareTo(_safeLower(b['class_name']));
-    if (classCmp != 0) return classCmp;
-
-    final sexRankCmp = _sexRank(a['sex']).compareTo(_sexRank(b['sex']));
-    if (sexRankCmp != 0) return sexRankCmp;
-
-    final sexCmp = _safeLower(a['sex']).compareTo(_safeLower(b['sex']));
-    if (sexCmp != 0) return sexCmp;
-
-    return _safeLower(a['tattoo']).compareTo(_safeLower(b['tattoo']));
-  }
-
   String _safeLabel(dynamic value, String fallback) {
     final text = (value ?? '').toString().trim();
     return text.isEmpty ? fallback : text;
@@ -1317,7 +1182,7 @@ class _ShowExpansionCard extends StatelessWidget {
         >{};
 
     final sorted = List<Map<String, dynamic>>.from(entries)
-      ..sort(_compareEntriesForShowOrder);
+      ..sort(compareReportAnimalRows);
 
     for (final e in sorted) {
       final breed = _safeLabel(e['breed'], '(No Breed)');
@@ -1490,12 +1355,7 @@ class _ShowExpansionCard extends StatelessWidget {
                               final breed = breedEntry.key;
                               final varieties = breedEntry.value;
 
-                              final varietyKeys = varieties.keys.toList()
-                                ..sort(
-                                  (a, b) => a.toLowerCase().compareTo(
-                                    b.toLowerCase(),
-                                  ),
-                                );
+                              final varietyKeys = varieties.keys.toList();
 
                               return Padding(
                                 padding: const EdgeInsets.only(
@@ -1516,12 +1376,7 @@ class _ShowExpansionCard extends StatelessWidget {
                                     const SizedBox(height: AppSpacing.sm),
                                     ...varietyKeys.map((variety) {
                                       final classes = varieties[variety]!;
-                                      final classKeys = classes.keys.toList()
-                                        ..sort(
-                                          (a, b) => a.toLowerCase().compareTo(
-                                            b.toLowerCase(),
-                                          ),
-                                        );
+                                      final classKeys = classes.keys.toList();
 
                                       return Padding(
                                         padding: const EdgeInsets.only(
@@ -1544,14 +1399,8 @@ class _ShowExpansionCard extends StatelessWidget {
                                             const SizedBox(height: 6),
                                             ...classKeys.map((className) {
                                               final sexes = classes[className]!;
-                                              final sexKeys =
-                                                  sexes.keys.toList()..sort(
-                                                    (a, b) => a
-                                                        .toLowerCase()
-                                                        .compareTo(
-                                                          b.toLowerCase(),
-                                                        ),
-                                                  );
+                                              final sexKeys = sexes.keys
+                                                  .toList();
 
                                               return Padding(
                                                 padding: const EdgeInsets.only(

@@ -1,5 +1,6 @@
 // lib/screens/admin/closeout/data/loaders/exhibitor_report_loader.dart
 
+import '../../utils/report_entry_order.dart';
 import 'package:ringmaster_show/utils/cavy/cavy_awards.dart';
 import 'package:ringmaster_show/utils/species_sex.dart';
 
@@ -64,6 +65,7 @@ class ExhibitorReportLoader {
 
         row['resolved_show_letter'] = showLetter;
         row['resolved_section_kind'] = sectionKind;
+        row['section_sort_order'] = section['sort_order'];
 
         allEligibleRows.add(row);
 
@@ -123,32 +125,7 @@ class ExhibitorReportLoader {
       _str(show['secretary_email']),
     ]);
 
-    rowList.sort((a, b) {
-      final aLetter = _str(a['resolved_show_letter']).toUpperCase();
-      final bLetter = _str(b['resolved_show_letter']).toUpperCase();
-      final letterCompare = aLetter.compareTo(bLetter);
-      if (letterCompare != 0) return letterCompare;
-
-      final breedCompare = _str(
-        a['breed_name'],
-      ).compareTo(_str(b['breed_name']));
-      if (breedCompare != 0) return breedCompare;
-
-      final varietyCompare = _str(
-        a['variety_name'],
-      ).compareTo(_str(b['variety_name']));
-      if (varietyCompare != 0) return varietyCompare;
-
-      final classCompare = _str(
-        a['class_name'],
-      ).compareTo(_str(b['class_name']));
-      if (classCompare != 0) return classCompare;
-
-      final sexCompare = _str(a['sex']).compareTo(_str(b['sex']));
-      if (sexCompare != 0) return sexCompare;
-
-      return _str(a['tattoo']).compareTo(_str(b['tattoo']));
-    });
+    rowList.sort(compareReportEntryRows);
 
     final first = rowList.first;
 

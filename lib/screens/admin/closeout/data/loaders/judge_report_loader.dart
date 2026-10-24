@@ -1,3 +1,5 @@
+import '../../utils/report_entry_order.dart';
+import '../report_catalog_order.dart';
 import 'package:supabase/supabase.dart';
 
 import '../report_data_reader.dart';
@@ -26,8 +28,6 @@ class JudgeReportLoader {
       final judgeId = entry.key;
       final judgeInfo = judgesById[judgeId];
       final rows = entry.value;
-
-      rows.sort(_compareJudgeRows);
 
       judges.add(
         JudgeReportJudge(
@@ -206,7 +206,20 @@ class JudgeReportLoader {
     String showId,
     List<String> sectionIds,
   ) async {
-    final entryRows = await _loadAllJudgedEntryRows(showId, sectionIds);
+    final entryRows = await withReportCatalogOrder(
+      _supabase,
+      showId,
+      await _loadAllJudgedEntryRows(showId, sectionIds),
+    );
+    for (final row in entryRows) {
+      final section = row['show_sections'];
+      if (section is Map) {
+        row['section_kind'] = section['kind'];
+        row['section_letter'] = section['letter'];
+        row['section_sort_order'] = section['sort_order'];
+      }
+    }
+    entryRows.sort(compareReportEntryRows);
 
     final entryIds = <String>[];
     final exhibitorIds = <String>[];
@@ -390,61 +403,6 @@ class JudgeReportLoader {
     }
 
     return result;
-  }
-
-  int _compareJudgeRows(JudgeReportRow a, JudgeReportRow b) {
-    final section = a.sectionLabel.compareTo(b.sectionLabel);
-    if (section != 0) return section;
-
-    final species = a.species.compareTo(b.species);
-    if (species != 0) return species;
-
-    final breed = a.breed.compareTo(b.breed);
-    if (breed != 0) return breed;
-
-    final variety = a.varietyLabel.compareTo(b.varietyLabel);
-    if (variety != 0) return variety;
-
-    final classSort = _classRank(
-      a.className,
-    ).compareTo(_classRank(b.className));
-    if (classSort != 0) return classSort;
-
-    final sexSort = _sexRank(a.sex).compareTo(_sexRank(b.sex));
-    if (sexSort != 0) return sexSort;
-
-    return a.tattoo.compareTo(b.tattoo);
-  }
-
-  int _classRank(String value) {
-    switch (value.trim().toLowerCase()) {
-      case 'senior':
-        return 1;
-      case 'intermediate':
-      case '6/8':
-      case 'six eight':
-        return 2;
-      case 'junior':
-        return 3;
-      case 'pre junior':
-      case 'pre-junior':
-        return 4;
-      default:
-        return 99;
-    }
-  }
-
-  int _sexRank(String value) {
-    switch (value.trim().toLowerCase()) {
-      case 'buck':
-      case 'boar':
-        return 1;
-      case 'doe':
-      case 'sow':
-        return 2;
-      default:
-        return 99;
-    }
   }
 
   String _sectionLabel(Object? value) {

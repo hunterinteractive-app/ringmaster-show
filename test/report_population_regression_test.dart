@@ -64,10 +64,7 @@ void main() {
       });
     }
     test('BIS remains above $award on the leg', () async {
-      final fixture = _Fixture(
-        _qualificationRows(),
-        award: '$award,BOB,BIS',
-      );
+      final fixture = _Fixture(_qualificationRows(), award: '$award,BOB,BIS');
       addTearDown(fixture.client.dispose);
       final legs = await LegsReportLoader(fixture.repo).load(_request);
       expect(legs.single.winCode, 'BIS');
@@ -226,6 +223,51 @@ void main() {
       );
     },
   );
+  test('exhibitor and leg outputs share Tan catalog/class/sex order', () async {
+    final rows = <Map<String, dynamic>>[];
+    final expected = <String>[];
+    for (final (rank, variety) in [
+      'Lilac',
+      'Blue',
+      'Chocolate',
+      'Black',
+    ].indexed) {
+      for (final age in ['Senior', 'Junior']) {
+        for (final sex in ['Buck', 'Doe']) {
+          final label = '$variety $age $sex';
+          expected.add(label);
+          for (var i = 1; i <= 5; i++) {
+            rows.add(
+              _row(
+                '$label-$i',
+                exhibitor: 'ex$i',
+                values: {
+                  'breed_name': 'Tan',
+                  'variety_name': variety,
+                  'group_name': '',
+                  'uses_group_awards': false,
+                  'variety_sort_order': rank + 1,
+                  'class_name': age,
+                  'sex': sex,
+                  'placement': i,
+                  'tattoo': label,
+                },
+              ),
+            );
+          }
+        }
+      }
+    }
+    final fixture = _Fixture(rows.reversed.toList());
+    addTearDown(fixture.client.dispose);
+    final report = await ExhibitorReportLoader(fixture.repo).load(_request);
+    final legs = await LegsReportLoader(fixture.repo).load(_request);
+    expect(report.entries.map((entry) => entry.tattoo), expected);
+    expect(legs.map((entry) => entry.earNumber), expected);
+    expect(report.entries.every((entry) => entry.earnedLeg), isTrue);
+    expect(report.entries.every((entry) => entry.classCount == 5), isTrue);
+    expect(report.entries.every((entry) => entry.exhibitorCount == 5), isTrue);
+  });
 }
 
 final _request = ReportRequest(

@@ -104,18 +104,21 @@ void main() {
       expect(alphabetized.last.rank, 2);
     });
 
-    test('uses breed as top section for combined cavy detail reports', () {
-      final row = {'breed_name': 'Abyssinian', 'variety_name': 'Brindle'};
+    test(
+      'keeps varieties separate within each breed in combined cavy detail reports',
+      () {
+        final row = {'breed_name': 'Abyssinian', 'variety_name': 'Brindle'};
 
-      expect(
-        breedResultsDetailTopSectionName(row, groupByBreed: true),
-        'Abyssinian',
-      );
-      expect(
-        breedResultsDetailTopSectionName(row, groupByBreed: false),
-        'Brindle',
-      );
-    });
+        expect(
+          breedResultsDetailTopSectionName(row, groupByBreed: true),
+          'Abyssinian — Brindle',
+        );
+        expect(
+          breedResultsDetailTopSectionName(row, groupByBreed: false),
+          'Brindle',
+        );
+      },
+    );
 
     test('recognizes cavy Boar and Sow sex labels', () {
       expect(

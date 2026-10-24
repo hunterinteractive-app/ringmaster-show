@@ -65,6 +65,8 @@ class BreedResultsDetailSection {
 }
 
 class BreedAward {
+  final int groupSortOrder;
+  final int varietySortOrder;
   final String award;
   final String animal;
   final String breedName;
@@ -83,6 +85,8 @@ class BreedAward {
   final double pointsEarned;
 
   const BreedAward({
+    this.groupSortOrder = 9999,
+    this.varietySortOrder = 9999,
     required this.award,
     required this.animal,
     this.breedName = '',

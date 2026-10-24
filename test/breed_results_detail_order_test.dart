@@ -25,8 +25,8 @@ void main() {
     expect(rabbitBreedResultsClassSortOrder('Sr', 'Female'), 1);
     expect(rabbitBreedResultsClassSortOrder('6-8', 'Male'), 2);
     expect(rabbitBreedResultsClassSortOrder('Inter', 'Does'), 3);
-    expect(rabbitBreedResultsClassSortOrder('Junior', 'Buck'), 4);
-    expect(rabbitBreedResultsClassSortOrder('Jr', 'Doe'), 5);
+    expect(rabbitBreedResultsClassSortOrder('Junior', 'Buck'), 6);
+    expect(rabbitBreedResultsClassSortOrder('Jr', 'Doe'), 7);
     expect(rabbitBreedResultsClassSortOrder('Unknown', 'Buck'), 999);
   });
 

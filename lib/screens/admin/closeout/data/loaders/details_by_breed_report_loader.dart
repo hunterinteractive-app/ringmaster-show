@@ -1,3 +1,4 @@
+import '../../utils/report_entry_order.dart';
 import 'package:intl/intl.dart';
 import 'package:ringmaster_show/utils/species_sex.dart';
 
@@ -54,7 +55,10 @@ class DetailsByBreedReportLoader {
     rows = await _filterRowsBySpecies(request.showId, rows, species);
     for (final row in rows) {
       normalizeSpeciesSexPresentation(row, speciesOverride: species);
+      if (species.isNotEmpty) row['species'] = species;
     }
+
+    rows.sort(compareReportAnimalRows);
 
     final judgeIdsByEntryId = await _loadJudgeIdsByEntryId(
       request.showId,
@@ -240,56 +244,45 @@ class DetailsByBreedReportLoader {
       }
     }
 
-    final breeds =
-        grouped.values.map((breed) {
-          final varieties =
-              breed.varieties.values.map((variety) {
-                final classes = variety.classes.values.map((clazz) {
-                  clazz.placements.sort(
-                    (a, b) => a.placement.compareTo(b.placement),
-                  );
-                  return DetailsByBreedClassSection(
-                    className: clazz.className,
-                    sex: clazz.sex,
-                    animalsShown: clazz.animalsShown,
-                    exhibitorCount: clazz.exhibitors.length,
-                    placements: clazz.placements,
-                  );
-                }).toList()..sort(_compareClasses);
-
-                return DetailsByBreedVarietySection(
-                  varietyName: variety.varietyName,
-                  animalsShown: variety.animalsShown,
-                  exhibitorCount: variety.exhibitors.length,
-                  bov: variety.bov,
-                  bosv: variety.bosv,
-                  classes: classes,
-                );
-              }).toList()..sort(
-                (a, b) => a.varietyName.toLowerCase().compareTo(
-                  b.varietyName.toLowerCase(),
-                ),
-              );
-
-          return DetailsByBreedBreedSection(
-            breedName: breed.breedName,
-            judgeName: breed.judgeName,
-            animalsShown: breed.animalsShown,
-            exhibitorCount: breed.exhibitors.length,
-            bob: breed.bob,
-            bosb: breed.bosb,
-            specialAwards: breed.specialAwards
-              ..sort(
-                (a, b) => _specialAwardRank(
-                  a.award.split(',').first.trim(),
-                ).compareTo(_specialAwardRank(b.award.split(',').first.trim())),
-              ),
-            varieties: varieties,
+    final breeds = grouped.values.map((breed) {
+      final varieties = breed.varieties.values.map((variety) {
+        final classes = variety.classes.values.map((clazz) {
+          clazz.placements.sort((a, b) => a.placement.compareTo(b.placement));
+          return DetailsByBreedClassSection(
+            className: clazz.className,
+            sex: clazz.sex,
+            animalsShown: clazz.animalsShown,
+            exhibitorCount: clazz.exhibitors.length,
+            placements: clazz.placements,
           );
-        }).toList()..sort(
-          (a, b) =>
-              a.breedName.toLowerCase().compareTo(b.breedName.toLowerCase()),
+        }).toList();
+
+        return DetailsByBreedVarietySection(
+          varietyName: variety.varietyName,
+          animalsShown: variety.animalsShown,
+          exhibitorCount: variety.exhibitors.length,
+          bov: variety.bov,
+          bosv: variety.bosv,
+          classes: classes,
         );
+      }).toList();
+
+      return DetailsByBreedBreedSection(
+        breedName: breed.breedName,
+        judgeName: breed.judgeName,
+        animalsShown: breed.animalsShown,
+        exhibitorCount: breed.exhibitors.length,
+        bob: breed.bob,
+        bosb: breed.bosb,
+        specialAwards: breed.specialAwards
+          ..sort(
+            (a, b) => _specialAwardRank(
+              a.award.split(',').first.trim(),
+            ).compareTo(_specialAwardRank(b.award.split(',').first.trim())),
+          ),
+        varieties: varieties,
+      );
+    }).toList();
 
     overallWinners.sort(
       (a, b) =>
@@ -673,30 +666,6 @@ class DetailsByBreedReportLoader {
       'HM': 90,
     };
     return ranks[code] ?? 50;
-  }
-
-  static int _compareClasses(
-    DetailsByBreedClassSection a,
-    DetailsByBreedClassSection b,
-  ) {
-    final age = _classRank(a.className).compareTo(_classRank(b.className));
-    if (age != 0) return age;
-    return _sexRank(a.sex).compareTo(_sexRank(b.sex));
-  }
-
-  static int _classRank(String value) {
-    final v = value.toLowerCase();
-    if (v.contains('senior')) return 0;
-    if (v.contains('intermediate') || v.contains('6-8')) return 1;
-    if (v.contains('junior')) return 2;
-    return 9;
-  }
-
-  static int _sexRank(String value) {
-    final v = value.toLowerCase();
-    if (v.contains('buck') || v.contains('boar')) return 0;
-    if (v.contains('doe') || v.contains('sow')) return 1;
-    return 9;
   }
 
   static String _cleanClassName(String value) {

@@ -1,3 +1,4 @@
+import '../../utils/report_entry_order.dart';
 import 'package:supabase/supabase.dart';
 import 'package:ringmaster_show/services/show_wave_schedule.dart';
 import 'package:intl/intl.dart';
@@ -69,7 +70,7 @@ class CheckInSheetReportLoader {
       normalizeSpeciesSexPresentation(entry);
     }
 
-    entries.sort(_compareEntries);
+    entries.sort(compareReportEntryRows);
 
     CheckInSheetReportData sheet(
       ShowWave? item,
@@ -282,66 +283,6 @@ class CheckInSheetReportLoader {
           : (coopNumberByAnimalAndScope['$animalId|$scope'] ?? '');
     }
   }
-
-  int _compareEntries(Map<String, dynamic> a, Map<String, dynamic> b) {
-    int toInt(dynamic value, [int fallback = 9999]) {
-      if (value == null) return fallback;
-      if (value is int) return value;
-      return int.tryParse(value.toString()) ?? fallback;
-    }
-
-    int kindRank(String kind) {
-      switch (kind.toLowerCase()) {
-        case 'open':
-          return 0;
-        case 'youth':
-          return 1;
-        default:
-          return 99;
-      }
-    }
-
-    final kindCmp = kindRank(
-      _safe(a, 'section_kind'),
-    ).compareTo(kindRank(_safe(b, 'section_kind')));
-    if (kindCmp != 0) return kindCmp;
-
-    final sectionCmp = toInt(
-      a['section_sort_order'],
-    ).compareTo(toInt(b['section_sort_order']));
-    if (sectionCmp != 0) return sectionCmp;
-
-    final letterCmp = _safe(
-      a,
-      'section_letter',
-    ).toUpperCase().compareTo(_safe(b, 'section_letter').toUpperCase());
-    if (letterCmp != 0) return letterCmp;
-
-    final breedCmp = _safe(
-      a,
-      'breed',
-    ).toLowerCase().compareTo(_safe(b, 'breed').toLowerCase());
-    if (breedCmp != 0) return breedCmp;
-
-    final classCmp = toInt(
-      a['class_sort_order'],
-    ).compareTo(toInt(b['class_sort_order']));
-    if (classCmp != 0) return classCmp;
-
-    final sexCmp = _safe(
-      a,
-      'sex',
-    ).toLowerCase().compareTo(_safe(b, 'sex').toLowerCase());
-    if (sexCmp != 0) return sexCmp;
-
-    return _safe(
-      a,
-      'tattoo',
-    ).toLowerCase().compareTo(_safe(b, 'tattoo').toLowerCase());
-  }
-
-  String _safe(Map<String, dynamic> row, String key) =>
-      (row[key] ?? '').toString().trim();
 
   bool _truthy(dynamic value) {
     if (value == null) return false;

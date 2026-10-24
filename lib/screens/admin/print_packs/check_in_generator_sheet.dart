@@ -1,5 +1,6 @@
 // lib/screens/admin/print_packs/check_in_generator_sheet.dart
 
+import '../closeout/utils/report_entry_order.dart';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -338,32 +339,7 @@ class _CheckInGeneratorSheetState extends State<CheckInGeneratorSheet> {
       final exhibitorCmp = _compareExhibitors(a, b);
       if (exhibitorCmp != 0) return exhibitorCmp;
 
-      final breedCmp = _safe(
-        a,
-        'breed',
-      ).toLowerCase().compareTo(_safe(b, 'breed').toLowerCase());
-      if (breedCmp != 0) return breedCmp;
-
-      final varietyCmp = _groupVarietyLabel(
-        a,
-      ).toLowerCase().compareTo(_groupVarietyLabel(b).toLowerCase());
-      if (varietyCmp != 0) return varietyCmp;
-
-      final classSortCmp = toInt(
-        a['class_sort_order'],
-      ).compareTo(toInt(b['class_sort_order']));
-      if (classSortCmp != 0) return classSortCmp;
-
-      final sexCmp = _safe(
-        a,
-        'sex',
-      ).toLowerCase().compareTo(_safe(b, 'sex').toLowerCase());
-      if (sexCmp != 0) return sexCmp;
-
-      return _safe(
-        a,
-        'tattoo',
-      ).toLowerCase().compareTo(_safe(b, 'tattoo').toLowerCase());
+      return compareReportAnimalRows(a, b);
     });
 
     return list;
@@ -886,47 +862,7 @@ class _CheckInGeneratorSheetState extends State<CheckInGeneratorSheet> {
         ).toUpperCase().compareTo(_safe(b, 'section_letter').toUpperCase());
         if (sectionLetterCmp != 0) return sectionLetterCmp;
 
-        final breedSortCmp = toInt(
-          a['breed_sort_order'],
-        ).compareTo(toInt(b['breed_sort_order']));
-        if (breedSortCmp != 0) return breedSortCmp;
-
-        final breedCmp = _safe(
-          a,
-          'breed',
-        ).toLowerCase().compareTo(_safe(b, 'breed').toLowerCase());
-        if (breedCmp != 0) return breedCmp;
-
-        final groupSortCmp = toInt(
-          a['group_sort_order'],
-        ).compareTo(toInt(b['group_sort_order']));
-        if (groupSortCmp != 0) return groupSortCmp;
-
-        final varietySortCmp = toInt(
-          a['variety_sort_order'],
-        ).compareTo(toInt(b['variety_sort_order']));
-        if (varietySortCmp != 0) return varietySortCmp;
-
-        final varietyCmp = _groupVarietyLabel(
-          a,
-        ).toLowerCase().compareTo(_groupVarietyLabel(b).toLowerCase());
-        if (varietyCmp != 0) return varietyCmp;
-
-        final classSortCmp = toInt(
-          a['class_sort_order'],
-        ).compareTo(toInt(b['class_sort_order']));
-        if (classSortCmp != 0) return classSortCmp;
-
-        final sexCmp = _safe(
-          a,
-          'sex',
-        ).toLowerCase().compareTo(_safe(b, 'sex').toLowerCase());
-        if (sexCmp != 0) return sexCmp;
-
-        return _safe(
-          a,
-          'tattoo',
-        ).toLowerCase().compareTo(_safe(b, 'tattoo').toLowerCase());
+        return compareReportAnimalRows(a, b);
       });
     }
 

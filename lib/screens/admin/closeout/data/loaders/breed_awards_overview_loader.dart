@@ -1,3 +1,5 @@
+import '../report_catalog_order.dart';
+import '../../utils/report_entry_order.dart';
 import 'package:supabase/supabase.dart';
 
 import '../../models/base/report_request.dart';
@@ -10,6 +12,7 @@ class BreedAwardsOverviewData {
 
 class BreedAwardOverviewRow {
   const BreedAwardOverviewRow({
+    this.sortRow = const {},
     required this.sectionId,
     required this.sectionLabel,
     required this.species,
@@ -22,6 +25,7 @@ class BreedAwardOverviewRow {
     required this.sex,
     required this.exhibitor,
   });
+  final Map<String, dynamic> sortRow;
   final String sectionId, sectionLabel, species, award, tattoo, coop;
   final String breed, variety, className, sex, exhibitor;
 }
@@ -57,6 +61,14 @@ class BreedAwardsOverviewLoader {
           .range(offset, offset + 999);
       awards.addAll(page);
       if (page.isEmpty) break;
+    }
+    final rankedEntries = await withReportCatalogOrder(
+      supabase,
+      request.showId,
+      awards.map((row) => _map(row['entries'])).toList(),
+    );
+    for (var i = 0; i < awards.length; i++) {
+      awards[i]['entries'] = rankedEntries[i];
     }
     final coops = <Map<String, dynamic>>[];
     for (var offset = 0; ; offset = coops.length) {
@@ -149,6 +161,7 @@ List<BreedAwardOverviewRow> buildBreedAwardOverviewRows(
     final exhibitor = _map(entry['exhibitors']);
     rows.add(
       BreedAwardOverviewRow(
+        sortRow: entry,
         sectionId: sectionId,
         sectionLabel:
             displayName.isEmpty ||
@@ -182,7 +195,7 @@ List<BreedAwardOverviewRow> buildBreedAwardOverviewRows(
       a.species.compareTo(b.species),
       a.breed.toLowerCase().compareTo(b.breed.toLowerCase()),
       awardOrder.indexOf(a.award).compareTo(awardOrder.indexOf(b.award)),
-      a.variety.toLowerCase().compareTo(b.variety.toLowerCase()),
+      compareReportAnimalRows(a.sortRow, b.sortRow),
       a.exhibitor.toLowerCase().compareTo(b.exhibitor.toLowerCase()),
       a.tattoo.compareTo(b.tattoo),
     ]) {

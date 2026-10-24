@@ -1,3 +1,4 @@
+import 'report_entry_order.dart';
 import '../models/clubs/breed_results_detail_report_data.dart';
 
 bool breedResultsDetailUsesRabbitClassLayout(String species) =>
@@ -77,6 +78,8 @@ int compareBreedResultsDetailAwards(BreedAward a, BreedAward b) {
   // Best of Variety followed by Best Opposite Sex of Variety.
   if (const {'BOG', 'BOSG'}.contains(aCode) &&
       const {'BOG', 'BOSG'}.contains(bCode)) {
+    final groupRank = a.groupSortOrder.compareTo(b.groupSortOrder);
+    if (groupRank != 0) return groupRank;
     final group = _compareText(_groupSortName(a), _groupSortName(b));
     if (group != 0) return group;
     final award = _groupPairRank(aCode).compareTo(_groupPairRank(bCode));
@@ -85,6 +88,10 @@ int compareBreedResultsDetailAwards(BreedAward a, BreedAward b) {
 
   if (const {'BOV', 'BOSV'}.contains(aCode) &&
       const {'BOV', 'BOSV'}.contains(bCode)) {
+    final groupRank = a.groupSortOrder.compareTo(b.groupSortOrder);
+    if (groupRank != 0) return groupRank;
+    final varietyRank = a.varietySortOrder.compareTo(b.varietySortOrder);
+    if (varietyRank != 0) return varietyRank;
     final variety = _compareText(a.variety, b.variety);
     if (variety != 0) return variety;
     final award = _varietyPairRank(aCode).compareTo(_varietyPairRank(bCode));
@@ -162,9 +169,10 @@ String _normalizedWords(String value) => value
 
 int _rabbitAgeOrder(String value) {
   final text = _normalizedWords(value);
+  if (RegExp(r'\bpre\s*(junior|jr)\b').hasMatch(text)) return 2;
   if (RegExp(r'\b(senior|sr)\b').hasMatch(text)) return 0;
-  if (RegExp(r'\b(intermediate|inter|6 8)\b').hasMatch(text)) return 1;
-  if (RegExp(r'\b(junior|jr)\b').hasMatch(text)) return 2;
+  if (RegExp(r'\b(intermediate|inter|int|6 8)\b').hasMatch(text)) return 1;
+  if (RegExp(r'\b(junior|jr)\b').hasMatch(text)) return 3;
   return 99;
 }
 
@@ -186,7 +194,8 @@ String rabbitBreedResultsClassHeading(String className, String sexLabel) {
   final age = switch (_rabbitAgeOrder(className)) {
     0 => 'Senior',
     1 => 'Intermediate',
-    2 => 'Junior',
+    2 => 'Pre-Junior',
+    3 => 'Junior',
     _ => className.trim(),
   };
   final sex = switch (_rabbitSexOrder(className, sexLabel)) {
@@ -249,4 +258,44 @@ List<RabbitBreedResultsClassBlock> rabbitBreedResultsClassBlocks(
         ),
       )
       .toList(growable: false);
+}
+
+/// Cavy placement blocks use Junior, Intermediate, Senior, with Boar/Sow
+/// together in each class, within the breed/variety section.
+List<RabbitBreedResultsClassBlock> cavyBreedResultsClassBlocks(
+  VarietySection variety,
+) {
+  final blocks = <({String sex, ClassSection section})>[
+    for (final sex in variety.sexSections)
+      for (final section in sex.classes) (sex: sex.sexLabel, section: section),
+  ];
+  Map<String, dynamic> row(String name, String sex) => {
+    'species': 'cavy',
+    'class_name': name,
+    'sex': sex,
+  };
+  blocks.sort(
+    (a, b) => compareReportAnimalRows(
+      row(a.section.className, a.sex),
+      row(b.section.className, b.sex),
+    ),
+  );
+  return blocks.map((block) {
+    final age = switch (_rabbitAgeOrder(block.section.className)) {
+      0 => 'Senior',
+      1 => 'Intermediate',
+      2 => 'Pre-Junior',
+      3 => 'Junior',
+      _ => block.section.className,
+    };
+    final sex = block.sex.toLowerCase().contains('boar')
+        ? 'Boar'
+        : block.sex.toLowerCase().contains('sow')
+        ? 'Sow'
+        : block.sex;
+    return RabbitBreedResultsClassBlock(
+      heading: '$age $sex'.trim(),
+      classSection: block.section,
+    );
+  }).toList();
 }

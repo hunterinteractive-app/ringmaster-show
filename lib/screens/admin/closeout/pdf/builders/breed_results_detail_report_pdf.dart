@@ -13,7 +13,7 @@ import '../../models/clubs/breed_results_detail_report_data.dart';
 import '../../utils/breed_results_detail_order.dart';
 
 /// Bump when the Breed Results Detail PDF template changes.
-const String breedResultsDetailReportVersion = '0.6.3';
+const String breedResultsDetailReportVersion = '0.6.4';
 
 class BreedResultsDetailReportPdf {
   final Uint8List? logoBytes;
@@ -514,55 +514,31 @@ class BreedResultsDetailReportPdf {
       widgets.add(pw.SizedBox(height: 8));
     }
 
-    if (isRabbit) {
-      for (final block in rabbitBreedResultsClassBlocks(variety)) {
-        final classGroup = block.classSection;
+    final blocks = isRabbit
+        ? rabbitBreedResultsClassBlocks(variety)
+        : cavyBreedResultsClassBlocks(variety);
+    for (final block in blocks) {
+      final classGroup = block.classSection;
+      widgets.add(
+        pw.Text(
+          '${block.heading} — ${classGroup.animalsJudged} animals / ${classGroup.exhibitorsJudged} exhibitors judged',
+          style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold),
+        ),
+      );
+      widgets.add(pw.SizedBox(height: 4));
+
+      if (classGroup.rows.isEmpty) {
         widgets.add(
           pw.Text(
-            '${block.heading} — ${classGroup.animalsJudged} animals / ${classGroup.exhibitorsJudged} exhibitors judged',
-            style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold),
+            'No top 5 placements recorded.',
+            style: const pw.TextStyle(fontSize: 8),
           ),
         );
-        widgets.add(pw.SizedBox(height: 4));
-
-        if (classGroup.rows.isEmpty) {
-          widgets.add(
-            pw.Text(
-              'No top 5 placements recorded.',
-              style: const pw.TextStyle(fontSize: 8),
-            ),
-          );
-        } else {
-          widgets.add(_buildPlacementTable(classGroup.rows));
-        }
-
-        widgets.add(pw.SizedBox(height: 8));
+      } else {
+        widgets.add(_buildPlacementTable(classGroup.rows));
       }
-    } else {
-      for (final sexSection in variety.sexSections) {
-        widgets.add(_sexHeader(sexSection.sexLabel));
 
-        for (final classGroup in sexSection.classes) {
-          widgets.add(
-            pw.Text(
-              '${classGroup.className} — ${classGroup.animalsJudged} animals / ${classGroup.exhibitorsJudged} exhibitors judged',
-              style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold),
-            ),
-          );
-          widgets.add(pw.SizedBox(height: 4));
-          widgets.add(
-            classGroup.rows.isEmpty
-                ? pw.Text(
-                    'No top 5 placements recorded.',
-                    style: const pw.TextStyle(fontSize: 8),
-                  )
-                : _buildPlacementTable(classGroup.rows),
-          );
-          widgets.add(pw.SizedBox(height: 8));
-        }
-
-        widgets.add(pw.SizedBox(height: 6));
-      }
+      widgets.add(pw.SizedBox(height: 8));
     }
 
     widgets.add(pw.SizedBox(height: 8));
@@ -872,19 +848,6 @@ class BreedResultsDetailReportPdf {
       child: pw.Text(
         title,
         style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold),
-      ),
-    );
-  }
-
-  pw.Widget _sexHeader(String title) {
-    return pw.Container(
-      width: double.infinity,
-      margin: const pw.EdgeInsets.only(bottom: 5, top: 4),
-      padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-      decoration: const pw.BoxDecoration(color: PdfColors.grey200),
-      child: pw.Text(
-        title.toUpperCase(),
-        style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold),
       ),
     );
   }

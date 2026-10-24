@@ -1,3 +1,4 @@
+import '../closeout/utils/report_entry_order.dart';
 // lib/screens/admin/print_packs/remark_cards_generator_sheet.dart
 
 import 'dart:typed_data';
@@ -64,17 +65,6 @@ class _RemarkCardsGeneratorSheetState extends State<RemarkCardsGeneratorSheet> {
     };
 
     return letter.isEmpty ? kindLabel : '$kindLabel $letter';
-  }
-
-  String _groupVarietyLabel(Map<String, dynamic> row) {
-    final groupName = _safe(row, 'group_name');
-    final variety = _safe(row, 'variety');
-
-    if (groupName.isNotEmpty && variety.isNotEmpty) {
-      return '$groupName / $variety';
-    }
-    if (groupName.isNotEmpty) return groupName;
-    return variety;
   }
 
   String _entryNumber(Map<String, dynamic> row) {
@@ -169,47 +159,7 @@ class _RemarkCardsGeneratorSheetState extends State<RemarkCardsGeneratorSheet> {
       );
       if (sectionLetterCmp != 0) return sectionLetterCmp;
 
-      final breedSortCmp = toInt(
-        a['breed_sort_order'],
-      ).compareTo(toInt(b['breed_sort_order']));
-      if (breedSortCmp != 0) return breedSortCmp;
-
-      final breedCmp = cmpText(_safe(a, 'breed'), _safe(b, 'breed'));
-      if (breedCmp != 0) return breedCmp;
-
-      final groupSortCmp = toInt(
-        a['group_sort_order'],
-      ).compareTo(toInt(b['group_sort_order']));
-      if (groupSortCmp != 0) return groupSortCmp;
-
-      final varietySortCmp = toInt(
-        a['variety_sort_order'],
-      ).compareTo(toInt(b['variety_sort_order']));
-      if (varietySortCmp != 0) return varietySortCmp;
-
-      final varietyCmp = cmpText(_groupVarietyLabel(a), _groupVarietyLabel(b));
-      if (varietyCmp != 0) return varietyCmp;
-
-      final classSortCmp = toInt(
-        a['class_sort_order'],
-      ).compareTo(toInt(b['class_sort_order']));
-      if (classSortCmp != 0) return classSortCmp;
-
-      final classCmp = cmpText(_safe(a, 'class_name'), _safe(b, 'class_name'));
-      if (classCmp != 0) return classCmp;
-
-      final sexSortCmp = toInt(
-        a['sex_sort_order'],
-      ).compareTo(toInt(b['sex_sort_order']));
-      if (sexSortCmp != 0) return sexSortCmp;
-
-      final sexCmp = cmpText(_safe(a, 'sex'), _safe(b, 'sex'));
-      if (sexCmp != 0) return sexCmp;
-
-      final coopCmp = cmpText(_safe(a, 'coop_number'), _safe(b, 'coop_number'));
-      if (coopCmp != 0) return coopCmp;
-
-      return cmpText(_safe(a, 'tattoo'), _safe(b, 'tattoo'));
+      return compareReportAnimalRows(a, b);
     });
 
     for (var i = 0; i < out.length; i++) {

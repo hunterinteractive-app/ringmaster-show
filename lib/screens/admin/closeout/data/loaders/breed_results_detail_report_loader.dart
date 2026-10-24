@@ -1,3 +1,4 @@
+import '../../utils/report_entry_order.dart';
 // lib/screens/admin/closeout/data/loaders/breed_results_detail_report_loader.dart
 
 import 'package:ringmaster_show/utils/cavy/cavy_awards.dart';
@@ -280,9 +281,11 @@ class BreedResultsDetailReportLoader {
 
     for (final row in reportRows) {
       normalizeSpeciesSexPresentation(row, speciesOverride: species);
+      if (species.isNotEmpty) row['species'] = species;
     }
     for (final row in overallRows) {
       normalizeSpeciesSexPresentation(row, speciesOverride: species);
+      if (species.isNotEmpty) row['species'] = species;
     }
 
     if (species == 'rabbit' && breedName.isNotEmpty) {
@@ -388,14 +391,17 @@ class BreedResultsDetailReportLoader {
     for (final row in awardRows.where(
       (a) => _isVarietyAward(a['award_code']),
     )) {
-      final sectionName = breedResultsDetailTopSectionName(
+      final award = _mapAwardRow(
         row,
-        groupByBreed: groupByBreed,
+        counts,
+        resultRowsForAwardLookup,
+        sweepstakesPoints,
       );
-      varietyAwardMap.putIfAbsent(sectionName, () => []);
-      varietyAwardMap[sectionName]!.add(
-        _mapAwardRow(row, counts, resultRowsForAwardLookup, sweepstakesPoints),
-      );
+      final sectionName = breedResultsDetailTopSectionName({
+        'breed_name': award.breedName,
+        'variety_name': award.variety,
+      }, groupByBreed: groupByBreed);
+      varietyAwardMap.putIfAbsent(sectionName, () => []).add(award);
     }
 
     return BreedResultsDetailSection(
@@ -558,7 +564,8 @@ class BreedResultsDetailReportLoader {
     final regularByVariety = <String, List<Map<String, dynamic>>>{};
     final furByCategory = <String, List<Map<String, dynamic>>>{};
 
-    for (final row in rows) {
+    final orderedRows = [...rows]..sort(compareReportAnimalRows);
+    for (final row in orderedRows) {
       final isFurOrWool = _isFurOrWoolRow(row);
       if (isFurOrWool) {
         final category = _furWoolCategoryLabel(row).isEmpty
@@ -582,8 +589,7 @@ class BreedResultsDetailReportLoader {
 
     final sections = <VarietySection>[];
 
-    final regularVarietyNames = regularByVariety.keys.toList()
-      ..sort(compareBreedResultsDetailSectionNames);
+    final regularVarietyNames = regularByVariety.keys.toList();
     for (final varietyName in regularVarietyNames) {
       sections.add(
         VarietySection(
@@ -883,6 +889,8 @@ class BreedResultsDetailReportLoader {
     );
 
     return BreedAward(
+      groupSortOrder: _sortMetadataValue(winnerRow?['group_sort_order']),
+      varietySortOrder: _sortMetadataValue(winnerRow?['variety_sort_order']),
       award: award,
       animal: animalLabel,
       breedName: breedName,
@@ -2239,8 +2247,14 @@ String breedResultsDetailTopSectionName(
       _detailSafe(row['breed_name']),
       _detailSafe(row['breed']),
     ]);
-    if (breedName.isNotEmpty) return breedName;
-    return 'Unspecified Breed';
+    final varietyName = _detailFirstNonEmpty([
+      _detailSafe(row['variety_name']),
+      _detailSafe(row['variety']),
+    ]);
+    return [
+      breedName.isEmpty ? 'Unspecified Breed' : breedName,
+      if (varietyName.isNotEmpty) varietyName,
+    ].join(' — ');
   }
 
   return _detailSafe(row['variety_name'], fallback: 'Unspecified Variety');

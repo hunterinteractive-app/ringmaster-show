@@ -1,3 +1,4 @@
+import '../../utils/report_entry_order.dart';
 // lib/screens/admin/closeout/data/loaders/legs_report_loader.dart
 
 import 'package:ringmaster_show/utils/species_sex.dart';
@@ -367,12 +368,10 @@ class LegsReportLoader {
       final nameCompare = a.exhibitorName.compareTo(b.exhibitorName);
       if (nameCompare != 0) return nameCompare;
 
-      final aShow = _sectionFromCertificateId(a.certificateId);
-      final bShow = _sectionFromCertificateId(b.certificateId);
-      final showCompare = aShow.compareTo(bShow);
-      if (showCompare != 0) return showCompare;
-
-      return a.earNumber.compareTo(b.earNumber);
+      return compareReportEntryRows(
+        entryContext[a.entryId]!.sortRow,
+        entryContext[b.entryId]!.sortRow,
+      );
     });
 
     // A leg cannot be certified without the sanction number for its section.
@@ -637,6 +636,8 @@ class LegsReportLoader {
 
         row['resolved_section_id'] = sectionId;
         row['resolved_section_letter'] = showLetter;
+        row['section_kind'] = rawSection['kind'];
+        row['section_sort_order'] = rawSection['sort_order'];
         row['resolved_judging_date'] = judgingDate;
         row['allows_ris_leg'] =
             _str(rawSection['breed_scope']).toLowerCase() == 'all';
@@ -786,6 +787,7 @@ class LegsReportLoader {
           )];
 
       byEntryId[entryId] = _EntryLegContext(
+        sortRow: row,
         sectionId: sectionId,
         allowsRisLeg: row['allows_ris_leg'] == true,
         sectionLetter: sectionLetter,
@@ -1372,14 +1374,6 @@ class LegsReportLoader {
     return formatted.isNotEmpty ? formatted : 'ADDRESS NOT PROVIDED';
   }
 
-  String _sectionFromCertificateId(String value) {
-    final parts = value.split('_');
-    if (parts.length >= 4) {
-      return parts[3].toUpperCase();
-    }
-    return '';
-  }
-
   String _firstNonEmpty(List<String> values) {
     for (final value in values) {
       final trimmed = value.trim();
@@ -1453,6 +1447,7 @@ class _LegRuleMatch {
 }
 
 class _EntryLegContext {
+  final Map<String, dynamic> sortRow;
   final bool allowsRisLeg;
   final String sectionId;
   final String sectionLetter;
@@ -1503,6 +1498,7 @@ class _EntryLegContext {
   final int showExhibitors;
 
   const _EntryLegContext({
+    required this.sortRow,
     required this.sectionId,
     required this.allowsRisLeg,
     required this.sectionLetter,

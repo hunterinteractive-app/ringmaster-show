@@ -107,8 +107,8 @@ void main() {
             return _json(request, {'display_name': 'Test Exhibitor'});
           case 'get_show_wave_schedule':
             return _json(request, {'enabled': false});
-          case 'report_closeout_checkin_entries':
-            expect(jsonDecode(request.body)['p_section_ids'], ['open']);
+          case 'report_checkin_entries':
+            expect(request.url.queryParameters['section_id'], 'in.("open")');
             return _page(request, entries);
           case 'entries':
             final ids = _ids(request, 'id');
@@ -174,6 +174,9 @@ void main() {
       final client = _client((request) async {
         if (request.url.path.endsWith('/shows')) {
           return _json(request, {'name': 'Local show'});
+        }
+        if (request.url.path.endsWith('/exhibitors')) {
+          return _json(request, <dynamic>[]);
         }
         expect(request.url.path, endsWith('/rpc/report_payback_rows'));
         expect(jsonDecode(request.body)['p_section_id'], 'open');
