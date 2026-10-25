@@ -608,7 +608,7 @@ class _ConventionSaleScreenState extends State<ConventionSaleScreen> {
                             ),
                             const SizedBox(height: 8),
                             const Text(
-                              'When you check out, we ask permission to check your location once. We use the U.S. Census geocoder to identify your city and state, then save those names, the check time and eligibility result with your account for Super Admin to review. This is your location during the check, not your home address. Precise visitor coordinates are not stored in the sale records.\nStart checkout during sale hours and complete it within one hour. Tax is shown at checkout.\nLocation unavailable or permission declined? Visit the booth for help.',
+                              'When you check out, we ask permission to check your location once. We use the U.S. Census geocoder to identify your city and state, then save those names, the check time and eligibility result with your account for review by authorized RingMaster staff. This is your location during the check, not your home address. Precise visitor coordinates are not stored in the sale records.\nStart checkout during sale hours and complete it within one hour. Tax is shown at checkout.\nLocation unavailable or permission declined? Visit the booth for help.',
                               textAlign: TextAlign.center,
                               style: TextStyle(
                                 color: Colors.white,
