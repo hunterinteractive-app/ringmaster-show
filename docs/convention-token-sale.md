@@ -38,8 +38,12 @@ create registrations or change tax settings.
 - Turning off the sale pauses new eligibility checks. Previously issued offers
   and already-started payments retain their original terms.
 
-An announcement appears on the sign-in and show-list screens while an enabled
-sale is upcoming or open. Existing check-in, judging, and demo routes are unchanged.
+The header promotion appears on the sign-in and show-list screens only while
+the sale is enabled, server-confirmed active, and within its scheduled hours.
+It stays hidden for upcoming, paused and ended sales. Open pages refresh the
+settings every 30 seconds and on foreground resume, with a timer at the next
+start/end boundary. A failed settings refresh hides the promotion until it can
+be confirmed again. Existing check-in, judging, and demo routes are unchanged.
 
 ## Eligibility and fulfillment
 
@@ -116,7 +120,7 @@ checks cannot be backfilled because their coordinates were not retained.
    secret, payment processing behavior, and email dependencies.
 4. Keep `checkout.session.completed` and add
    `checkout.session.async_payment_succeeded` on the **license** webhook endpoint.
-5. Deploy the normal Flutter entry point `lib/main.dart` (generation 1.00.08).
+5. Deploy the normal Flutter entry point `lib/main.dart` (generation 1.00.11).
    Never deploy the local preview entry point.
 6. Verify the anonymous catalog/settings, failed unauthenticated checkout,
    sale route, and Super Admin settings. No live charge is necessary for these checks.
