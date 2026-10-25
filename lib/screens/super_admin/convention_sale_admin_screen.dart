@@ -10,6 +10,7 @@ import '../../theme/app_theme.dart';
 import '../../widgets/ringmaster_page_shell.dart';
 import '../../widgets/rm_widgets.dart';
 import '../convention_sale_screen.dart';
+import 'convention_sale_visitors_screen.dart';
 
 class ConventionSaleAdminScreen extends StatefulWidget {
   const ConventionSaleAdminScreen({super.key});
@@ -684,6 +685,23 @@ class _ConventionSaleAdminScreenState extends State<ConventionSaleAdminScreen> {
                             ),
                             label: const Text(
                               'Preview sale page',
+                              style: TextStyle(color: Colors.white),
+                            ),
+                          ),
+                          OutlinedButton.icon(
+                            onPressed: () => Navigator.push(
+                              context,
+                              MaterialPageRoute<void>(
+                                builder: (_) =>
+                                    const ConventionSaleVisitorsScreen(),
+                              ),
+                            ),
+                            icon: const Icon(
+                              Icons.location_city,
+                              color: Colors.white,
+                            ),
+                            label: const Text(
+                              'Visitor city/state log',
                               style: TextStyle(color: Colors.white),
                             ),
                           ),

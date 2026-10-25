@@ -40,7 +40,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
                         ),
                         const SizedBox(height: AppSpacing.xs),
                         Text(
-                          'Effective Date: October 2026 (v2026-10)',
+                          'Effective Date: October 25, 2026 (v2026-10-25-locality)',
                           style: bodyStyle?.copyWith(color: AppColors.muted),
                         ),
                         const SizedBox(height: AppSpacing.lg),
@@ -60,7 +60,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
                               '• Device, browser, and usage information\n'
                               '• Support messages, screenshots of the app captured when a help report is submitted, and related diagnostic information\n'
                               '• Payment and transaction-related information when paid features are used\n\n'
-                              'For an optional convention purchase promotion, we request your permission to check your device location once for that checkout. We use the reported coordinates and accuracy to determine eligibility near the convention. Precise visitor coordinates are not stored in the promotion records; the eligibility verification time, offer details, account, and purchase record are retained. Hosting and authentication providers may separately process IP addresses and related network information.\n\n'
+                              'For an optional convention purchase promotion, we request your permission to check your device location once for that checkout. We use the reported coordinates and accuracy to determine eligibility near the convention. When you use the updated city/state location notice, the coordinates are also sent to the U.S. Census geocoder to identify the city and state where the check takes place. We retain those locality names, the check time, eligibility result, selected package and account for Super Admin review, including when the check is outside the sale area or a purchase is not completed. This describes your check location, not your home address. If the locality lookup is unavailable, that is recorded without guessing a city. Precise visitor coordinates and full geocoder responses are not stored in the promotion records. Offer and purchase records are also retained. Hosting, authentication and lookup providers may separately process IP addresses and related request information under their own practices.\n\n'
                               'Information may be provided directly by you, submitted by an authorized club representative or other user managing show records, or generated through your use of the platform.',
                           sectionStyle,
                           bodyStyle,

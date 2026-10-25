@@ -54,7 +54,7 @@ so this is a deterrent to casual link sharing, not guaranteed proof of attendanc
 
 Each successful location check creates a private offer for that verified user,
 package, canonical Stripe Price, currency, bonus, and sale revision.
-Precise visitor coordinates are not saved. The offer can start one checkout request
+Precise visitor coordinates are not saved. With the updated location notice, the check also records city/state as described below. The offer can start one checkout request
 within 15 minutes, or before the sale closes, whichever is earlier. A matching
 paid session is honored if that in-flight provider request crosses the deadline. Stripe allows
 one hour from verification to submit payment. Delayed payment methods can
@@ -71,20 +71,52 @@ Unlimited purchases add 12 plus the configured bonus calendar months from the
 later of payment confirmation and existing expiration. Existing lifetime access
 is preserved. The confirmation page and purchase email include the awarded offer.
 
+## Visitor city/state log
+
+Super Admin → Convention Token Sale → **Visitor city/state log** shows the
+account email, city/state at the check, check time, venue, selected package,
+area eligibility and whether the purchase was fulfilled. Use Refresh to update
+payment status, and Load older checks to read earlier records (50 per page).
+History is retained when the convention settings change next year.
+
+Only an authenticated buyer who presses the purchase location button after the
+updated notice creates a record. Ordinary page views and permission-denied or
+invalid/stale measurements do not create locality records. Valid measurements
+outside the area are recorded without granting an offer. Retries reuse one
+record and never overwrite its original city/state. New checks are limited to
+30 per hour per account.
+
+The server sends just the coordinates, without account/payment details, to the
+[U.S. Census coordinate geography API](https://geocoding.geo.census.gov/geocoder/Geocoding_Services_API.html).
+It extracts the incorporated place or Census designated place and two-letter
+state abbreviation, then discards the full response. No precise coordinates,
+accuracy, street address, IP address or provider payload is stored in this log.
+These are **check locations, not home addresses**. U.S. states/territories are
+supported. A missing city is shown as unavailable; timeouts, unsupported areas
+or other lookup failures do not block an eligible purchase. The lookup is
+bounded to three seconds. A record left pending after an interrupted request is
+shown as incomplete in the log.
+
+The table lives in the private sale schema with RLS and no browser grants.
+Recording RPCs are service-role-only. The bounded visitor-read RPC explicitly
+checks `auth.uid()` and Super Admin status. Old browser tabs that have not shown
+the new notice keep the original flow without retaining city/state. Existing
+checks cannot be backfilled because their coordinates were not retained.
+
 ## Deployment
 
-1. Apply the `convention_token_sale` and `convention_sale_fulfillment_deadline` migrations to the Show project only.
+1. Apply the `convention_token_sale`, `convention_sale_fulfillment_deadline`, and `convention_visitor_locality` migrations to the Show project only.
    It adds private settings/offer tables and restricted public RPCs; it does not
    rewrite existing user balances or historical purchases.
 2. Deploy `convention-sale-checkout` with `verify_jwt=false`. The catalog is
    public; checkout authenticates the user's JWT with `auth.getUser`. Include its
    handler, `_shared/convention_sale.ts`, `_shared/request_fetch.ts`, and the
-   function Deno configuration.
+   function Deno configuration. Include `_shared/convention_locality.ts` for city/state lookups.
 3. Deploy the updated `stripe-license-webhook`, retaining its existing signature
    secret, payment processing behavior, and email dependencies.
 4. Keep `checkout.session.completed` and add
    `checkout.session.async_payment_succeeded` on the **license** webhook endpoint.
-5. Deploy the normal Flutter entry point `lib/main.dart` (generation 1.00.07).
+5. Deploy the normal Flutter entry point `lib/main.dart` (generation 1.00.08).
    Never deploy the local preview entry point.
 6. Verify the anonymous catalog/settings, failed unauthenticated checkout,
    sale route, and Super Admin settings. No live charge is necessary for these checks.
@@ -125,4 +157,4 @@ Open `http://127.0.0.1:58620`. This preview cannot process payments. Its setting
 do not reach Supabase. The Super Admin map uses normal interactive
 [OpenStreetMap tiles](https://operations.osmfoundation.org/policies/tiles/) with
 visible attribution and a browser referrer, without bulk downloads or public
-geocoding API calls.
+geocoding API calls from the admin map. The purchase location check uses the separate Census lookup described above.

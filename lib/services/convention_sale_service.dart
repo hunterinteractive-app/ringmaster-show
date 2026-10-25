@@ -28,8 +28,23 @@ class ConventionSaleService {
     'action': 'checkout',
     'plan': plan,
     'request_id': requestId,
+    'location_notice_version': '2026-10-25-locality',
     ...location,
   });
+
+  static Future<List<Map<String, dynamic>>> visitors({
+    Map<String, dynamic>? before,
+  }) async =>
+      (await _client.rpc(
+                'convention_sale_visitors',
+                params: {
+                  if (before != null) 'p_before': before['checked_at'],
+                  if (before != null) 'p_before_id': before['id'],
+                },
+              )
+              as List)
+          .map((row) => Map<String, dynamic>.from(row as Map))
+          .toList();
 
   static Future<Map<String, dynamic>?> purchase(String claimId) async {
     final result = await _client.rpc(
