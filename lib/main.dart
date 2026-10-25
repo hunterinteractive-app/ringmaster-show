@@ -276,6 +276,7 @@ class Root extends StatefulWidget {
 }
 
 class _RootState extends State<Root> {
+  String? _startupUserId;
   bool _loading = true;
   bool _hasExhibitor = false;
   String? _msg;
@@ -302,6 +303,10 @@ class _RootState extends State<Root> {
 
       if (event == AuthChangeEvent.signedOut || session == null) {
         AppInitService.reset();
+      } else if (session.user.id == _startupUserId) {
+        // Refreshing a token or re-announcing the same sign-in must not dispose
+        // the show list underneath an open agreement dialog.
+        return;
       }
 
       _refresh();
@@ -316,6 +321,7 @@ class _RootState extends State<Root> {
 
   Future<void> _refresh() async {
     final user = supabase.auth.currentUser;
+    _startupUserId = user?.id;
     final demoMode = initialDemoMode || _demoModeFromBrowser();
 
     if (user == null) {
@@ -360,7 +366,7 @@ class _RootState extends State<Root> {
           .limit(1)
           .maybeSingle();
 
-      if (!mounted) return;
+      if (!mounted || supabase.auth.currentUser?.id != user.id) return;
       setState(() {
         _hasExhibitor =
             row != null ||
@@ -369,7 +375,7 @@ class _RootState extends State<Root> {
         _loading = false;
       });
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted || supabase.auth.currentUser?.id != user.id) return;
       setState(() {
         _loading = false;
         _hasExhibitor = false;
@@ -408,7 +414,7 @@ class _RootState extends State<Root> {
       return ConventionSaleScreen(initialUri: conventionUri);
     }
 
-    if (session == null) return const LoginScreen();
+    if (session == null) return const LoginScreen(rootManaged: true);
 
     if (squareConnectUri != null) {
       return SquareConnectReturnScreen(uri: squareConnectUri);

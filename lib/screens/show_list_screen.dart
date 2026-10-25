@@ -34,7 +34,7 @@ import 'package:ringmaster_show/superintendent/superintendent_shows_screen.dart'
 import 'package:ringmaster_show/services/superintendent_access_service.dart';
 import 'account_profile_setup_screen.dart';
 
-import '../config/legal_config.dart';
+import '../services/legal_acceptance_service.dart';
 import '../services/app_session.dart';
 import '../services/show_addon_service.dart';
 import '../services/show_payment_configuration_service.dart';
@@ -210,6 +210,7 @@ class _ShowListScreenState extends State<ShowListScreen> {
   String _stateFilter = 'All';
   bool _showSearchFilters = true;
   bool _checkingLegal = true;
+  String? _legalError;
   bool _canAccessAdmin = false;
   bool _canAccessSuperintendent = false;
   bool _loadingAdminAccess = true;
@@ -1197,6 +1198,7 @@ class _ShowListScreenState extends State<ShowListScreen> {
   }
 
   Future<void> _verifyLegalAcceptance() async {
+    if (mounted) setState(() => _legalError = null);
     if (widget.demoMode) {
       if (!mounted) return;
       setState(() {
@@ -1219,8 +1221,6 @@ class _ShowListScreenState extends State<ShowListScreen> {
       return;
     }
 
-    final userId = _effectiveUserId ?? user.id;
-
     if (SupportImpersonationSession.isActive) {
       await _loadAdminAccess();
       if (!mounted) return;
@@ -1231,66 +1231,42 @@ class _ShowListScreenState extends State<ShowListScreen> {
       return;
     }
 
-    final profile = await supabase
-        .from('profiles')
-        .select('accepted_terms_version, accepted_privacy_version')
-        .eq('user_id', userId)
-        .maybeSingle();
-
-    final termsOk =
-        profile?['accepted_terms_version'] == LegalConfig.currentTermsVersion;
-    final privacyOk =
-        profile?['accepted_privacy_version'] ==
-        LegalConfig.currentPrivacyVersion;
-
-    if (termsOk && privacyOk) {
-      final accountReady = await _ensureExhibitorAccount();
-      if (!accountReady || !mounted) return;
-
-      await _loadAdminAccess();
-      if (!mounted) return;
-      setState(() {
-        _bundleFuture = _loadBundle();
-        _checkingLegal = false;
-      });
-      return;
-    }
-
-    if (!mounted) return;
-
-    final agreed = await _showLegalAgreementDialog();
-
-    if (!agreed) {
-      await supabase.auth.signOut();
-
-      if (!mounted) return;
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const LoginScreen()),
-        (_) => false,
-      );
-      return;
-    }
-
     try {
-      await supabase.from('profiles').upsert({
-        'user_id': userId,
-        'accepted_terms_version': LegalConfig.currentTermsVersion,
-        'accepted_terms_at': DateTime.now().toUtc().toIso8601String(),
-        'accepted_privacy_version': LegalConfig.currentPrivacyVersion,
-        'accepted_privacy_at': DateTime.now().toUtc().toIso8601String(),
-        'email': user.email,
-        'display_name': user.email?.split('@').first ?? 'User',
-      }, onConflict: 'user_id');
-    } catch (e) {
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Could not save legal agreement: $e'),
-          backgroundColor: AppColors.danger,
-        ),
-      );
-
+      final agreed = await LegalAcceptanceService(supabase, user.id)
+          .ensureAccepted(
+            prompt: (save) async {
+              if (!mounted) return null;
+              return showDialog<bool>(
+                context: context,
+                barrierDismissible: false,
+                builder: (_) => LegalAgreementDialog(onAccept: save),
+              );
+            },
+          );
+      if (!mounted || supabase.auth.currentUser?.id != user.id) return;
+      if (agreed == null) {
+        setState(
+          () => _legalError =
+              'The agreement check was interrupted. Please retry.',
+        );
+        return;
+      }
+      if (!agreed) {
+        await supabase.auth.signOut();
+        if (!mounted) return;
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const LoginScreen()),
+          (_) => false,
+        );
+        return;
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => _legalError =
+              'Your saved agreement could not be checked. Please retry.',
+        );
+      }
       return;
     }
 
@@ -1305,15 +1281,6 @@ class _ShowListScreenState extends State<ShowListScreen> {
       _bundleFuture = _loadBundle();
       _checkingLegal = false;
     });
-  }
-
-  Future<bool> _showLegalAgreementDialog() async {
-    return await showDialog<bool>(
-          context: context,
-          barrierDismissible: false,
-          builder: (_) => const LegalAgreementDialog(),
-        ) ??
-        false;
   }
 
   Future<void> _logout(BuildContext context) async {
@@ -1611,7 +1578,26 @@ class _ShowListScreenState extends State<ShowListScreen> {
   Widget build(BuildContext context) {
     ShowAssistantController.instance.register(context, 'Upcoming Shows', null);
     if (_checkingLegal) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return Scaffold(
+        body: Center(
+          child: _legalError == null
+              ? const CircularProgressIndicator()
+              : Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(_legalError!, textAlign: TextAlign.center),
+                      const SizedBox(height: 12),
+                      FilledButton(
+                        onPressed: _verifyLegalAcceptance,
+                        child: const Text('Retry agreement check'),
+                      ),
+                    ],
+                  ),
+                ),
+        ),
+      );
     }
 
     return FutureBuilder<_ShowListBundle>(

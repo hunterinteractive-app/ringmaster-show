@@ -26,8 +26,9 @@ import 'package:flutter/services.dart';
 final supabase = Supabase.instance.client;
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key, this.afterLogin});
+  const LoginScreen({super.key, this.afterLogin, this.rootManaged = false});
   final WidgetBuilder? afterLogin;
+  final bool rootManaged;
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -230,6 +231,9 @@ class _LoginScreenState extends State<LoginScreen>
       await AppInitService.initializeForCurrentUser();
 
       if (!mounted) return;
+      // Root already owns this transition. A second show-list route here can
+      // create a second agreement check during the same sign-in.
+      if (widget.rootManaged) return;
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
           builder: widget.afterLogin ?? (_) => const ShowListScreen(),
