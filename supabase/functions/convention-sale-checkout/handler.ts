@@ -8,6 +8,10 @@ import {
   isUuid,
 } from "../_shared/convention_sale.ts";
 import { authErrorStatus } from "../_shared/request_fetch.ts";
+import {
+  type ConventionLocality,
+  lookupConventionLocality,
+} from "../_shared/convention_locality.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -30,6 +34,10 @@ export function createConventionSaleHandler(deps: {
   db: SupabaseClient;
   site: string;
   links?: Partial<Record<ConventionPlan, string>>;
+  locality?: (
+    latitude: number,
+    longitude: number,
+  ) => Promise<ConventionLocality>;
 }) {
   const { stripe, db } = deps;
   return async (req: Request) => {
@@ -96,6 +104,56 @@ export function createConventionSaleHandler(deps: {
       }
       const location = checkoutMeasurement(body);
       const p = await product(body.plan);
+      // Older open tabs have not shown the city/state retention notice. Leave
+      // their original coordinate-only eligibility flow intact.
+      if (body.location_notice_version === "2026-10-25-locality") {
+        const check = await db.rpc("convention_sale_location_check", {
+          p_id: body.request_id,
+          p_user_id: auth.user.id,
+          p_email: auth.user.email,
+          p_plan: body.plan,
+          p_latitude: location.latitude,
+          p_longitude: location.longitude,
+          p_accuracy: location.accuracy,
+          p_measured_at: location.measured_at,
+        });
+        if (check.error) {
+          const message = check.error.message;
+          return json({
+            error: /^(The convention sale|A fresh|Too many|Checkout request)/
+                .test(message)
+              ? message
+              : "Unable to verify this offer. Please retry or visit the booth for help.",
+          }, 400);
+        }
+        if (check.data.lookup_needed) {
+          let locality: ConventionLocality;
+          try {
+            locality = await (deps.locality ?? lookupConventionLocality)(
+              location.latitude,
+              location.longitude,
+            );
+          } catch {
+            locality = { city: null, state: null, status: "unavailable" };
+          }
+          const saved = await db.rpc("convention_sale_location_result", {
+            p_id: body.request_id,
+            p_user_id: auth.user.id,
+            p_city: locality.city,
+            p_state: locality.state,
+            p_status: locality.status,
+          });
+          if (saved.error) {
+            console.error("Convention city/state could not save");
+          }
+        }
+        if (!check.data.eligible) {
+          return json({
+            error:
+              "Your location could not be confirmed inside the sale area. Retry or visit the booth for help.",
+          }, 400);
+        }
+      }
       const { data: claim, error } = await db.rpc("convention_sale_claim", {
         p_id: body.request_id,
         p_user_id: auth.user.id,

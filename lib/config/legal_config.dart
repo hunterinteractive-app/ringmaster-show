@@ -2,7 +2,7 @@
 
 class LegalConfig {
   static const String currentTermsVersion = '2026-09';
-  static const String currentPrivacyVersion = '2026-10';
+  static const String currentPrivacyVersion = '2026-10-25-locality';
 
   static const String termsUrl = 'https://show.ringmasterone.com/terms';
   static const String privacyUrl = 'https://show.ringmasterone.com/privacy';

@@ -218,7 +218,13 @@ class _ConventionSaleScreenState extends State<ConventionSaleScreen> {
       final text = e is StateError
           ? e.message.toString()
           : 'Unable to open checkout. Please retry or visit the booth for help.';
-      if (text.contains('expired') || text.contains('does not match')) {
+      // A declined location check is a completed visitor record. A new reading
+      // after moving into the area must use a new id, while provider/network
+      // retries retain their id to avoid creating another payment session.
+      if (text.contains('expired') ||
+          text.contains('does not match') ||
+          text.contains('inside the sale area') ||
+          text.contains('fresh, accurate')) {
         _requestId = null;
         _requestPlan = null;
       }
@@ -602,7 +608,7 @@ class _ConventionSaleScreenState extends State<ConventionSaleScreen> {
                             ),
                             const SizedBox(height: 8),
                             const Text(
-                              'When you check out, we ask permission to check your location once. We keep the eligibility result and time with your purchase; precise visitor coordinates are not stored in the sale records.\nStart checkout during sale hours and complete it within one hour. Tax is shown at checkout.\nLocation unavailable or permission declined? Visit the booth for help.',
+                              'When you check out, we ask permission to check your location once. We use the U.S. Census geocoder to identify your city and state, then save those names, the check time and eligibility result with your account for Super Admin to review. This is your location during the check, not your home address. Precise visitor coordinates are not stored in the sale records.\nStart checkout during sale hours and complete it within one hour. Tax is shown at checkout.\nLocation unavailable or permission declined? Visit the booth for help.',
                               textAlign: TextAlign.center,
                               style: TextStyle(
                                 color: Colors.white,

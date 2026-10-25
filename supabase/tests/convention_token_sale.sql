@@ -98,5 +98,43 @@ select pg_temp.sale_check(public.convention_sale_purchase('bbbbbbbb-0000-4000-80
 select set_config('request.jwt.claim.sub','aaaaaaaa-0000-4000-8000-000000000002',true);
 select pg_temp.sale_check(public.convention_sale_purchase('bbbbbbbb-0000-4000-8000-000000000001') is null,'another account cannot read the receipt');
 select pg_temp.sale_check(not exists(select 1 from information_schema.columns where table_schema='convention_sale_private' and table_name='claims' and column_name in ('latitude','longitude','accuracy')),'precise visitor location is not retained');
+
+-- City/state records are separate from purchases and never contain coordinates.
+create function pg_temp.location_check(check_id uuid,lat double precision default 39.4861,
+  buyer uuid default 'aaaaaaaa-0000-4000-8000-000000000001') returns jsonb language sql as $$
+ select public.convention_sale_location_check(check_id,buyer,'buyer@example.invalid','single_show',lat,-119.7911,10,now());
+$$;
+select pg_temp.sale_check(not has_function_privilege('anon','public.convention_sale_visitors(timestamptz,uuid)','execute'),'visitor list is not public');
+select pg_temp.sale_check(not has_function_privilege('authenticated','public.convention_sale_location_check(uuid,uuid,text,text,double precision,double precision,double precision,timestamptz)','execute'),'buyers cannot forge location records');
+select pg_temp.sale_check(not has_function_privilege('authenticated','public.convention_sale_location_result(uuid,uuid,text,text,text)','execute'),'buyers cannot forge city/state');
+select pg_temp.sale_check(not has_table_privilege('authenticated','convention_sale_private.location_checks','select'),'buyers cannot read visitor table');
+select pg_temp.sale_reject('select public.convention_sale_visitors()','Super Admin','ordinary accounts cannot read visitor log');
+select pg_temp.sale_check(pg_temp.location_check('bbbbbbbb-0000-4000-8000-000000000001')->>'eligible'='true','eligible city/state check recorded');
+select public.convention_sale_location_result('bbbbbbbb-0000-4000-8000-000000000001','aaaaaaaa-0000-4000-8000-000000000001','Reno','NV','resolved');
+select public.convention_sale_location_result('bbbbbbbb-0000-4000-8000-000000000001','aaaaaaaa-0000-4000-8000-000000000001','Wrong','CA','resolved');
+select pg_temp.sale_check((select city='Reno' and state='NV' from convention_sale_private.location_checks where id='bbbbbbbb-0000-4000-8000-000000000001'),'retry cannot overwrite original locality');
+select pg_temp.sale_check(pg_temp.location_check('bbbbbbbb-0000-4000-8000-000000000001')->>'lookup_needed'='false','retry does not repeat external lookup');
+select pg_temp.sale_reject($c$select pg_temp.location_check('bbbbbbbb-0000-4000-8000-000000000001',39.4861,'aaaaaaaa-0000-4000-8000-000000000002')$c$,'does not match','another account cannot reuse visitor record');
+select pg_temp.sale_check(pg_temp.location_check('dddddddd-0000-4000-8000-000000000001',40)->>'eligible'='false','outside-area checks are retained without granting offer');
+select public.convention_sale_location_result('dddddddd-0000-4000-8000-000000000001','aaaaaaaa-0000-4000-8000-000000000002','Wrong','CA','resolved');
+select pg_temp.sale_check((select locality_status='pending' from convention_sale_private.location_checks where id='dddddddd-0000-4000-8000-000000000001'),'locality result must match recorded account');
+select public.convention_sale_location_result('dddddddd-0000-4000-8000-000000000001','aaaaaaaa-0000-4000-8000-000000000001',null,'NV','state_only');
+select pg_temp.sale_check((select city is null and state='NV' from convention_sale_private.location_checks where id='dddddddd-0000-4000-8000-000000000001'),'unknown city is not inferred from convention');
+select pg_temp.sale_check(not exists(select 1 from information_schema.columns where table_schema='convention_sale_private' and table_name='location_checks' and column_name in ('latitude','longitude','accuracy','provider_response')),'visitor log never stores raw coordinates or lookup payload');
+update convention_sale_private.settings set enabled=false;
+select pg_temp.sale_reject($c$select pg_temp.location_check('dddddddd-0000-4000-8000-000000000002')$c$,'not open','paused sale creates no visitor record');
+update convention_sale_private.settings set enabled=true;
+select pg_temp.sale_reject($c$select public.convention_sale_location_check('dddddddd-0000-4000-8000-000000000002','aaaaaaaa-0000-4000-8000-000000000001','buyer@example.invalid','single_show',39.4861,-119.7911,10,now()-interval '61 seconds')$c$,'fresh, accurate','stale points never reach visitor log');
+select set_config('request.jwt.claim.sub','aaaaaaaa-0000-4000-8000-000000000004',true);
+select pg_temp.sale_check(jsonb_array_length(public.convention_sale_visitors())=2,'Super Admin can see saved checks');
+select pg_temp.sale_check(public.convention_sale_visitors()->0->>'purchased'='false','outside-area record does not show paid status');
+select pg_temp.sale_check(public.convention_sale_visitors()->1->>'purchased'='true','visitor record shows fulfilled purchase');
+select pg_temp.sale_check(jsonb_array_length(public.convention_sale_visitors(now(),'dddddddd-0000-4000-8000-000000000001'))=1,'same-timestamp cursor preserves older records');
+-- Exercise the bounded result and account rate limit with synthetic records.
+insert into convention_sale_private.location_checks(id,user_id,email,plan,sale_revision,venue,eligible)
+ select md5('location-fixture-'||g)::uuid,'aaaaaaaa-0000-4000-8000-000000000002','other@example.invalid','single_show',1,'Fixture venue',false from generate_series(1,55) g;
+select pg_temp.sale_check(jsonb_array_length(public.convention_sale_visitors())=50,'visitor log is bounded to 50 per page');
+select pg_temp.sale_reject($c$select pg_temp.location_check('dddddddd-0000-4000-8000-000000000002',39.4861,'aaaaaaaa-0000-4000-8000-000000000002')$c$,'Too many','rejected-area requests cannot bypass account rate limit');
+
 select count(*)||' convention sale database checks passed' as result from sale_checks;
 rollback;

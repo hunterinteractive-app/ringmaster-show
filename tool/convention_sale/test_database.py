@@ -51,7 +51,7 @@ grant select,insert,update on public.account_license_balances,public.processed_s
 command('createdb', '-U', 'postgres', database)
 try:
     sql(bootstrap)
-    migrations = sorted(list((root / 'supabase/migrations').glob('*_convention_token_sale.sql')) + list((root / 'supabase/migrations').glob('*_convention_sale_fulfillment_deadline.sql')))
+    migrations = sorted(list((root / 'supabase/migrations').glob('*_convention_token_sale.sql')) + list((root / 'supabase/migrations').glob('*_convention_sale_fulfillment_deadline.sql')) + list((root / 'supabase/migrations').glob('*_convention_visitor_locality.sql')))
     for migration in migrations:
         sql(migration.read_text())
     output = sql((root / 'supabase/tests/convention_token_sale.sql').read_text())

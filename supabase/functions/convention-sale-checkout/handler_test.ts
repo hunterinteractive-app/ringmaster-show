@@ -13,6 +13,7 @@ function harness(
     tax?: boolean;
     registrations?: boolean;
     quoteAgeMs?: number;
+    localityFailure?: boolean;
   } = {},
 ) {
   const calls: { name: string; params: unknown }[] = [];
@@ -86,6 +87,15 @@ function harness(
     },
     rpc: (name: string, params: unknown) => {
       calls.push({ name, params });
+      if (name === "convention_sale_location_check") {
+        return Promise.resolve({
+          error: null,
+          data: { eligible: options.eligible !== false, lookup_needed: true },
+        });
+      }
+      if (name === "convention_sale_location_result") {
+        return Promise.resolve({ error: null, data: null });
+      }
       return Promise.resolve(
         options.eligible === false
           ? {
@@ -111,6 +121,13 @@ function harness(
     stripe,
     db,
     site: "https://sale.example.invalid",
+    locality: () => {
+      calls.push({ name: "locality", params: null });
+      if (options.localityFailure) {
+        return Promise.reject(new Error("lookup unavailable"));
+      }
+      return Promise.resolve({ city: "Reno", state: "NV", status: "resolved" });
+    },
   });
   const request = (patch: Record<string, unknown> = {}) =>
     new Request("https://functions.example.invalid", {
@@ -138,6 +155,69 @@ Deno.test("catalog loads without signing in or requesting location", async () =>
   assertEquals(response.status, 200);
   assertEquals((await response.json()).products.length, 3);
   assertEquals(h.calls.length, 0);
+});
+Deno.test("city/state is captured from the server lookup after the updated notice", async () => {
+  const h = harness();
+  const response = await h.handler(h.request({
+    location_notice_version: "2026-10-25-locality",
+    city: "Forged",
+    state: "XX",
+  }));
+  assertEquals(response.status, 200);
+  assertEquals(
+    h.calls.find((c) => c.name === "convention_sale_location_result")?.params,
+    {
+      p_id: claimId,
+      p_user_id: ownerId,
+      p_city: "Reno",
+      p_state: "NV",
+      p_status: "resolved",
+    },
+  );
+});
+Deno.test("old tabs do not save city/state before displaying the new notice", async () => {
+  const h = harness();
+  assertEquals((await h.handler(h.request())).status, 200);
+  assertEquals(
+    h.calls.some((c) =>
+      c.name === "locality" || c.name.startsWith("convention_sale_location")
+    ),
+    false,
+  );
+});
+Deno.test("outside-area checks save locality but cannot create a payment", async () => {
+  const h = harness({ eligible: false });
+  assertEquals(
+    (await h.handler(
+      h.request({ location_notice_version: "2026-10-25-locality" }),
+    )).status,
+    400,
+  );
+  assertEquals(
+    h.calls.some((c) => c.name === "convention_sale_location_result"),
+    true,
+  );
+  assertEquals(
+    h.calls.some((c) =>
+      c.name === "convention_sale_claim" || c.name === "stripe"
+    ),
+    false,
+  );
+});
+Deno.test("a locality provider failure does not block eligible checkout", async () => {
+  const h = harness({ localityFailure: true });
+  assertEquals(
+    (await h.handler(
+      h.request({ location_notice_version: "2026-10-25-locality" }),
+    )).status,
+    200,
+  );
+  const saved = h.calls.find((c) =>
+    c.name === "convention_sale_location_result"
+  )?.params as Record<string, unknown>;
+  assertEquals(saved.p_status, "unavailable");
+  assertEquals(saved.p_city, null);
+  assertEquals(saved.p_state, null);
 });
 Deno.test("unauthenticated and unverified buyers cannot start checkout", async () => {
   for (const options of [{ signedIn: false }, { verified: false }]) {

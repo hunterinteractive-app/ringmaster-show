@@ -30,6 +30,19 @@ class Handler(SimpleHTTPRequestHandler):
         self.reply({})
 
     def do_POST(self):
+        if self.path == '/rest/v1/rpc/convention_sale_visitors':
+            self.rfile.read(int(self.headers.get('Content-Length', 0)))
+            return self.reply([
+                dict(id='example-reno', email='sample-buyer@example.invalid', plan='four_shows',
+                     venue=settings['venue'], checked_at='2026-10-26T17:30:00Z', eligible=True,
+                     city='Reno', state='NV', locality_status='resolved', purchased=True),
+                dict(id='example-sparks', email='sample-visitor@example.invalid', plan='single_show',
+                     venue=settings['venue'], checked_at='2026-10-26T17:00:00Z', eligible=False,
+                     city='Sparks', state='NV', locality_status='resolved', purchased=False),
+                dict(id='example-unavailable', email='sample-lookup@example.invalid', plan='unlimited',
+                     venue=settings['venue'], checked_at='2026-10-26T16:30:00Z', eligible=True,
+                     city=None, state=None, locality_status='unavailable', purchased=False),
+            ])
         if self.path == '/functions/v1/convention-sale-checkout':
             return self.reply({'products': [
                 {'plan': 'single_show', 'amount': 5000, 'currency': 'usd', 'tax_inclusive': True},
