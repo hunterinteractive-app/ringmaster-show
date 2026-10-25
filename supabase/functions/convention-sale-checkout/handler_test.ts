@@ -14,6 +14,7 @@ function harness(
     registrations?: boolean;
     quoteAgeMs?: number;
     localityFailure?: boolean;
+    legacyOffer?: boolean;
   } = {},
 ) {
   const calls: { name: string; params: unknown }[] = [];
@@ -109,6 +110,7 @@ function harness(
             error: null,
             data: {
               id: claimId,
+              secretary_recipient: options.legacyOffer !== true,
               bonus_tokens: 1,
               bonus_months: 2,
               verified_at: verifiedAt,
@@ -199,7 +201,7 @@ Deno.test("outside-area checks save locality but cannot create a payment", async
   );
   assertEquals(
     h.calls.some((c) =>
-      c.name === "convention_sale_claim" || c.name === "stripe"
+      c.name === "convention_sale_claim_secretary" || c.name === "stripe"
     ),
     false,
   );
@@ -244,7 +246,7 @@ Deno.test("account, price and bonus come from authenticated server records", asy
     }),
   );
   assertEquals(response.status, 200);
-  const rpc = h.calls.find((c) => c.name === "convention_sale_claim")!
+  const rpc = h.calls.find((c) => c.name === "convention_sale_claim_secretary")!
     .params as Record<string, unknown>;
   assertEquals(rpc.p_user_id, ownerId);
   assertEquals(rpc.p_price_id, "price_canonical");
@@ -255,6 +257,20 @@ Deno.test("account, price and bonus come from authenticated server records", asy
     request: { idempotencyKey: string };
   };
   assertEquals(stripe.params.metadata?.convention_claim_id, claimId);
+  assertEquals(stripe.params.metadata?.convention_recipient, "secretary");
+  assertEquals(
+    stripe.params.custom_fields?.map(
+      (f) => [f.key, f.label.custom, f.optional],
+    ),
+    [
+      ["showsecretaryname", "Show Secretary Name", false],
+      ["showsecretaryemail", "Show Secretary Email", false],
+    ],
+  );
+  assertStringIncludes(
+    (stripe.params.custom_text!.submit as { message: string }).message,
+    "Show Secretary Email",
+  );
   assertEquals(stripe.params.client_reference_id, claimId);
   assertEquals(stripe.params.line_items, [{
     price: "price_canonical",
@@ -266,6 +282,19 @@ Deno.test("account, price and bonus come from authenticated server records", asy
   assertEquals(
     stripe.params.success_url,
     `https://sale.example.invalid/#/convention-sale?purchase=${claimId}`,
+  );
+});
+Deno.test("retry of an already-issued legacy offer retains its original buyer and payload", async () => {
+  const h = harness({ legacyOffer: true });
+  assertEquals((await h.handler(h.request())).status, 200);
+  const { params } = h.calls.find((c) => c.name === "stripe")!.params as {
+    params: Stripe.Checkout.SessionCreateParams;
+  };
+  assertEquals(params.custom_fields, undefined);
+  assertEquals(params.metadata?.convention_recipient, undefined);
+  assertStringIncludes(
+    (params.custom_text!.submit as { message: string }).message,
+    "signed-in RingMaster account",
   );
 });
 Deno.test("retry uses identical Stripe payload and idempotency key", async () => {

@@ -1,0 +1,43 @@
+name: Convention sale payment regression
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/convention-sale-regression.yml'
+      - 'supabase/functions/convention-sale-checkout/**'
+      - 'supabase/functions/stripe-license-webhook/**'
+      - 'supabase/functions/_shared/convention*'
+      - 'supabase/functions/_shared/license_purchase_email*'
+      - 'supabase/migrations/*convention*'
+      - 'supabase/tests/convention*'
+      - 'tool/convention_sale/test_database.py'
+
+permissions:
+  contents: read
+
+jobs:
+  payment-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate checkout and paid webhook behavior
+        run: |
+          npx --yes deno@2.9.6 test --config supabase/functions/deno.json --allow-env --allow-net supabase/functions/convention-sale-checkout/handler_test.ts supabase/functions/_shared/convention_sale_test.ts supabase/functions/_shared/convention_locality_test.ts supabase/functions/_shared/license_purchase_email_test.ts
+          npx --yes deno@2.9.6 check --config supabase/functions/deno.json supabase/functions/stripe-license-webhook/index.ts
+      - name: Start disposable payment database
+        run: |
+          docker run -d --name supabase_db_convention_sale_ci -e POSTGRES_PASSWORD=disposable-ci-only --health-cmd='pg_isready -U postgres' --health-interval=1s --health-timeout=5s --health-retries=30 postgres:17
+          for attempt in $(seq 1 30); do
+            if docker exec supabase_db_convention_sale_ci pg_isready -U postgres; then break; fi
+            sleep 1
+          done
+          docker exec supabase_db_convention_sale_ci psql -U postgres -v ON_ERROR_STOP=1 -c 'create role anon; create role authenticated; create role service_role bypassrls;'
+      - name: Validate account routing and concurrent fulfillment
+        run: python3 tool/convention_sale/test_database.py --container supabase_db_convention_sale_ci
+      - name: Remove disposable database
+        if: always()
+        run: docker rm -f supabase_db_convention_sale_ci || true

@@ -68,6 +68,49 @@ Deno.test("paid session resolves only the server-created claim and exact line it
   assertEquals(result.p_amount_cents, 5000);
   assertEquals(result.p_livemode, false);
 });
+
+Deno.test("secretary routing uses only the required fields retrieved from Stripe", () => {
+  const session = {
+    ...paidSession(),
+    metadata: { convention_claim_id: id, convention_recipient: "secretary" },
+    custom_fields: [{
+      key: "showsecretaryname",
+      text: { value: " Club Secretary " },
+    }, {
+      key: "showsecretaryemail",
+      text: { value: " Club@Example.Invalid " },
+    }],
+  };
+  const result = conventionFulfillmentParams(session);
+  assertEquals(
+    "p_secretary_name" in result && result.p_secretary_name,
+    "Club Secretary",
+  );
+  assertEquals(
+    "p_secretary_email" in result && result.p_secretary_email,
+    "club@example.invalid",
+  );
+  for (
+    const fields of [[], [session.custom_fields[0]], [
+      session.custom_fields[0],
+      { key: "showsecretaryemail", text: { value: "invalid" } },
+    ]]
+  ) {
+    assertThrows(() =>
+      conventionFulfillmentParams({ ...session, custom_fields: fields })
+    );
+  }
+  assertThrows(() =>
+    conventionFulfillmentParams({
+      ...session,
+      metadata: { ...session.metadata, convention_recipient: "unknown" },
+    })
+  );
+  assertEquals(
+    "p_secretary_email" in conventionFulfillmentParams(paidSession()),
+    false,
+  );
+});
 Deno.test("tax-inclusive purchases verify the total without rejecting embedded sales tax", () => {
   const session = paidSession();
   session.amount_subtotal = 4600;

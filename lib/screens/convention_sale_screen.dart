@@ -130,18 +130,13 @@ class _ConventionSaleScreenState extends State<ConventionSaleScreen> {
       if (!mounted) return;
       if (result?['fulfilled'] == true) {
         _receiptTimer?.cancel();
-        final plan = result!['plan'];
-        final summary = plan == 'unlimited'
-            ? result['unlimited_expires_at'] == null
-                  ? 'Your existing lifetime unlimited access is preserved.'
-                  : '${12 + (result['bonus_months'] as num).toInt()} months of unlimited access have been added.'
-            : '${(plan == 'single_show' ? 1 : 4) + (result['bonus_tokens'] as num).toInt()} tokens have been added.';
+        final summary = conventionPurchaseConfirmation(result!);
         setState(() {
           _fulfilled = true;
           _requestId = null;
           _requestPlan = null;
           _checkoutUrl = null;
-          _message = 'Purchase complete! $summary';
+          _message = summary;
         });
       } else if (result == null) {
         _receiptTimer?.cancel();
@@ -573,6 +568,17 @@ class _ConventionSaleScreenState extends State<ConventionSaleScreen> {
                           ],
                           if (sale != null) ...[
                             const SizedBox(height: 30),
+                            const Text(
+                              'Buying for yourself or a club? Enter the Show Secretary Name and Email in Stripe. '
+                              'The purchase and bonus go to that secretary’s account. '
+                              'If they have not registered yet, the purchase is held for their verified email.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: Colors.white,
+                                height: 1.5,
+                              ),
+                            ),
+                            const SizedBox(height: 20),
                             LayoutBuilder(
                               builder: (context, constraints) {
                                 final width = constraints.maxWidth >= 900

@@ -46,6 +46,25 @@ export function checkoutMeasurement(
   return { latitude, longitude, accuracy, measured_at };
 }
 
+export function conventionSecretaryQuestions() {
+  return [
+    {
+      key: "showsecretaryname",
+      label: { type: "custom" as const, custom: "Show Secretary Name" },
+      type: "text" as const,
+      optional: false,
+      text: { minimum_length: 1, maximum_length: 255 },
+    },
+    {
+      key: "showsecretaryemail",
+      label: { type: "custom" as const, custom: "Show Secretary Email" },
+      type: "text" as const,
+      optional: false,
+      text: { minimum_length: 3, maximum_length: 254 },
+    },
+  ];
+}
+
 type PurchaseSession = {
   id: string;
   status: string | null;
@@ -57,6 +76,7 @@ type PurchaseSession = {
   currency: string | null;
   client_reference_id?: string | null;
   metadata: Record<string, string> | null;
+  custom_fields?: { key: string; text?: { value?: string | null } | null }[];
   line_items?: {
     data: {
       quantity: number | null;
@@ -88,7 +108,7 @@ export function conventionFulfillmentParams(session: PurchaseSession) {
   ) {
     throw new Error("Convention payment does not match its offer");
   }
-  return {
+  const params = {
     p_claim_id: claimId,
     p_session_id: session.id,
     p_price_id: session.line_items.data[0].price.id,
@@ -102,4 +122,22 @@ export function conventionFulfillmentParams(session: PurchaseSession) {
     p_livemode: session.livemode,
     p_checkout_created: new Date(session.created * 1000).toISOString(),
   };
+  const recipientMode = session.metadata?.convention_recipient;
+  if (recipientMode === undefined) return params;
+  if (recipientMode !== "secretary") {
+    throw new Error("Unknown convention recipient mode");
+  }
+  const name = session.custom_fields?.find((f) => f.key === "showsecretaryname")
+    ?.text?.value?.trim();
+  const email = session.custom_fields?.find((f) =>
+    f.key === "showsecretaryemail"
+  )?.text?.value?.trim().toLowerCase();
+  if (
+    !name || name.length > 255 || /[\x00-\x1f\x7f]/.test(name) || !email ||
+    email.length > 254 ||
+    !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+  ) {
+    throw new Error("A valid Show Secretary Name and Email are required");
+  }
+  return { ...params, p_secretary_name: name, p_secretary_email: email };
 }

@@ -176,17 +176,24 @@ serve(async (req) => {
       return new Response('Invalid convention payment', { status: 400 });
     }
     try {
-      const { data: purchase, error } = await supabase.rpc('convention_sale_fulfill', params);
+      const rpc = fullSession.metadata?.convention_recipient === 'secretary'
+        ? 'convention_sale_fulfill_secretary' : 'convention_sale_fulfill';
+      const { data: purchase, error } = await supabase.rpc(rpc, params);
       if (error || !purchase) {
         console.error('Convention fulfillment failed', { sessionId: session.id, code: error?.code });
         return new Response('Convention fulfillment unavailable', { status: 500 });
       }
       await deliverPurchaseEmail({
         supabase, eventId: event.id, sessionId: session.id,
-        secretaryEmail: purchase.email, secretaryName: null,
+        secretaryEmail: purchase.email, secretaryName: purchase.secretary_name ?? null,
         matchedUserId: purchase.user_id, matchedPlan: purchase.plan,
+        pendingAccount: purchase.recipient_pending === true,
         completedAt: new Date(event.created * 1000).toISOString(),
-        offerSummary: purchase.plan === 'unlimited'
+        offerSummary: purchase.recipient_pending
+          ? purchase.plan === 'unlimited'
+            ? `Your convention purchase reserved ${12 + purchase.bonus_months} months of unlimited access, including ${purchase.bonus_months} bonus months.`
+            : `Your convention purchase reserved ${(purchase.plan === 'single_show' ? 1 : 4) + purchase.bonus_tokens} tokens, including ${purchase.bonus_tokens} bonus tokens.`
+          : purchase.plan === 'unlimited'
           ? purchase.unlimited_expires_at
             ? `Your convention purchase added ${12 + purchase.bonus_months} months of unlimited access, including ${purchase.bonus_months} bonus months. Existing remaining time was preserved.`
             : 'Your convention purchase is complete. Your existing lifetime unlimited access is preserved.'
@@ -456,6 +463,7 @@ async function deliverPurchaseEmail(args: {
   matchedPlan: string;
   completedAt: string;
   offerSummary?: string;
+  pendingAccount?: boolean;
 }): Promise<void> {
   const { data, error } = await args.supabase.rpc(
     "claim_license_purchase_email",
@@ -495,6 +503,7 @@ async function deliverPurchaseEmail(args: {
       type: emailType,
       secretaryName: args.secretaryName,
       offerSummary: args.offerSummary,
+      pendingAccount: args.pendingAccount,
     });
     const { error: updateError } = await args.supabase
       .from("license_purchase_email_events")
