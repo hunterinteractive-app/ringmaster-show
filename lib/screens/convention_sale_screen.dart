@@ -602,7 +602,7 @@ class _ConventionSaleScreenState extends State<ConventionSaleScreen> {
                             ),
                             const SizedBox(height: 8),
                             const Text(
-                              'When you check out, we ask permission to check your location once. We keep the eligibility result and time with your purchase; precise visitor coordinates are not stored in the sale records.\nStart checkout during sale hours and complete it within 30 minutes. Tax is shown at checkout.\nLocation unavailable or permission declined? Visit the booth for help.',
+                              'When you check out, we ask permission to check your location once. We keep the eligibility result and time with your purchase; precise visitor coordinates are not stored in the sale records.\nStart checkout during sale hours and complete it within one hour. Tax is shown at checkout.\nLocation unavailable or permission declined? Visit the booth for help.',
                               textAlign: TextAlign.center,
                               style: TextStyle(
                                 color: Colors.white,

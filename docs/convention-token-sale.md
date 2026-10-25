@@ -54,9 +54,10 @@ so this is a deterrent to casual link sharing, not guaranteed proof of attendanc
 
 Each successful location check creates a private offer for that verified user,
 package, canonical Stripe Price, currency, bonus, and sale revision.
-Precise visitor coordinates are not saved. The offer can create one checkout
-within 15 minutes, or before the sale closes, whichever is earlier. Stripe allows
-30 minutes from verification to submit payment. Delayed payment methods can
+Precise visitor coordinates are not saved. The offer can start one checkout request
+within 15 minutes, or before the sale closes, whichever is earlier. A matching
+paid session is honored if that in-flight provider request crosses the deadline. Stripe allows
+one hour from verification to submit payment. Delayed payment methods can
 settle later; fulfillment waits for paid confirmation.
 
 Stripe metadata binds the offer to the checkout and the user who was verified.
@@ -72,7 +73,7 @@ is preserved. The confirmation page and purchase email include the awarded offer
 
 ## Deployment
 
-1. Apply the new `convention_token_sale` migration to the Show project only.
+1. Apply the `convention_token_sale` and `convention_sale_fulfillment_deadline` migrations to the Show project only.
    It adds private settings/offer tables and restricted public RPCs; it does not
    rewrite existing user balances or historical purchases.
 2. Deploy `convention-sale-checkout` with `verify_jwt=false`. The catalog is

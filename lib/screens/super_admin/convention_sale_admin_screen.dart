@@ -610,7 +610,7 @@ class _ConventionSaleAdminScreenState extends State<ConventionSaleAdminScreen> {
                             ),
                             const SizedBox(height: 12),
                             const Text(
-                              'Checkout must start during these hours. A checkout already started can be completed within 30 minutes. Times follow the selected convention time zone, including daylight saving time.',
+                              'Checkout must start during these hours. A checkout already started can be completed within one hour. Times follow the selected convention time zone, including daylight saving time.',
                             ),
                           ],
                         ),

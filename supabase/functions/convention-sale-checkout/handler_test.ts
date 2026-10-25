@@ -12,6 +12,7 @@ function harness(
     eligible?: boolean;
     tax?: boolean;
     registrations?: boolean;
+    quoteAgeMs?: number;
   } = {},
 ) {
   const calls: { name: string; params: unknown }[] = [];
@@ -49,6 +50,11 @@ function harness(
     checkout: {
       sessions: {
         create: (params: unknown, request: unknown) => {
+          const expires = (params as Stripe.Checkout.SessionCreateParams)
+            .expires_at!;
+          if (expires < Date.now() / 1000 + 1800) {
+            throw new Error("Stripe requires at least 30 minutes to expire");
+          }
           calls.push({ name: "stripe", params: { params, request } });
           return Promise.resolve({
             url: "https://checkout.stripe.com/c/pay/test",
@@ -57,7 +63,8 @@ function harness(
       },
     },
   } as unknown as Stripe;
-  const verifiedAt = new Date().toISOString();
+  const verifiedAt = new Date(Date.now() - (options.quoteAgeMs ?? 0))
+    .toISOString();
   const db = {
     auth: {
       getUser: (token: string) => {
@@ -188,6 +195,16 @@ Deno.test("retry uses identical Stripe payload and idempotency key", async () =>
   const requests = h.calls.filter((c) => c.name === "stripe");
   assertEquals(requests.length, 2);
   assertEquals(requests[0].params, requests[1].params);
+});
+
+Deno.test("a late checkout retry still meets Stripe's minimum expiration window", async () => {
+  const h = harness({ quoteAgeMs: 14 * 60 * 1000 });
+  const response = await h.handler(h.request());
+  assertEquals(response.status, 200);
+  const request = h.calls.find((c) => c.name === "stripe")!.params as {
+    params: Stripe.Checkout.SessionCreateParams;
+  };
+  assertEquals(request.params.expires_at! - Date.now() / 1000 >= 1800, true);
 });
 Deno.test("automatic tax cannot be enabled without an active registration", async () => {
   const h = harness({ tax: true });

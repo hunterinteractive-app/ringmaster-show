@@ -73,8 +73,9 @@ select pg_temp.sale_check((pg_temp.sale_claim('bbbbbbbb-0000-4000-8000-000000000
 select pg_temp.sale_reject($c$select pg_temp.sale_claim('bbbbbbbb-0000-4000-8000-000000000001','four_shows')$c$,'does not match','cannot change a quoted package');
 select pg_temp.sale_reject($c$select pg_temp.sale_fulfill('bbbbbbbb-0000-4000-8000-000000000001','cs_wrong',1)$c$,'does not match','underpayment cannot credit tokens');
 select pg_temp.sale_check(not exists(select 1 from public.processed_stripe_sessions where stripe_session_id='cs_wrong'),'rejected payment leaves no processed marker');
-select pg_temp.sale_reject($c$select pg_temp.sale_fulfill('bbbbbbbb-0000-4000-8000-000000000001','cs_wrong',5000,now()+interval '16 minutes')$c$,'does not match','expired offer cannot create checkout');
-select pg_temp.sale_check((pg_temp.sale_fulfill('bbbbbbbb-0000-4000-8000-000000000001','cs_sale_one')->>'already_processed')::boolean=false,'paid purchase fulfilled');
+update convention_sale_private.claims set expires_at=now()-interval '1 second' where id='bbbbbbbb-0000-4000-8000-000000000001';
+select pg_temp.sale_reject($c$select pg_temp.sale_claim('bbbbbbbb-0000-4000-8000-000000000001')$c$,'expired','expired offers cannot start another checkout');
+select pg_temp.sale_check((pg_temp.sale_fulfill('bbbbbbbb-0000-4000-8000-000000000001','cs_sale_one')->>'already_processed')::boolean=false,'paid purchase is fulfilled when an in-flight Stripe request crosses the offer deadline');
 select pg_temp.sale_check((select purchased_show_days=2 from public.account_license_balances where user_id='aaaaaaaa-0000-4000-8000-000000000001'),'buy one get one awards two');
 select pg_temp.sale_check((pg_temp.sale_fulfill('bbbbbbbb-0000-4000-8000-000000000001','cs_sale_one')->>'already_processed')::boolean,'duplicate webhook is idempotent');
 select pg_temp.sale_check((select purchased_show_days=2 from public.account_license_balances where user_id='aaaaaaaa-0000-4000-8000-000000000001'),'duplicate payment event does not add tokens');

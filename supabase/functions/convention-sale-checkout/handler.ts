@@ -160,7 +160,7 @@ export function createConventionSaleHandler(deps: {
           ).join("")
         }`,
         // Fixed values keep the Stripe idempotency payload identical on retry.
-        expires_at: Math.floor(Date.parse(claim.verified_at) / 1000) + 1800,
+        expires_at: Math.floor(Date.parse(claim.verified_at) / 1000) + 3600,
       }, { idempotencyKey: `convention-${claim.id}` });
       return json({ url: session.url, claim_id: claim.id });
     } catch (error) {

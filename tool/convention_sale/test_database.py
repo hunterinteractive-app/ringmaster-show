@@ -51,8 +51,9 @@ grant select,insert,update on public.account_license_balances,public.processed_s
 command('createdb', '-U', 'postgres', database)
 try:
     sql(bootstrap)
-    migration, = (root / 'supabase/migrations').glob('*_convention_token_sale.sql')
-    sql(migration.read_text())
+    migrations = sorted(list((root / 'supabase/migrations').glob('*_convention_token_sale.sql')) + list((root / 'supabase/migrations').glob('*_convention_sale_fulfillment_deadline.sql')))
+    for migration in migrations:
+        sql(migration.read_text())
     output = sql((root / 'supabase/tests/convention_token_sale.sql').read_text())
     print(next(line for line in output.splitlines() if 'database checks passed' in line))
     buyer = 'cccccccc-0000-4000-8000-000000000001'
