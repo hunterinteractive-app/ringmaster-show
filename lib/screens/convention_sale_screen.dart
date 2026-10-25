@@ -218,7 +218,13 @@ class _ConventionSaleScreenState extends State<ConventionSaleScreen> {
       final text = e is StateError
           ? e.message.toString()
           : 'Unable to open checkout. Please retry or visit the booth for help.';
-      if (text.contains('expired') || text.contains('does not match')) {
+      // A declined location check is a completed visitor record. A new reading
+      // after moving into the area must use a new id, while provider/network
+      // retries retain their id to avoid creating another payment session.
+      if (text.contains('expired') ||
+          text.contains('does not match') ||
+          text.contains('inside the sale area') ||
+          text.contains('fresh, accurate')) {
         _requestId = null;
         _requestPlan = null;
       }
