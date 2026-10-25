@@ -4,6 +4,7 @@ import {
   checkoutMeasurement,
   type ConventionPlan,
   conventionPlans,
+  conventionSecretaryQuestions,
   isConventionPlan,
   isUuid,
 } from "../_shared/convention_sale.ts";
@@ -154,20 +155,23 @@ export function createConventionSaleHandler(deps: {
           }, 400);
         }
       }
-      const { data: claim, error } = await db.rpc("convention_sale_claim", {
-        p_id: body.request_id,
-        p_user_id: auth.user.id,
-        p_email: auth.user.email,
-        p_plan: body.plan,
-        p_latitude: location.latitude,
-        p_longitude: location.longitude,
-        p_accuracy: location.accuracy,
-        p_measured_at: location.measured_at,
-        p_price_id: p.price.id,
-        p_amount_cents: p.price.unit_amount,
-        p_currency: p.item.currency,
-        p_livemode: p.link.livemode,
-      });
+      const { data: claim, error } = await db.rpc(
+        "convention_sale_claim_secretary",
+        {
+          p_id: body.request_id,
+          p_user_id: auth.user.id,
+          p_email: auth.user.email,
+          p_plan: body.plan,
+          p_latitude: location.latitude,
+          p_longitude: location.longitude,
+          p_accuracy: location.accuracy,
+          p_measured_at: location.measured_at,
+          p_price_id: p.price.id,
+          p_amount_cents: p.price.unit_amount,
+          p_currency: p.item.currency,
+          p_livemode: p.link.livemode,
+        },
+      );
       if (error) {
         const safeMessage =
           /^(The convention sale|A fresh|Your location|Location check|Too many|Checkout request)/
@@ -190,6 +194,7 @@ export function createConventionSaleHandler(deps: {
         }
       }
       const site = deps.site;
+      const secretaryRecipient = claim.secretary_recipient === true;
       const bonus = body.plan === "unlimited"
         ? `Includes ${claim.bonus_months} bonus months (${
           12 + claim.bonus_months
@@ -202,14 +207,24 @@ export function createConventionSaleHandler(deps: {
         line_items: [{ price: p.price.id, quantity: 1 }],
         customer_email: auth.user.email,
         client_reference_id: claim.id,
-        metadata: { convention_claim_id: claim.id },
+        metadata: {
+          convention_claim_id: claim.id,
+          ...(secretaryRecipient ? { convention_recipient: "secretary" } : {}),
+        },
+        custom_fields: secretaryRecipient
+          ? conventionSecretaryQuestions()
+          : undefined,
         automatic_tax: { enabled: p.link.automatic_tax.enabled },
         billing_address_collection: p.link.billing_address_collection,
         success_url: `${site}/#/convention-sale?purchase=${claim.id}`,
         cancel_url: `${site}/#/convention-sale?cancelled=1`,
         custom_text: {
           submit: {
-            message: `${bonus} Credited to your signed-in RingMaster account.`,
+            message: `${bonus} ${
+              secretaryRecipient
+                ? "Purchase and bonus go to the Show Secretary Email entered here."
+                : "Credited to your signed-in RingMaster account."
+            }`,
           },
         },
         integration_identifier: `ringmaster_convention_${

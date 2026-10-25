@@ -28,9 +28,28 @@ export function licensePurchaseEmail(
   type: LicensePurchaseEmailType,
   secretaryName?: string | null,
   offerSummary?: string | null,
+  pendingAccount = false,
 ): LicensePurchaseEmail {
   const name = String(secretaryName ?? "").trim();
   const greeting = name ? `Hello ${escapeHtml(name)},` : "Hello,";
+
+  if (pendingAccount) {
+    return {
+      subject: "Your RingMaster Convention Purchase Is Reserved",
+      html:
+        `<div style="font-family: Arial, sans-serif; line-height: 1.6; color: #1f2937;">
+        <p>${greeting}</p>
+        <p>${
+          escapeHtml(
+            offerSummary ??
+              "Your convention purchase is complete and reserved for this email address.",
+          )
+        }</p>
+        <p>Create or sign in to your <a href="https://show.ringmasterone.com">RingMaster Show account</a> using this email address and verify your email. The purchase and bonus will be added automatically.</p>
+        <p>If you need help, contact <a href="mailto:support@ringmasterone.com">support@ringmasterone.com</a>.</p>
+        <p>Thank you,<br>RingMaster Show</p></div>`,
+    };
+  }
 
   if (type === "welcome") {
     return {
@@ -78,12 +97,14 @@ export async function sendLicensePurchaseEmail(args: {
   type: LicensePurchaseEmailType;
   secretaryName?: string | null;
   offerSummary?: string | null;
+  pendingAccount?: boolean;
   fetcher?: typeof fetch;
 }): Promise<string | null> {
   const content = licensePurchaseEmail(
     args.type,
     args.secretaryName,
     args.offerSummary,
+    args.pendingAccount,
   );
   const response = await (args.fetcher ?? fetch)(
     "https://api.resend.com/emails",

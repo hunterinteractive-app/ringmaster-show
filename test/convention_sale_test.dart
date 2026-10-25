@@ -19,6 +19,47 @@ Map<String, dynamic> sale() => {
 };
 
 void main() {
+  test(
+    'purchase confirmation identifies the secretary receiving the full bonus',
+    () {
+      final receipt = <String, dynamic>{
+        'plan': 'four_shows',
+        'bonus_tokens': 2,
+        'recipient_email': 'club@example.invalid',
+        'recipient_pending': false,
+      };
+      expect(
+        conventionPurchaseConfirmation(receipt),
+        contains('6 tokens have been added to club@example.invalid'),
+      );
+      expect(
+        conventionPurchaseConfirmation({...receipt, 'recipient_pending': true}),
+        contains('6 tokens are reserved for club@example.invalid'),
+      );
+      expect(
+        conventionPurchaseConfirmation({
+          ...receipt,
+          'plan': 'unlimited',
+          'bonus_months': 2,
+          'unlimited_expires_at': '2028-04-15T12:00:00Z',
+        }),
+        contains(
+          '14 months of Unlimited access have been added to club@example.invalid',
+        ),
+      );
+      expect(
+        conventionPurchaseConfirmation({
+          ...receipt,
+          'plan': 'unlimited',
+          'bonus_months': 2,
+          'unlimited_expires_at': null,
+        }),
+        contains(
+          'lifetime Unlimited access for club@example.invalid is preserved',
+        ),
+      );
+    },
+  );
   test('header stays hidden before the sale even when it is enabled', () {
     final model = ConventionSale({...sale(), 'active': true});
     expect(model.isActiveAt(DateTime.parse('2026-10-26T06:59:59Z')), false);

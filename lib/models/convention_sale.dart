@@ -1,5 +1,22 @@
 import 'package:intl/intl.dart';
 
+String conventionPurchaseConfirmation(Map<String, dynamic> receipt) {
+  final email = (receipt['recipient_email'] as String? ?? '').trim();
+  final target = email.isEmpty ? 'the show secretary’s account' : email;
+  final unlimited = receipt['plan'] == 'unlimited';
+  final quantity = unlimited
+      ? '${12 + (receipt['bonus_months'] as num).toInt()} months of Unlimited access'
+      : '${(receipt['plan'] == 'single_show' ? 1 : 4) + (receipt['bonus_tokens'] as num).toInt()} tokens';
+  if (receipt['recipient_pending'] == true) {
+    return 'Payment complete! $quantity are reserved for $target. '
+        'They will be added when the show secretary signs in with that verified email address.';
+  }
+  if (unlimited && receipt['unlimited_expires_at'] == null) {
+    return 'Purchase complete! Existing lifetime Unlimited access for $target is preserved.';
+  }
+  return 'Purchase complete! $quantity have been added to $target.';
+}
+
 class ConventionSale {
   ConventionSale(this.data);
   final Map<String, dynamic> data;

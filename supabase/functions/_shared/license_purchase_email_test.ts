@@ -40,6 +40,23 @@ Deno.test("secretary email normalization is conservative", () => {
   assertEquals(normalizeSecretaryEmail("not-an-email"), null);
 });
 
+Deno.test("pending secretary receives a reservation confirmation with verification instructions", () => {
+  const email = licensePurchaseEmail(
+    "welcome",
+    "Club <Secretary>",
+    "6 tokens, including 2 bonus tokens.",
+    true,
+  );
+  assertEquals(
+    email.subject,
+    "Your RingMaster Convention Purchase Is Reserved",
+  );
+  assertStringIncludes(email.html, "Club &lt;Secretary&gt;");
+  assertStringIncludes(email.html, "6 tokens, including 2 bonus tokens.");
+  assertStringIncludes(email.html, "verify your email");
+  assertEquals(email.html.includes("your account is ready"), false);
+});
+
 Deno.test("convention receipts include the paid offer and escape any summary text", () => {
   const mail = licensePurchaseEmail(
     "returning",

@@ -64,16 +64,36 @@ paid session is honored if that in-flight provider request crosses the deadline.
 one hour from verification to submit payment. Delayed payment methods can
 settle later; fulfillment waits for paid confirmation.
 
-Stripe metadata binds the offer to the checkout and the user who was verified.
-Forwarding the checkout cannot redirect the credits to a friend's account.
+Stripe metadata binds the offer to the location-checked buyer and selected package.
+New checkouts require **Show Secretary Name** and **Show Secretary Email**, matching
+the regular Stripe checkout. The paid purchase and full bonus go to the verified
+RingMaster account with that secretary email, even when someone else signs in and
+pays. The payer's contact email and card details do not select the recipient.
+The return page identifies the secretary receiving the purchase.
+
+If the secretary has not registered or verified that email, the paid offer stays
+reserved privately for that email. Their verified sign-in claims it once through
+the existing app initialization flow. Multiple pending purchases add all token
+bonuses and all Unlimited months to existing balances. Confirmation email goes
+to the secretary and explains whether benefits are applied or reserved. Buyers
+cannot claim another secretary's reservations by submitting a different email.
+
+The location requirement applies to the buyer starting checkout, allowing a
+convention visitor to buy for a club whose secretary is elsewhere. Each private
+Stripe checkout URL is for one purchase and should not be shared; the recipient
+can be entered before payment and is fixed once the purchase is paid. This is
+not a reusable promotional code or proof that the recipient is at the convention.
+Previously issued buyer-bound sessions retain their original terms on retries.
 Every separate qualifying purchase earns a bonus. Webhook retries, duplicate
 deliveries and concurrent purchases are handled with row locks and a single
 transaction for the balance, offer, and processed-session ledger. Tax-inclusive
 prices are verified against the total, exclusive prices against the subtotal.
 
 Unlimited purchases add 12 plus the configured bonus calendar months from the
-later of payment confirmation and existing expiration. Existing lifetime access
-is preserved. The confirmation page and purchase email include the awarded offer.
+later of crediting the purchase and the secretary's existing expiration. Existing
+lifetime access is preserved. The confirmation page and purchase email include
+the awarded offer. A malformed secretary email does not fall back to the payer;
+the payment needs staff review rather than crediting the wrong account.
 
 ## Visitor city/state log
 
@@ -112,6 +132,11 @@ checks cannot be backfilled because their coordinates were not retained.
 1. Apply the `convention_token_sale`, `convention_sale_fulfillment_deadline`, and `convention_visitor_locality` migrations to the Show project only.
    It adds private settings/offer tables and restricted public RPCs; it does not
    rewrite existing user balances or historical purchases.
+   For release 1.00.12, apply `convention_secretary_recipient` first, then deploy
+   the updated `stripe-license-webhook`, and finally `convention-sale-checkout`.
+   This preserves fulfillment for older sessions during deployment. The migration
+   keeps recipient reservations private and secures the existing pending-license
+   claim RPC to the signed-in user's verified email.
 2. Deploy `convention-sale-checkout` with `verify_jwt=false`. The catalog is
    public; checkout authenticates the user's JWT with `auth.getUser`. Include its
    handler, `_shared/convention_sale.ts`, `_shared/request_fetch.ts`, and the
