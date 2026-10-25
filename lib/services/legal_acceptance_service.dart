@@ -17,7 +17,8 @@ class LegalAcceptanceService {
     bool covers(Object? accepted, String required, List<String> versions) {
       if (accepted == required) return true;
       final index = versions.indexOf(accepted?.toString() ?? '');
-      return index >= 0 && index >= versions.indexOf(required);
+      final requiredIndex = versions.indexOf(required);
+      return requiredIndex >= 0 && index >= requiredIndex;
     }
 
     return covers(
