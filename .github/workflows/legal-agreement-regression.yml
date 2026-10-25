@@ -11,6 +11,9 @@ on:
       - 'lib/screens/show_list_screen.dart'
       - 'lib/screens/legal/**'
       - 'test/legal_auth_navigation_test.dart'
+      - 'lib/widgets/convention_sale_banner.dart'
+      - 'lib/models/convention_sale.dart'
+      - 'test/convention_sale_banner_web_test.dart'
 
 permissions:
   contents: read
@@ -26,4 +29,4 @@ jobs:
           channel: stable
           cache: true
       - run: flutter pub get
-      - run: flutter test --platform chrome --reporter expanded test/legal_auth_navigation_test.dart
+      - run: flutter test --platform chrome --reporter expanded test/legal_auth_navigation_test.dart test/convention_sale_banner_web_test.dart

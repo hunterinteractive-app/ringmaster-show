@@ -11,12 +11,58 @@ Map<String, dynamic> sale() => {
   'unlimited_bonus_months': 2,
   'enabled': true,
   'active': false,
+  'starts_at': '2026-10-26T07:00:00Z',
+  'ends_at': '2026-10-27T07:00:00Z',
   'time_zone': 'America/Los_Angeles',
   'starts_local': '2026-10-26T00:00',
   'ends_local': '2026-10-27T00:00',
 };
 
 void main() {
+  test('header stays hidden before the sale even when it is enabled', () {
+    final model = ConventionSale({...sale(), 'active': true});
+    expect(model.isActiveAt(DateTime.parse('2026-10-26T06:59:59Z')), false);
+  });
+  test(
+    'active sale appears at its start and remains through the last minute',
+    () {
+      final model = ConventionSale({...sale(), 'active': true});
+      expect(model.isActiveAt(DateTime.parse('2026-10-26T07:00:00Z')), true);
+      expect(model.isActiveAt(DateTime.parse('2026-10-27T06:59:59Z')), true);
+    },
+  );
+  test(
+    'header disappears at the exclusive end even if the snapshot was active',
+    () {
+      final model = ConventionSale({...sale(), 'active': true});
+      expect(model.isActiveAt(DateTime.parse('2026-10-27T07:00:00Z')), false);
+    },
+  );
+  test('disabled and inactive sales stay hidden during scheduled hours', () {
+    final now = DateTime.parse('2026-10-26T19:00:00Z');
+    expect(
+      ConventionSale({
+        ...sale(),
+        'active': true,
+        'enabled': false,
+      }).isActiveAt(now),
+      false,
+    );
+    expect(ConventionSale(sale()).isActiveAt(now), false);
+  });
+  test('missing or invalid sale dates do not show a promotion', () {
+    final now = DateTime.parse('2026-10-26T19:00:00Z');
+    for (final dates in [
+      {'starts_at': null},
+      {'ends_at': 'invalid'},
+      {'ends_at': '2026-10-26T07:00:00Z'},
+    ]) {
+      expect(
+        ConventionSale({...sale(), 'active': true, ...dates}).isActiveAt(now),
+        false,
+      );
+    }
+  });
   test(
     'full-day offer ends at 11:59 PM in Reno, with the three requested totals',
     () {

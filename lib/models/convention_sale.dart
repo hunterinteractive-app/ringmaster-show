@@ -7,6 +7,18 @@ class ConventionSale {
   String get venue => data['venue'] as String;
   bool get active => data['active'] == true;
   bool get enabled => data['enabled'] == true;
+  bool isActiveAt(DateTime serverNow) {
+    final start = DateTime.tryParse('${data['starts_at']}');
+    final end = DateTime.tryParse('${data['ends_at']}');
+    return enabled &&
+        active &&
+        start != null &&
+        end != null &&
+        end.isAfter(start) &&
+        !serverNow.isBefore(start) &&
+        serverNow.isBefore(end);
+  }
+
   double get radiusMiles => (data['radius_miles'] as num).toDouble();
   int bonusFor(String plan) =>
       (data[switch (plan) {
