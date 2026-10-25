@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:web/web.dart' as web;
 import 'package:ringmaster_show/main.dart' as app;
 import 'package:ringmaster_show/config/legal_config.dart';
 import 'package:ringmaster_show/screens/legal/legal_agreement_dialog.dart';
@@ -46,6 +47,13 @@ void main() {
     'accepted_privacy_version': '2026-09',
   };
   setUpAll(() async {
+    // Flutter's browser test runner stores JSON metadata in the fragment. The
+    // real app expects its normal route fragment rather than test-runner JSON.
+    web.window.history.replaceState(
+      null,
+      '',
+      '${web.window.location.pathname}${web.window.location.search}',
+    );
     SharedPreferences.setMockInitialValues({});
     await Supabase.initialize(
       url: 'http://fixture.invalid',
