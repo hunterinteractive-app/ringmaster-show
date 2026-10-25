@@ -76,6 +76,7 @@ void main() {
           return response({'households': [], 'invitations': []});
         }
         if (path.endsWith('/claim_pending_licenses')) return response(null);
+        if (path.endsWith('/get_open_contest_shows')) return response([]);
         if (path.endsWith('/claim-or-import-exhibitor')) {
           return response({'status': 'already_exists'});
         }
@@ -163,6 +164,9 @@ void main() {
       );
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox.shrink());
+      // The existing time-zone notice expires with a delayed future. Drain it
+      // after disposing the app so it does not outlive this browser fixture.
+      await tester.pump(const Duration(minutes: 5));
     },
   );
 }
