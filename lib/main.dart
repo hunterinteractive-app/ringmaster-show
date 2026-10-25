@@ -23,6 +23,7 @@ import 'package:ringmaster_show/screens/square_payment_return_screen.dart';
 import 'package:ringmaster_show/screens/exhibitor_checkin_portal_screen.dart';
 
 import 'screens/login_screen.dart';
+import 'screens/convention_sale_screen.dart';
 import 'screens/show_list_screen.dart';
 import 'screens/account_profile_setup_screen.dart';
 
@@ -80,6 +81,15 @@ Uri? _checkinUriFromBrowser() {
     if (uri.path == '/checkin') return uri;
   }
   return Uri.base.path.endsWith('/checkin') ? Uri.base : null;
+}
+
+Uri? _conventionUriFromBrowser() {
+  final fragment = Uri.base.fragment.trim();
+  if (fragment.isNotEmpty) {
+    final uri = Uri.tryParse(fragment);
+    if (uri?.path == '/convention-sale') return uri;
+  }
+  return Uri.base.path.endsWith('/convention-sale') ? Uri.base : null;
 }
 
 bool _isCheckinPortalHost() =>
@@ -177,6 +187,11 @@ class MyApp extends StatelessWidget {
             return MaterialPageRoute(builder: destination);
           }
           final routeUri = Uri.parse(settings.name ?? '');
+          if (routeUri.path == '/convention-sale') {
+            return MaterialPageRoute(
+              builder: (_) => ConventionSaleScreen(initialUri: routeUri),
+            );
+          }
           Uri uri = routeUri;
 
           if (Uri.base.fragment.isNotEmpty) {
@@ -198,6 +213,12 @@ class MyApp extends StatelessWidget {
               builder: (_) => ExhibitorCheckinPortalScreen(
                 initialToken: uri.queryParameters['token'],
               ),
+            );
+          }
+
+          if (uri.path == '/convention-sale') {
+            return MaterialPageRoute(
+              builder: (_) => ConventionSaleScreen(initialUri: uri),
             );
           }
 
@@ -380,6 +401,11 @@ class _RootState extends State<Root> {
 
     if (demoMode) {
       return const DemoLoginScreen();
+    }
+
+    final conventionUri = _conventionUriFromBrowser();
+    if (conventionUri != null) {
+      return ConventionSaleScreen(initialUri: conventionUri);
     }
 
     if (session == null) return const LoginScreen();

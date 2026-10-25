@@ -6,7 +6,8 @@ export type LicensePurchaseEmail = {
 };
 
 export function isCompletedLicenseCheckoutEvent(eventType: unknown): boolean {
-  return eventType === "checkout.session.completed";
+  return eventType === "checkout.session.completed" ||
+    eventType === "checkout.session.async_payment_succeeded";
 }
 
 export function isCompletedSuccessfulLicensePurchase(
@@ -26,6 +27,7 @@ export function normalizeSecretaryEmail(value: unknown): string | null {
 export function licensePurchaseEmail(
   type: LicensePurchaseEmailType,
   secretaryName?: string | null,
+  offerSummary?: string | null,
 ): LicensePurchaseEmail {
   const name = String(secretaryName ?? "").trim();
   const greeting = name ? `Hello ${escapeHtml(name)},` : "Hello,";
@@ -37,6 +39,7 @@ export function licensePurchaseEmail(
         <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #1f2937;">
           <p>${greeting}</p>
           <p>Welcome to RingMaster Show! Your token purchase is complete and your account is ready to get started.</p>
+          ${offerSummary ? `<p>${escapeHtml(offerSummary)}</p>` : ""}
           <p><a href="https://show.ringmasterone.com">Log in to RingMaster Show</a> using the show secretary email address provided during purchase.</p>
           <p>Your first guide is available at <a href="https://www.ringmasterone.com/help_secretaries.html">RingMaster Show Help for Secretaries</a>.</p>
           <p>You can find additional guides in the app under <strong>Show Secretary → More → Resources → RingMaster Show Help Guides</strong>.</p>
@@ -48,11 +51,17 @@ export function licensePurchaseEmail(
   }
 
   return {
-    subject: "Your New RingMaster Show Token Is Ready",
+    subject: offerSummary
+      ? "Your RingMaster Convention Purchase Is Ready"
+      : "Your New RingMaster Show Token Is Ready",
     html: `
       <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #1f2937;">
         <p>${greeting}</p>
-        <p>Thank you for purchasing another RingMaster Show token. Your new token is now available.</p>
+        <p>${
+      offerSummary
+        ? escapeHtml(offerSummary)
+        : "Thank you for purchasing another RingMaster Show token. Your new token is now available."
+    }</p>
         <p><a href="https://show.ringmasterone.com">Log in to RingMaster Show</a> to continue managing your shows.</p>
         <p>Help guides are available in the app under <strong>Show Secretary → More → Resources → RingMaster Show Help Guides</strong>.</p>
         <p>If you need help, contact <a href="mailto:support@ringmasterone.com">support@ringmasterone.com</a>.</p>
@@ -68,9 +77,14 @@ export async function sendLicensePurchaseEmail(args: {
   to: string;
   type: LicensePurchaseEmailType;
   secretaryName?: string | null;
+  offerSummary?: string | null;
   fetcher?: typeof fetch;
 }): Promise<string | null> {
-  const content = licensePurchaseEmail(args.type, args.secretaryName);
+  const content = licensePurchaseEmail(
+    args.type,
+    args.secretaryName,
+    args.offerSummary,
+  );
   const response = await (args.fetcher ?? fetch)(
     "https://api.resend.com/emails",
     {

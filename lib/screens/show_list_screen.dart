@@ -10,6 +10,7 @@ import 'package:ringmaster_show/reporting_core/network/transient_retry.dart';
 // ignore_for_file: deprecated_member_use
 
 import 'package:flutter/material.dart';
+import '../widgets/convention_sale_banner.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:ringmaster_show/screens/admin/admin_shows_screen.dart';
@@ -2219,6 +2220,7 @@ class _ShowListScreenState extends State<ShowListScreen> {
                   return Column(
                     children: [
                       if (demoBanner != null) demoBanner,
+                      if (!widget.demoMode) const ConventionSaleBanner(),
                       if (impersonatedUser != null)
                         Container(
                           width: double.infinity,
