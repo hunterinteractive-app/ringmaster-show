@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -12,6 +13,7 @@ Future<void> _openLegalAgreement(
   WidgetTester tester, {
   ValueChanged<bool?>? onResult,
   double textScale = 1,
+  Future<void> Function()? onAccept,
 }) async {
   await tester.pumpWidget(
     MaterialApp(
@@ -29,7 +31,7 @@ Future<void> _openLegalAgreement(
               final result = await showDialog<bool>(
                 context: context,
                 barrierDismissible: false,
-                builder: (_) => const LegalAgreementDialog(),
+                builder: (_) => LegalAgreementDialog(onAccept: onAccept),
               );
               onResult?.call(result);
             },
@@ -44,6 +46,71 @@ Future<void> _openLegalAgreement(
 }
 
 void main() {
+  testWidgets(
+    'agreement stays open until saving is confirmed and blocks duplicate submission',
+    (tester) async {
+      final saved = Completer<void>();
+      var calls = 0;
+      bool? result;
+      await _openLegalAgreement(
+        tester,
+        onResult: (v) => result = v,
+        onAccept: () {
+          calls++;
+          return saved.future;
+        },
+      );
+      await tester.tap(find.byType(CheckboxListTile));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Agree & Continue'));
+      await tester.pump();
+      expect(find.text('Saving agreement…'), findsOneWidget);
+      expect(result, isNull);
+      expect(
+        tester
+            .widget<TextButton>(find.widgetWithText(TextButton, 'Cancel'))
+            .onPressed,
+        isNull,
+      );
+      await tester.binding.handlePopRoute();
+      await tester.pump();
+      expect(find.byType(LegalAgreementDialog), findsOneWidget);
+      expect(calls, 1);
+      saved.complete();
+      await tester.pumpAndSettle();
+      expect(result, isTrue);
+    },
+  );
+  testWidgets('failed agreement save stays checked and shows a usable retry', (
+    tester,
+  ) async {
+    var calls = 0;
+    bool? result;
+    await _openLegalAgreement(
+      tester,
+      onResult: (v) => result = v,
+      onAccept: () async {
+        if (calls++ == 0) throw StateError('write rejected');
+      },
+    );
+    await tester.tap(find.byType(CheckboxListTile));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Agree & Continue'));
+    await tester.pumpAndSettle();
+    expect(result, isNull);
+    expect(
+      find.text('Your agreement could not be saved. Please try again.'),
+      findsOneWidget,
+    );
+    expect(
+      tester.widget<CheckboxListTile>(find.byType(CheckboxListTile)).value,
+      isTrue,
+    );
+    await tester.tap(find.text('Agree & Continue'));
+    await tester.pumpAndSettle();
+    expect(result, isTrue);
+    expect(calls, 2);
+  });
   testWidgets('legal agreement has readable text before and after checking', (
     tester,
   ) async {
