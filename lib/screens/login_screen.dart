@@ -9,6 +9,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../theme/app_theme.dart';
 import '../utils/date_time_utils.dart';
 import '../widgets/rm_widgets.dart';
+import '../widgets/convention_sale_banner.dart';
 import '../services/app_init_service.dart';
 import '../services/email_code_request.dart';
 import 'show_list_screen.dart';
@@ -25,7 +26,8 @@ import 'package:flutter/services.dart';
 final supabase = Supabase.instance.client;
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+  const LoginScreen({super.key, this.afterLogin});
+  final WidgetBuilder? afterLogin;
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -229,7 +231,9 @@ class _LoginScreenState extends State<LoginScreen>
 
       if (!mounted) return;
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const ShowListScreen()),
+        MaterialPageRoute(
+          builder: widget.afterLogin ?? (_) => const ShowListScreen(),
+        ),
       );
     } catch (_) {
       if (!mounted) return;
@@ -527,6 +531,8 @@ class _LoginScreenState extends State<LoginScreen>
                               ),
                             ),
                           ),
+                        if (widget.afterLogin == null)
+                          const ConventionSaleBanner(),
                         const SizedBox(height: AppSpacing.lg),
                         FadeTransition(
                           opacity: _cardFade,

@@ -14,6 +14,7 @@ import 'package:ringmaster_show/screens/super_admin/club_payment_provider_migrat
 import '../show_list_screen.dart';
 import 'breed_catalog_screen.dart';
 import 'assistant_usage_screen.dart';
+import 'convention_sale_admin_screen.dart';
 
 final supabase = Supabase.instance.client;
 
@@ -168,6 +169,18 @@ class _SuperadminHomeScreenState extends State<SuperadminHomeScreen> {
             child: ListView(
               padding: const EdgeInsets.all(16),
               children: [
+                _SuperadminToolCard(
+                  icon: Icons.local_offer_outlined,
+                  title: 'Convention Token Sale',
+                  subtitle:
+                      'Set the venue, map radius, sale hours, bonus tokens, and extra unlimited months.',
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => const ConventionSaleAdminScreen(),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
                 _SuperadminToolCard(
                   icon: Icons.pets,
                   title: 'Breed Catalog (Global)',

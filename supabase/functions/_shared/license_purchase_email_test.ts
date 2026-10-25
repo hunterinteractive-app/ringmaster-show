@@ -15,6 +15,10 @@ Deno.test("only completed paid purchases are eligible", () => {
     true,
   );
   assertEquals(
+    isCompletedLicenseCheckoutEvent("checkout.session.async_payment_succeeded"),
+    true,
+  );
+  assertEquals(
     isCompletedLicenseCheckoutEvent("checkout.session.expired"),
     false,
   );
@@ -34,6 +38,28 @@ Deno.test("secretary email normalization is conservative", () => {
     "secretary@example.com",
   );
   assertEquals(normalizeSecretaryEmail("not-an-email"), null);
+});
+
+Deno.test("convention receipts include the paid offer and escape any summary text", () => {
+  const mail = licensePurchaseEmail(
+    "returning",
+    null,
+    "6 tokens, including 2 bonus tokens. <script>",
+  );
+  assertStringIncludes(mail.subject, "Convention Purchase");
+  assertStringIncludes(
+    mail.html,
+    "6 tokens, including 2 bonus tokens. &lt;script&gt;",
+  );
+  const welcome = licensePurchaseEmail(
+    "welcome",
+    "Buyer",
+    "14 months unlimited, including 2 bonus months.",
+  );
+  assertStringIncludes(
+    welcome.html,
+    "14 months unlimited, including 2 bonus months.",
+  );
 });
 
 Deno.test("first purchase renders the welcome onboarding email", () => {
@@ -65,7 +91,9 @@ Deno.test("Resend request uses the repository email provider contract", async ()
     to: "secretary@example.com",
     type: "welcome",
     fetcher: async (_input, init) => {
-      requestBody = JSON.parse(String(init && "body" in init ? init.body : "{}"));
+      requestBody = JSON.parse(
+        String(init && "body" in init ? init.body : "{}"),
+      );
       return new Response(JSON.stringify({ id: "email-1" }), {
         status: 200,
         headers: { "Content-Type": "application/json" },

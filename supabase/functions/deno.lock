@@ -9,6 +9,7 @@
     "npm:pdf-lib@1.17.1": "1.17.1",
     "npm:pdfkit@0.15.0": "0.15.0",
     "npm:stripe@14.25.0": "14.25.0",
+    "npm:stripe@22.6.0": "22.6.0",
     "npm:unpdf@1.8.1": "1.8.1"
   },
   "jsr": {
@@ -695,6 +696,9 @@
         "@types/node",
         "qs"
       ]
+    },
+    "stripe@22.6.0": {
+      "integrity": "sha512-Ezk+WYEEwX2DLxFrKfb6coznlCMZvCaCYMNPXNHFSZkBIEzF5Hgm7RLb38q/0h9Ol5jsUJGJRorvhzAvckgfhw=="
     },
     "tiny-inflate@1.0.3": {
       "integrity": "sha512-pkY1fj1cKHb2seWDy0B16HeWyczlJA9/WW3u3c4z/NiWDsO3DOU5D7nhTLE9CF0yXv/QZFY7sEJmj24dK+Rrqw=="

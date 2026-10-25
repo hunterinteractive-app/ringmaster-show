@@ -9,6 +9,7 @@ import {
   normalizeSecretaryEmail,
   sendLicensePurchaseEmail,
 } from "../_shared/license_purchase_email.ts";
+import { conventionFulfillmentParams } from "../_shared/convention_sale.ts";
 
 const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") ?? "", {
   apiVersion: "2023-10-16" as Stripe.LatestApiVersion,
@@ -164,6 +165,38 @@ serve(async (req) => {
       paymentStatus: fullSession.payment_status,
     });
     return new Response("Ignored incomplete purchase", { status: 200 });
+  }
+
+  if (fullSession.metadata?.convention_claim_id) {
+    let params;
+    try {
+      params = conventionFulfillmentParams(fullSession);
+    } catch {
+      console.error('Invalid convention payment', { sessionId: session.id });
+      return new Response('Invalid convention payment', { status: 400 });
+    }
+    try {
+      const { data: purchase, error } = await supabase.rpc('convention_sale_fulfill', params);
+      if (error || !purchase) {
+        console.error('Convention fulfillment failed', { sessionId: session.id, code: error?.code });
+        return new Response('Convention fulfillment unavailable', { status: 500 });
+      }
+      await deliverPurchaseEmail({
+        supabase, eventId: event.id, sessionId: session.id,
+        secretaryEmail: purchase.email, secretaryName: null,
+        matchedUserId: purchase.user_id, matchedPlan: purchase.plan,
+        completedAt: new Date(event.created * 1000).toISOString(),
+        offerSummary: purchase.plan === 'unlimited'
+          ? purchase.unlimited_expires_at
+            ? `Your convention purchase added ${12 + purchase.bonus_months} months of unlimited access, including ${purchase.bonus_months} bonus months. Existing remaining time was preserved.`
+            : 'Your convention purchase is complete. Your existing lifetime unlimited access is preserved.'
+          : `Your convention purchase added ${(purchase.plan === 'single_show' ? 1 : 4) + purchase.bonus_tokens} tokens to your account, including ${purchase.bonus_tokens} bonus tokens.`,
+      });
+      return new Response('ok', { status: 200 });
+    } catch {
+      console.error('Convention fulfillment or receipt unavailable', { sessionId: session.id });
+      return new Response('Convention fulfillment or receipt unavailable', { status: 500 });
+    }
   }
 
   const paymentLinkId = typeof fullSession.payment_link === "string"
@@ -422,6 +455,7 @@ async function deliverPurchaseEmail(args: {
   matchedUserId: string | null;
   matchedPlan: string;
   completedAt: string;
+  offerSummary?: string;
 }): Promise<void> {
   const { data, error } = await args.supabase.rpc(
     "claim_license_purchase_email",
@@ -460,6 +494,7 @@ async function deliverPurchaseEmail(args: {
       to: args.secretaryEmail,
       type: emailType,
       secretaryName: args.secretaryName,
+      offerSummary: args.offerSummary,
     });
     const { error: updateError } = await args.supabase
       .from("license_purchase_email_events")

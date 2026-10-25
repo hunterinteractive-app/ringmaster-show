@@ -47,6 +47,9 @@ dependencies:
   shared_preferences: ^2.3.3
   device_info_plus: ^11.3.0
   screenshot: ^3.0.0
+  flutter_map: 8.3.2
+  latlong2: 0.9.1
+  web: 1.1.1
 
 
 

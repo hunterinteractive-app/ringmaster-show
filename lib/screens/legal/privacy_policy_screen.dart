@@ -11,12 +11,12 @@ class PrivacyPolicyScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final titleStyle = Theme.of(context).textTheme.titleLarge;
-    final sectionStyle = Theme.of(context).textTheme.titleMedium?.copyWith(
-          fontWeight: FontWeight.w700,
-        );
-    final bodyStyle = Theme.of(context).textTheme.bodyMedium?.copyWith(
-          height: 1.6,
-        );
+    final sectionStyle = Theme.of(
+      context,
+    ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700);
+    final bodyStyle = Theme.of(
+      context,
+    ).textTheme.bodyMedium?.copyWith(height: 1.6);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Privacy Policy')),
@@ -34,10 +34,13 @@ class PrivacyPolicyScreen extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('RingMaster Show – Privacy Policy', style: titleStyle),
+                        Text(
+                          'RingMaster Show – Privacy Policy',
+                          style: titleStyle,
+                        ),
                         const SizedBox(height: AppSpacing.xs),
                         Text(
-                          'Effective Date: September 2026 (v2026-09)',
+                          'Effective Date: October 2026 (v2026-10)',
                           style: bodyStyle?.copyWith(color: AppColors.muted),
                         ),
                         const SizedBox(height: AppSpacing.lg),
@@ -57,6 +60,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
                               '• Device, browser, and usage information\n'
                               '• Support messages, screenshots of the app captured when a help report is submitted, and related diagnostic information\n'
                               '• Payment and transaction-related information when paid features are used\n\n'
+                              'For an optional convention purchase promotion, we request your permission to check your device location once for that checkout. We use the reported coordinates and accuracy to determine eligibility near the convention. Precise visitor coordinates are not stored in the promotion records; the eligibility verification time, offer details, account, and purchase record are retained. Hosting and authentication providers may separately process IP addresses and related network information.\n\n'
                               'Information may be provided directly by you, submitted by an authorized club representative or other user managing show records, or generated through your use of the platform.',
                           sectionStyle,
                           bodyStyle,
