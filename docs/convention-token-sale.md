@@ -56,6 +56,14 @@ sale area. Failure or denied permission directs the buyer to the booth; it does
 not automatically grant a bonus. Self-reported browser locations can be spoofed,
 so this is a deterrent to casual link sharing, not guaranteed proof of attendance.
 
+Rejected checks explain that the buyer must be in the showroom to place the
+order and should stop by the booth if issues continue. If a fresh reading's
+entire accuracy circle is outside the configured radius, the message explicitly
+says the buyer is outside, including when that reading is too coarse to qualify
+for checkout. Overlapping, stale or invalid readings say the showroom location
+could not be confirmed. This only improves the explanation; the server retains
+all existing eligibility checks and never approves a purchase from this estimate.
+
 Each successful location check creates a private offer for that verified user,
 package, canonical Stripe Price, currency, bonus, and sale revision.
 Precise visitor coordinates are not saved. With the updated location notice, the check also records city/state as described below. The offer can start one checkout request

@@ -15,6 +15,9 @@ function harness(
     quoteAgeMs?: number;
     localityFailure?: boolean;
     legacyOffer?: boolean;
+    settingsFailure?: boolean;
+    locationCheckError?: string;
+    claimError?: string;
   } = {},
 ) {
   const calls: { name: string; params: unknown }[] = [];
@@ -88,14 +91,32 @@ function harness(
     },
     rpc: (name: string, params: unknown) => {
       calls.push({ name, params });
+      if (name === "convention_sale_settings") {
+        return Promise.resolve({
+          error: options.settingsFailure ? { message: "Unavailable" } : null,
+          data: options.settingsFailure ? null : {
+            latitude: 39.4861,
+            longitude: -119.7911,
+            radius_miles: 1,
+          },
+        });
+      }
       if (name === "convention_sale_location_check") {
         return Promise.resolve({
-          error: null,
+          error: options.locationCheckError
+            ? { message: options.locationCheckError }
+            : null,
           data: { eligible: options.eligible !== false, lookup_needed: true },
         });
       }
       if (name === "convention_sale_location_result") {
         return Promise.resolve({ error: null, data: null });
+      }
+      if (options.claimError) {
+        return Promise.resolve({
+          data: null,
+          error: { message: options.claimError },
+        });
       }
       return Promise.resolve(
         options.eligible === false
@@ -189,12 +210,17 @@ Deno.test("old tabs do not save city/state before displaying the new notice", as
 });
 Deno.test("outside-area checks save locality but cannot create a payment", async () => {
   const h = harness({ eligible: false });
-  assertEquals(
-    (await h.handler(
-      h.request({ location_notice_version: "2026-10-25-locality" }),
-    )).status,
-    400,
-  );
+  const response = await h.handler(h.request({
+    latitude: 39.52,
+    location_notice_version: "2026-10-25-locality",
+  }));
+  assertEquals(response.status, 400);
+  const failure = await response.json();
+  assertEquals(failure.code, "outside_sale_area");
+  assertStringIncludes(failure.error, "showroom to place this order");
+  assertStringIncludes(failure.error, "please stop by the booth");
+  // Already-open clients use this phrase to reset a declined check ID.
+  assertStringIncludes(failure.error, "inside the sale area");
   assertEquals(
     h.calls.some((c) => c.name === "convention_sale_location_result"),
     true,
@@ -205,6 +231,65 @@ Deno.test("outside-area checks save locality but cannot create a payment", async
     ),
     false,
   );
+});
+Deno.test("coarse outside readings show showroom instructions without creating an offer", async () => {
+  const h = harness();
+  const response = await h.handler(h.request({
+    latitude: 39.52,
+    accuracy: 500,
+    location_notice_version: "2026-10-25-locality",
+  }));
+  assertEquals(response.status, 400);
+  assertEquals((await response.json()).code, "outside_sale_area");
+  assertEquals(h.calls.map((c) => c.name), [
+    "auth",
+    "convention_sale_settings",
+  ]);
+});
+Deno.test("uncertain or stale readings ask for a fresh showroom check without guessing outside", async () => {
+  for (
+    const patch of [
+      { latitude: 39.52, accuracy: 3000 },
+      { latitude: 40, measured_at: new Date(Date.now() - 61000).toISOString() },
+      { latitude: null },
+    ]
+  ) {
+    const h = harness();
+    const response = await h.handler(h.request(patch));
+    assertEquals(response.status, 400);
+    const failure = await response.json();
+    assertEquals(failure.code, "location_unconfirmed");
+    assertStringIncludes(failure.error, "precise location enabled");
+    assertStringIncludes(failure.error, "please stop by the booth");
+    assertEquals(h.calls.some((c) => c.name === "stripe"), false);
+  }
+});
+Deno.test("database location quality failures use the same showroom messages", async () => {
+  const qualityError = "A fresh, accurate location reading is required.";
+  for (
+    const options of [
+      { locationCheckError: qualityError },
+      { claimError: qualityError },
+    ]
+  ) {
+    const h = harness(options);
+    const response = await h.handler(h.request({
+      latitude: 39.52,
+      ...(options.locationCheckError
+        ? { location_notice_version: "2026-10-25-locality" }
+        : {}),
+    }));
+    assertEquals(response.status, 400);
+    assertEquals((await response.json()).code, "outside_sale_area");
+    assertEquals(h.calls.some((c) => c.name === "stripe"), false);
+  }
+});
+Deno.test("failed settings lookup still blocks checkout with booth guidance", async () => {
+  const h = harness({ settingsFailure: true });
+  const response = await h.handler(h.request({ latitude: 40, accuracy: 500 }));
+  assertEquals(response.status, 400);
+  assertEquals((await response.json()).code, "location_unconfirmed");
+  assertEquals(h.calls.some((c) => c.name === "stripe"), false);
 });
 Deno.test("a locality provider failure does not block eligible checkout", async () => {
   const h = harness({ localityFailure: true });
