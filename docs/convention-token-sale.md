@@ -153,7 +153,7 @@ checks cannot be backfilled because their coordinates were not retained.
    secret, payment processing behavior, and email dependencies.
 4. Keep `checkout.session.completed` and add
    `checkout.session.async_payment_succeeded` on the **license** webhook endpoint.
-5. Deploy the normal Flutter entry point `lib/main.dart` (generation 1.00.12).
+5. Deploy the normal Flutter entry point `lib/main.dart` (generation 1.00.13).
    Never deploy the local preview entry point.
 6. Verify the anonymous catalog/settings, failed unauthenticated checkout,
    sale route, and Super Admin settings. No live charge is necessary for these checks.
