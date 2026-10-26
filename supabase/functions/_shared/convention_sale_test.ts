@@ -2,6 +2,7 @@ import { assertEquals, assertThrows } from "jsr:@std/assert@1";
 import {
   checkoutMeasurement,
   conventionFulfillmentParams,
+  conventionLocationFailure,
   isConventionPlan,
 } from "./convention_sale.ts";
 
@@ -60,6 +61,76 @@ Deno.test("location must be finite, recent and accurate", () => {
       { measured_at: new Date(now + 31000).toISOString() },
     ]
   ) assertThrows(() => checkoutMeasurement({ ...valid, ...invalid }, now));
+});
+Deno.test("outside messages account for the full accuracy circle and editable venue", () => {
+  const now = Date.parse("2026-10-26T18:00:00Z");
+  const venue = { latitude: 39.4861, longitude: -119.7911, radius_miles: 1 };
+  const point = {
+    latitude: 39.52,
+    longitude: -119.7911,
+    accuracy: 20,
+    measured_at: new Date(now).toISOString(),
+  };
+  const outside = conventionLocationFailure(point, venue, now);
+  assertEquals(outside.code, "outside_sale_area");
+  assertEquals(outside.error.includes("showroom to place this order"), true);
+  assertEquals(outside.error.includes("please stop by the booth"), true);
+  // Coarse readings still reject checkout, but can establish an outside area.
+  assertThrows(() => checkoutMeasurement({ ...point, accuracy: 500 }, now));
+  assertEquals(
+    conventionLocationFailure({ ...point, accuracy: 500 }, venue, now).code,
+    "outside_sale_area",
+  );
+  // Do not claim someone is outside when their uncertainty circle overlaps.
+  for (const accuracy of [3000, 5000]) {
+    assertEquals(
+      conventionLocationFailure({ ...point, accuracy }, venue, now).code,
+      "location_unconfirmed",
+    );
+  }
+  for (
+    const settings of [
+      { ...venue, radius_miles: 10 },
+      { ...venue, latitude: point.latitude },
+    ]
+  ) {
+    assertEquals(
+      conventionLocationFailure(point, settings, now).code,
+      "location_unconfirmed",
+    );
+  }
+});
+Deno.test("stale, invalid or unavailable location data never guesses outside", () => {
+  const now = Date.parse("2026-10-26T18:00:00Z");
+  const venue = { latitude: 39.4861, longitude: -119.7911, radius_miles: 1 };
+  const point = {
+    latitude: 40,
+    longitude: -119.7911,
+    accuracy: 20,
+    measured_at: new Date(now).toISOString(),
+  };
+  for (
+    const invalid of [
+      { latitude: NaN },
+      { longitude: Infinity },
+      { latitude: 91 },
+      { accuracy: -1 },
+      { accuracy: Infinity },
+      { measured_at: new Date(now - 61000).toISOString() },
+      { measured_at: new Date(now + 31000).toISOString() },
+    ]
+  ) {
+    assertEquals(
+      conventionLocationFailure({ ...point, ...invalid }, venue, now).code,
+      "location_unconfirmed",
+    );
+  }
+  for (const settings of [null, {}, { ...venue, radius_miles: NaN }]) {
+    assertEquals(
+      conventionLocationFailure(point, settings, now).code,
+      "location_unconfirmed",
+    );
+  }
 });
 Deno.test("paid session resolves only the server-created claim and exact line item", () => {
   const result = conventionFulfillmentParams(paidSession());

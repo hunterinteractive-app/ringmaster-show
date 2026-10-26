@@ -26,6 +26,14 @@ export function checkoutMeasurement(
   body: Record<string, unknown>,
   now = Date.now(),
 ) {
+  return readCheckoutMeasurement(body, now, 250);
+}
+
+function readCheckoutMeasurement(
+  body: Record<string, unknown>,
+  now: number,
+  maxAccuracy: number,
+) {
   const { latitude, longitude, accuracy, measured_at } = body;
   if (
     typeof latitude !== "number" || !Number.isFinite(latitude) ||
@@ -33,7 +41,7 @@ export function checkoutMeasurement(
     typeof longitude !== "number" || !Number.isFinite(longitude) ||
     Math.abs(longitude) > 180 ||
     typeof accuracy !== "number" || !Number.isFinite(accuracy) ||
-    accuracy < 0 || accuracy > 250 ||
+    accuracy < 0 || accuracy > maxAccuracy ||
     typeof measured_at !== "string" ||
     !Number.isFinite(Date.parse(measured_at)) ||
     Date.parse(measured_at) < now - 60_000 ||
@@ -44,6 +52,47 @@ export function checkoutMeasurement(
     );
   }
   return { latitude, longitude, accuracy, measured_at };
+}
+
+/** Explains a rejected check; it never approves checkout or stores coordinates. */
+export function conventionLocationFailure(
+  body: Record<string, unknown>,
+  settings: Record<string, unknown> | null,
+  now = Date.now(),
+) {
+  let outside = false;
+  try {
+    // A coarse reading cannot qualify for checkout, but its entire uncertainty
+    // circle can still be clearly outside the configured convention radius.
+    const point = readCheckoutMeasurement(body, now, Infinity);
+    const latitude = settings?.latitude;
+    const longitude = settings?.longitude;
+    const miles = settings?.radius_miles;
+    if (
+      typeof latitude === "number" && Number.isFinite(latitude) &&
+      Math.abs(latitude) <= 90 &&
+      typeof longitude === "number" && Number.isFinite(longitude) &&
+      Math.abs(longitude) <= 180 &&
+      typeof miles === "number" && Number.isFinite(miles) && miles > 0
+    ) {
+      const radians = (degrees: number) => degrees * Math.PI / 180;
+      const haversine = Math.sin(radians(point.latitude - latitude) / 2) ** 2 +
+        Math.cos(radians(latitude)) * Math.cos(radians(point.latitude)) *
+          Math.sin(radians(point.longitude - longitude) / 2) ** 2;
+      // Match the database's Earth diameter and miles-to-meters conversion.
+      const distance = 12742017.6 *
+        Math.asin(Math.sqrt(Math.min(1, Math.max(0, haversine))));
+      outside = distance - point.accuracy > miles * 1609.344;
+    }
+  } catch {
+    // Invalid or stale measurements cannot establish that someone is outside.
+  }
+  return {
+    code: outside ? "outside_sale_area" : "location_unconfirmed",
+    error: outside
+      ? "Your location is outside the allowed radius. You need to be inside the sale area at the showroom to place this order. If you continue to have issues, please stop by the booth."
+      : "We couldn't confirm your location inside the sale area. You need to be in the showroom to place this order. Please try again with precise location enabled. If you continue to have issues, please stop by the booth.",
+  };
 }
 
 export function conventionSecretaryQuestions() {

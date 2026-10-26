@@ -2,6 +2,7 @@ import type Stripe from "npm:stripe@22.6.0";
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2.110.2";
 import {
   checkoutMeasurement,
+  conventionLocationFailure,
   type ConventionPlan,
   conventionPlans,
   conventionSecretaryQuestions,
@@ -41,6 +42,16 @@ export function createConventionSaleHandler(deps: {
   ) => Promise<ConventionLocality>;
 }) {
   const { stripe, db } = deps;
+  async function locationRejection(body: Record<string, unknown>) {
+    let settings: Record<string, unknown> | null = null;
+    try {
+      const result = await db.rpc("convention_sale_settings");
+      if (!result.error) settings = result.data;
+    } catch {
+      // A settings outage must not grant eligibility or guess an outside area.
+    }
+    return json(conventionLocationFailure(body, settings), 400);
+  }
   return async (req: Request) => {
     if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
     if (req.method !== "POST") return json({ error: "Use POST" }, 405);
@@ -103,7 +114,12 @@ export function createConventionSaleHandler(deps: {
       if (!isConventionPlan(body.plan) || !isUuid(body.request_id)) {
         return json({ error: "Choose a token package and retry." }, 400);
       }
-      const location = checkoutMeasurement(body);
+      let location;
+      try {
+        location = checkoutMeasurement(body);
+      } catch {
+        return await locationRejection(body);
+      }
       const p = await product(body.plan);
       // Older open tabs have not shown the city/state retention notice. Leave
       // their original coordinate-only eligibility flow intact.
@@ -120,6 +136,9 @@ export function createConventionSaleHandler(deps: {
         });
         if (check.error) {
           const message = check.error.message;
+          if (message.startsWith("A fresh")) {
+            return await locationRejection(body);
+          }
           return json({
             error: /^(The convention sale|A fresh|Too many|Checkout request)/
                 .test(message)
@@ -149,10 +168,7 @@ export function createConventionSaleHandler(deps: {
           }
         }
         if (!check.data.eligible) {
-          return json({
-            error:
-              "Your location could not be confirmed inside the sale area. Retry or visit the booth for help.",
-          }, 400);
+          return await locationRejection(body);
         }
       }
       const { data: claim, error } = await db.rpc(
@@ -173,6 +189,9 @@ export function createConventionSaleHandler(deps: {
         },
       );
       if (error) {
+        if (/^(A fresh|Your location)/.test(error.message)) {
+          return await locationRejection(body);
+        }
         const safeMessage =
           /^(The convention sale|A fresh|Your location|Location check|Too many|Checkout request)/
               .test(error.message)
