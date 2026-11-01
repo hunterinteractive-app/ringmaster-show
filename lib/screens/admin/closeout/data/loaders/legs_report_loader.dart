@@ -96,6 +96,37 @@ String _legTextFromFirstKey(Map<String, dynamic> row, List<String> keys) {
   return '';
 }
 
+/// Selecting every breed of one species is still an all-breed competition.
+/// Do not infer this from entered animals or a breed-count threshold: a real
+/// specialty can have many entries, and rabbit-only shows exclude cavies.
+bool sectionAllowsReserveLeg(
+  Map<String, dynamic> section,
+  String species,
+  List<Map<String, dynamic>> breedCatalog,
+) {
+  final scope = (section['breed_scope'] ?? '').toString().trim().toLowerCase();
+  if (scope == 'all' || scope == 'all_breed') return true;
+  if (scope != 'limited' || !const {'rabbit', 'cavy'}.contains(species)) {
+    return false;
+  }
+  final rawIds = section['allowed_breed_ids'];
+  if (rawIds is! List || rawIds.isEmpty) return false;
+  final selected = rawIds.map((id) => id.toString()).toSet();
+  final required = breedCatalog.where(
+    (breed) =>
+        breed['species'] == species &&
+        breed['is_active'] == true &&
+        breed['local_show_id'] == null &&
+        !isCodEntry({'breed': breed['name']}),
+  );
+  // An empty/unavailable catalog must not accidentally authorize RIS legs.
+  return required.isNotEmpty &&
+      required.every(
+        (breed) =>
+            breed['id'] != null && selected.contains(breed['id'].toString()),
+      );
+}
+
 class LegsReportLoader {
   LegsReportLoader(this.repo);
 
@@ -609,6 +640,23 @@ class LegsReportLoader {
       throw ArgumentError('Result snapshot belongs to another show.');
     }
     final sectionRows = snapshot.sections;
+    final needsBreedCatalog = sectionRows.any(
+      (section) =>
+          _str(section['breed_scope']).toLowerCase() == 'limited' &&
+          section['allowed_breed_ids'] is List &&
+          (section['allowed_breed_ids'] as List).isNotEmpty,
+    );
+    final breedCatalog = needsBreedCatalog
+        ? await readAllReportPages(
+            (from, to) => repo.supabase
+                .from('breeds')
+                .select('id,name,species,is_active,local_show_id')
+                .eq('is_active', true)
+                .isFilter('local_show_id', null)
+                .order('id')
+                .range(from, to),
+          )
+        : <Map<String, dynamic>>[];
 
     final allRows = <Map<String, dynamic>>[];
 
@@ -639,8 +687,11 @@ class LegsReportLoader {
         row['section_kind'] = rawSection['kind'];
         row['section_sort_order'] = rawSection['sort_order'];
         row['resolved_judging_date'] = judgingDate;
-        row['allows_ris_leg'] =
-            _str(rawSection['breed_scope']).toLowerCase() == 'all';
+        row['allows_ris_leg'] = sectionAllowsReserveLeg(
+          rawSection,
+          legSpeciesFromResultRow(row),
+          breedCatalog,
+        );
         normalizeSpeciesSexPresentation(
           row,
           speciesOverride: legSpeciesFromResultRow(row),

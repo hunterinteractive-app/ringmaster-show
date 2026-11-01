@@ -10,6 +10,66 @@ import 'package:ringmaster_show/screens/admin/closeout/data/loaders/legs_report_
 import 'package:ringmaster_show/screens/admin/closeout/models/base/report_request.dart';
 
 void main() {
+  for (final award in ['RIS', 'RESERVE IN SHOW', '1RIS']) {
+    test('rabbit-only all-breed selection prints $award above BOB', () async {
+      final fixture = _Fixture(
+        _qualificationRows(),
+        award: '$award,BOB,BOV',
+        breedScope: 'limited',
+        allowedBreedIds: ['rabbit1', 'rabbit2'],
+      );
+      addTearDown(fixture.client.dispose);
+      final legs = await LegsReportLoader(fixture.repo).load(_request);
+      expect(legs.single.winCode, award);
+      expect(legs.single.legRule, 10);
+      expect(legs.single.animalsCount, 9);
+      expect(legs.single.exhibitorsCount, 9);
+    });
+  }
+  test('partial rabbit selection still falls back to BOB', () async {
+    final fixture = _Fixture(
+      _qualificationRows(),
+      award: 'RIS,BOB',
+      breedScope: 'limited',
+      allowedBreedIds: ['rabbit1'],
+    );
+    addTearDown(fixture.client.dispose);
+    expect(
+      (await LegsReportLoader(fixture.repo).load(_request)).single.winCode,
+      'BOB',
+    );
+  });
+  test('selected breeds are assessed per species, never by count', () {
+    final section = {
+      'breed_scope': 'limited',
+      'allowed_breed_ids': ['rabbit1', 'rabbit2', 'cavy1'],
+    };
+    expect(sectionAllowsReserveLeg(section, 'rabbit', _breedCatalog), isTrue);
+    expect(sectionAllowsReserveLeg(section, 'cavy', _breedCatalog), isFalse);
+    expect(sectionAllowsReserveLeg(section, '', _breedCatalog), isFalse);
+    expect(sectionAllowsReserveLeg(section, 'rabbit', []), isFalse);
+    expect(
+      sectionAllowsReserveLeg(
+        {
+          ...section,
+          'allowed_breed_ids': ['cavy1', 'cavy2'],
+        },
+        'cavy',
+        _breedCatalog,
+      ),
+      isTrue,
+    );
+    for (final scope in ['single', 'grouped_lop', 'meat_only', '']) {
+      expect(
+        sectionAllowsReserveLeg(
+          {...section, 'breed_scope': scope},
+          'rabbit',
+          _breedCatalog,
+        ),
+        isFalse,
+      );
+    }
+  });
   for (final showingName in ['Danny & Tracy Jarvis', '']) {
     test(
       'leg name prefers showing name with personal-name fallback: $showingName',
@@ -94,7 +154,7 @@ void main() {
     expect(await LegsReportLoader(fixture.repo).load(_request), isEmpty);
   });
 
-  for (final scope in ['all', 'limited', 'single', '']) {
+  for (final scope in ['all', 'all_breed', 'limited', 'single', '']) {
     for (final award in ['RIS', '1RIS', '2RIS', 'BIS', 'BOB']) {
       test(
         '$scope section $award leg eligibility, including historical shows',
@@ -108,7 +168,7 @@ void main() {
           final legs = await LegsReportLoader(fixture.repo).load(_request);
           final expected = award == 'BIS' || award == 'BOB'
               ? award
-              : scope == 'all' && award != '2RIS'
+              : (scope == 'all' || scope == 'all_breed') && award != '2RIS'
               ? award
               : 'FIRST';
           expect(legs.single.winCode, expected);
@@ -356,11 +416,38 @@ List<Map<String, dynamic>> _qualificationRows() => [
   _row('y', section: 'youth'), _row('y2', section: 'youth', exhibitor: 'ex2'),
 ];
 
+final _breedCatalog = <Map<String, dynamic>>[
+  for (final species in ['rabbit', 'cavy'])
+    for (var i = 1; i <= 2; i++)
+      {
+        'id': '$species$i',
+        'name': 'Breed $i',
+        'species': species,
+        'is_active': true,
+        'local_show_id': null,
+      },
+  {'id': 'cod', 'name': 'Breed (COD)', 'species': 'rabbit', 'is_active': true},
+  {
+    'id': 'inactive',
+    'name': 'Inactive',
+    'species': 'rabbit',
+    'is_active': false,
+  },
+  {
+    'id': 'local',
+    'name': 'Local',
+    'species': 'rabbit',
+    'is_active': true,
+    'local_show_id': 'show',
+  },
+];
+
 class _Fixture {
   _Fixture(
     List<Map<String, dynamic>> rows, {
     String award = 'FIRST',
     String breedScope = 'all',
+    List<String>? allowedBreedIds,
     bool failAwards = false,
     bool failPoints = false,
   }) {
@@ -389,6 +476,8 @@ class _Fixture {
           data = request.headers['Accept']?.contains('object') == true
               ? show
               : [show];
+        } else if (table == 'breeds') {
+          data = _breedCatalog;
         } else if (table == 'show_sanctions') {
           data = [
             for (final section in ['open', 'youth'])
@@ -435,15 +524,21 @@ class _Fixture {
         );
       }),
     );
-    repo = _FixtureRepository(client, rows, breedScope);
+    repo = _FixtureRepository(client, rows, breedScope, allowedBreedIds);
   }
   late final SupabaseClient client;
   late final _FixtureRepository repo;
 }
 
 class _FixtureRepository extends CloseoutRepository {
-  _FixtureRepository(super.client, this.rows, this.breedScope);
+  _FixtureRepository(
+    super.client,
+    this.rows,
+    this.breedScope,
+    this.allowedBreedIds,
+  );
   final String breedScope;
+  final List<String>? allowedBreedIds;
   final List<Map<String, dynamic>> rows;
   int snapshotLoads = 0;
   @override
@@ -464,6 +559,7 @@ class _FixtureRepository extends CloseoutRepository {
             'id': id,
             'kind': id,
             'breed_scope': breedScope,
+            'allowed_breed_ids': allowedBreedIds,
             'letter': 'A',
             'sort_order': id == 'open' ? 1 : 2,
           },
