@@ -300,7 +300,7 @@ class BreedResultsDetailReportLoader {
       );
     }
 
-    if (reportRows.isEmpty) {
+    if (!reportRows.any(breedResultsDetailIsShownEntry)) {
       return BreedResultsDetailSection(
         showLetter: showLetter,
         judgeName: '',
@@ -2388,6 +2388,21 @@ bool breedResultsDetailIsSweepstakesCountable(Map<String, dynamic> row) =>
     !isCodEntry(row) && breedResultsDetailIsCountableJudgedEntry(row);
 
 bool breedResultsDetailIsCountableJudgedEntry(Map<String, dynamic> row) {
+  if (!breedResultsDetailIsShownEntry(row) ||
+      _detailBool(row['is_disqualified']) ||
+      _detailBool(row['entry_is_disqualified']))
+    return false;
+  return ![
+        row['fur_result_status'],
+        row['result_status'],
+        row['status'],
+        row['entry_status'],
+      ]
+      .map(_detailNormalizedStatus)
+      .any((status) => status.startsWith('disqual') || status == 'dq');
+}
+
+bool breedResultsDetailIsShownEntry(Map<String, dynamic> row) {
   if (_detailSafe(row['scratched_at']).isNotEmpty ||
       _detailSafe(row['entry_scratched_at']).isNotEmpty) {
     return false;
@@ -2403,10 +2418,6 @@ bool breedResultsDetailIsCountableJudgedEntry(Map<String, dynamic> row) {
       (!isFurOrWool && _detailIsExplicitFalse(row['entry_is_shown']))) {
     return false;
   }
-  if (_detailBool(row['is_disqualified']) ||
-      _detailBool(row['entry_is_disqualified'])) {
-    return false;
-  }
 
   final statuses = [
     row['fur_result_status'],
@@ -2420,9 +2431,7 @@ bool breedResultsDetailIsCountableJudgedEntry(Map<String, dynamic> row) {
         status == 'noshow' ||
         status == 'notshown' ||
         status == 'scratched' ||
-        status == 'scratch' ||
-        status.startsWith('disqual') ||
-        status == 'dq',
+        status == 'scratch',
   );
 }
 

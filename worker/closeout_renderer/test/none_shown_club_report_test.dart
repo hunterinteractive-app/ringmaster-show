@@ -145,6 +145,118 @@ void main() {
       },
     );
   }
+  test(
+    'recorded but unshown entries do not create a populated breed report',
+    () {
+      expect(
+        breedResultsDetailIsShownEntry({'entry_is_shown': false}),
+        isFalse,
+      );
+      expect(
+        breedResultsDetailIsShownEntry({
+          'entry_is_shown': true,
+          'entry_scratched_at': '2026-01-01',
+        }),
+        isFalse,
+      );
+      expect(
+        breedResultsDetailIsShownEntry({
+          'entry_is_shown': true,
+          'entry_status': 'not shown',
+        }),
+        isFalse,
+      );
+      expect(
+        breedResultsDetailIsShownEntry({
+          'entry_is_shown': true,
+          'entry_is_disqualified': true,
+        }),
+        isTrue,
+      );
+      expect(
+        breedResultsDetailIsShownEntry({
+          'entry_is_shown': true,
+          'variety_name': 'Blue (COD)',
+        }),
+        isTrue,
+      );
+      expect(
+        breedResultsDetailIsShownEntry({
+          'entry_is_shown': false,
+          'is_shown': true,
+          'is_fur': true,
+          'fur_placement': 1,
+        }),
+        isTrue,
+      );
+    },
+  );
+  test(
+    'unshown entry rows return none shown before loading show awards',
+    () async {
+      final client = SupabaseClient(
+        'http://fixture.invalid',
+        'synthetic',
+        httpClient: MockClient((request) async {
+          final table = request.url.pathSegments.last;
+          Object rows = <Object>[];
+          if (table.contains('awards'))
+            throw StateError('Unshown breed must not load awards');
+          if (table == 'show_sections')
+            rows = [
+              {'id': 'section'},
+            ];
+          if (table == 'show_sanctions')
+            rows = [
+              {'sanction_number': 'SANCTION'},
+            ];
+          if (request.url.queryParameters['offset'] == '0') {
+            if (table == 'report_results_entry_rows_for_breed_detail')
+              rows = [
+                {
+                  'entry_id': 'a',
+                  'breed_name': 'Czech Frosty',
+                  'species': 'rabbit',
+                  'is_shown': false,
+                },
+              ];
+            if (table == 'entries')
+              rows = [
+                {
+                  'id': 'a',
+                  'breed': 'Czech Frosty',
+                  'species': 'rabbit',
+                  'is_shown': false,
+                  'status': 'entered',
+                },
+              ];
+          }
+          return http.Response(
+            jsonEncode(rows),
+            200,
+            request: request,
+            headers: {'content-type': 'application/json'},
+          );
+        }),
+      );
+      addTearDown(client.dispose);
+      final result =
+          await BreedResultsDetailReportLoader(CloseoutRepository(client)).load(
+            ReportRequest(
+              showId: 'show',
+              reportName: 'breed_results_detail_report',
+              finalizeRunId: 'run',
+              breedName: 'Czech Frosty',
+              species: 'rabbit',
+              scope: 'OPEN',
+              showLetter: 'A',
+            ),
+          );
+      expect(result.noResultsFound, isTrue);
+      expect(result.sections.single.totalAnimalsShown, 0);
+      expect(result.breedAwards, isEmpty);
+    },
+  );
   for (final species in ['rabbit', 'cavy']) {
     for (final scope in ['OPEN', 'YOUTH']) {
       for (final letter in ['A', 'B', 'C']) {

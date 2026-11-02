@@ -13,7 +13,7 @@ import '../../models/clubs/breed_results_detail_report_data.dart';
 import '../../utils/breed_results_detail_order.dart';
 
 /// Bump when the Breed Results Detail PDF template changes.
-const String breedResultsDetailReportVersion = '0.6.5';
+const String breedResultsDetailReportVersion = '0.6.6';
 
 class BreedResultsDetailReportPdf {
   final Uint8List? logoBytes;
