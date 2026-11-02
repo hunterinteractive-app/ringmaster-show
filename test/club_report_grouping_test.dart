@@ -2,6 +2,60 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ringmaster_show/screens/admin/closeout/utils/club_report_grouping.dart';
 
 void main() {
+  group('club report picker labels', () {
+    test('national Cavy reports do not inherit a state label from format', () {
+      expect(
+        clubReportPickerLabel(
+          reportName: 'details_by_breed',
+          title: 'Details By Breed',
+          metadata: const [
+            {'species': 'cavy', 'sanctioning_body': 'NATIONAL CLUB'},
+          ],
+        ),
+        'Details By Breed (National)',
+      );
+    });
+
+    test('state breed sweepstakes are labeled state', () {
+      expect(
+        clubReportPickerLabel(
+          reportName: 'sweepstakes_report',
+          title: 'Sweepstakes Report',
+          metadata: const [
+            {'sanctioning_body': 'STATE BREED CLUB'},
+          ],
+        ),
+        'Sweepstakes Report (State)',
+      );
+    });
+
+    test('shared formats list both audiences once in a stable order', () {
+      expect(
+        clubReportPickerLabel(
+          reportName: 'exh_by_breed',
+          title: 'Exhibitors By Breed',
+          metadata: const [
+            {'sanctioning_body': 'STATE CLUB'},
+            {'club_type': 'National Breed Club'},
+            {'club_kind': 'state'},
+          ],
+        ),
+        'Exhibitors By Breed (National / State)',
+      );
+    });
+
+    test('missing sanction metadata does not guess the audience', () {
+      expect(
+        clubReportPickerLabel(
+          reportName: 'sweepstakes_report',
+          title: 'Sweepstakes Report',
+          metadata: const [{}],
+        ),
+        'Sweepstakes Report',
+      );
+    });
+  });
+
   group('emailReportNamesFor', () {
     test('keeps a club report selected when includeReports is true', () {
       expect(

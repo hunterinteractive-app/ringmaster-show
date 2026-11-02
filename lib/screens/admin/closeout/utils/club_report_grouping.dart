@@ -35,6 +35,32 @@ Set<String> emailReportNamesFor({
 bool isClubReportName(String reportName) =>
     clubReportNames.contains(reportName);
 
+/// Labels the audience from sanctions, since report formats can be shared by
+/// national and state clubs (including national Cavy reports).
+String clubReportPickerLabel({
+  required String reportName,
+  required String title,
+  required Iterable<Map<String, dynamic>> metadata,
+}) {
+  if (!isClubReportName(reportName)) return title;
+  final audiences = <String>{};
+  for (final item in metadata) {
+    for (final key in ['sanctioning_body', 'club_type', 'club_kind']) {
+      final value = _lower(item[key]);
+      if (value.contains('national')) {
+        audiences.add('National');
+        break;
+      }
+      if (value.contains('state')) {
+        audiences.add('State');
+        break;
+      }
+    }
+  }
+  final note = ['National', 'State'].where(audiences.contains).join(' / ');
+  return note.isEmpty ? title : '$title ($note)';
+}
+
 bool isBreedClubReportName(String reportName) =>
     breedClubReportNames.contains(reportName);
 

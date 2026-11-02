@@ -8384,6 +8384,14 @@ class _ReportActionsCard extends StatefulWidget {
 }
 
 class _ReportActionsCardState extends State<_ReportActionsCard> {
+  String _reportPickerLabel(String reportName) => clubReportPickerLabel(
+    reportName: reportName,
+    title: _friendlyReportName(reportName),
+    metadata: widget.reports
+        .where((artifact) => artifact.reportName == reportName)
+        .map((artifact) => artifact.metadata),
+  );
+
   String _selectedGroup = 'arba';
   String? _selectedReportName = 'arba_report';
   String? _selectedArbaArtifactId;
@@ -9593,6 +9601,7 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
             initialValue: _currentReports.contains(_selectedReportName)
                 ? _selectedReportName
                 : (_currentReports.isNotEmpty ? _currentReports.first : null),
+            isExpanded: true,
             decoration: const InputDecoration(
               labelText: 'Report',
               border: OutlineInputBorder(),
@@ -9601,7 +9610,7 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
                 .map(
                   (reportName) => DropdownMenuItem<String>(
                     value: reportName,
-                    child: Text(_friendlyReportName(reportName)),
+                    child: Text(_reportPickerLabel(reportName)),
                   ),
                 )
                 .toList(),

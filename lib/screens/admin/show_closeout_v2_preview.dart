@@ -4785,6 +4785,14 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
 
   List<String> get _availableGroups => _groupOrder;
 
+  String _reportPickerLabel(String reportName) => clubReportPickerLabel(
+    reportName: reportName,
+    title: _friendlyReportName(reportName),
+    metadata: _artifacts
+        .where((artifact) => artifact.reportName == reportName)
+        .map((artifact) => artifact.metadata),
+  );
+
   List<String> _reportNamesFor(String? group) {
     if (group == null) return const [];
     final reportNames =
@@ -5833,6 +5841,7 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
         else
           DropdownButtonFormField<String>(
             key: ValueKey('closeout-v2-report-picker-$_selectedGroup'),
+            isExpanded: true,
             initialValue: _selectedReportName,
             decoration: const InputDecoration(
               labelText: 'Report',
@@ -5842,7 +5851,7 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
                 .map(
                   (reportName) => DropdownMenuItem(
                     value: reportName,
-                    child: Text(_friendlyReportName(reportName)),
+                    child: Text(_reportPickerLabel(reportName)),
                   ),
                 )
                 .toList(),
