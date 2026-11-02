@@ -2390,8 +2390,9 @@ bool breedResultsDetailIsSweepstakesCountable(Map<String, dynamic> row) =>
 bool breedResultsDetailIsCountableJudgedEntry(Map<String, dynamic> row) {
   if (!breedResultsDetailIsShownEntry(row) ||
       _detailBool(row['is_disqualified']) ||
-      _detailBool(row['entry_is_disqualified']))
+      _detailBool(row['entry_is_disqualified'])) {
     return false;
+  }
   return ![
         row['fur_result_status'],
         row['result_status'],
