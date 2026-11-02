@@ -11,7 +11,7 @@ import '../../models/base/report_request.dart';
 import '../../models/clubs/sweepstakes_report_data.dart';
 
 /// Bump when the Sweepstakes PDF template or scoring presentation changes.
-const String sweepstakesReportVersion = '0.6.3';
+const String sweepstakesReportVersion = '0.6.4';
 
 class SweepstakesReportPdf {
   final Uint8List? logoBytes;
@@ -324,7 +324,9 @@ class SweepstakesReportPdf {
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
           pw.Text(
-            'No Results Reported',
+            message.startsWith('None shown.')
+                ? 'None Shown'
+                : 'No Results Reported',
             style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
           ),
           pw.SizedBox(height: 8),
@@ -623,7 +625,11 @@ String sweepstakesNoResultsMessage(
           'were calculated. Review the cavy scoring configuration and '
           'regenerate this report.';
     }
-    return 'No cavies were shown in this Show.';
+    return 'None shown. No cavies were shown in this show section.';
   }
-  return 'No rabbits of this breed were shown in this Show.';
+  if (shownEntryCount > 0) {
+    return '$shownEntryCount rabbits were shown, but no sweepstakes points '
+        'were calculated. Review the scoring configuration and regenerate this report.';
+  }
+  return 'None shown. No rabbits of this breed were shown in this show section.';
 }

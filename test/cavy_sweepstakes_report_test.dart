@@ -26,7 +26,7 @@ void main() {
   test('uses the genuine empty-show message when no cavies were shown', () {
     expect(
       sweepstakesNoResultsMessage(cavyReport, shownEntryCount: 0),
-      'No cavies were shown in this Show.',
+      'None shown. No cavies were shown in this show section.',
     );
   });
 }

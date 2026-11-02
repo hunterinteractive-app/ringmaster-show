@@ -1,3 +1,4 @@
+import 'club_report_shown_entries.dart';
 import '../report_data_reader.dart';
 import '../../models/base/report_request.dart';
 import '../../models/clubs/sweepstakes_report_data.dart';
@@ -156,8 +157,10 @@ class SweepstakesReportLoader {
           species: species,
           breedName: breedName,
         );
-        final shownEntryCount = rows.isEmpty && species == 'cavy'
-            ? await _loadShownEntryCountForSpecies(
+        final shownEntryCount = rows.isEmpty
+            ? await loadShownClubReportEntryCount(
+                repo: repo,
+                breedName: breedName,
                 showId: showId,
                 scope: scope,
                 showLetter: letter,
@@ -297,8 +300,10 @@ class SweepstakesReportLoader {
       species: species,
       breedName: breedName,
     );
-    final shownEntryCount = rows.isEmpty && species == 'cavy'
-        ? await _loadShownEntryCountForSpecies(
+    final shownEntryCount = rows.isEmpty
+        ? await loadShownClubReportEntryCount(
+            repo: repo,
+            breedName: breedName,
             showId: showId,
             scope: scope,
             showLetter: showLetter,
@@ -506,66 +511,6 @@ class SweepstakesReportLoader {
 
     return breeds.toList()
       ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
-  }
-
-  Future<int> _loadShownEntryCountForSpecies({
-    required String showId,
-    required String scope,
-    required String showLetter,
-    required String species,
-  }) async {
-    final sectionResponse = await repo.supabase
-        .from('show_sections')
-        .select('id')
-        .eq('show_id', showId)
-        .eq('is_enabled', true)
-        .eq('kind', scope.toLowerCase())
-        .eq('letter', showLetter);
-
-    final sectionIds = (sectionResponse as List)
-        .map((row) => (row['id'] ?? '').toString().trim())
-        .where((id) => id.isNotEmpty)
-        .toList(growable: false);
-    if (sectionIds.isEmpty) return 0;
-
-    final entryIds = <String>{};
-    for (final sectionId in sectionIds) {
-      final response = await readAllReportPages(
-        (from, to) => repo.supabase
-            .from('entries')
-            .select(
-              'id, breed, species, is_shown, scratched_at, is_disqualified',
-            )
-            .eq('show_id', showId)
-            .eq('section_id', sectionId)
-            .order('id', ascending: true)
-            .range(from, to),
-      );
-
-      for (final raw in (response as List)) {
-        final row = Map<String, dynamic>.from(raw as Map);
-        final breedName = (row['breed'] ?? '').toString();
-        final rowSpecies = normalizeClubReportSpecies(
-          (row['species'] ?? '').toString(),
-        );
-        final matchesSpecies =
-            rowSpecies == species ||
-            (rowSpecies.isEmpty &&
-                species == 'cavy' &&
-                isKnownCavyBreed(breedName));
-        if (!matchesSpecies ||
-            row['is_shown'] == false ||
-            row['scratched_at'] != null ||
-            row['is_disqualified'] == true) {
-          continue;
-        }
-
-        final entryId = (row['id'] ?? '').toString().trim();
-        if (entryId.isNotEmpty) entryIds.add(entryId);
-      }
-    }
-
-    return entryIds.length;
   }
 
   List<SweepstakesReportRow> _normalizeRowsForReport(

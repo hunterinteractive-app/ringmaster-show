@@ -13,7 +13,7 @@ import '../../models/clubs/breed_results_detail_report_data.dart';
 import '../../utils/breed_results_detail_order.dart';
 
 /// Bump when the Breed Results Detail PDF template changes.
-const String breedResultsDetailReportVersion = '0.6.4';
+const String breedResultsDetailReportVersion = '0.6.5';
 
 class BreedResultsDetailReportPdf {
   final Uint8List? logoBytes;
@@ -113,7 +113,7 @@ class BreedResultsDetailReportPdf {
             pw.SizedBox(height: 12),
             if (isNoResults)
               _buildNoResultsBox(
-                'No breed result details were found for this breed/show section.',
+                breedDetailNoResultsMessage(section.totalAnimalsShown),
               )
             else
               ..._buildSections(
@@ -1127,4 +1127,12 @@ bool _breedResultsDetailIsFurWoolTextMatch(List<String> values) {
     if (normalized.contains('fur') || normalized.contains('wool')) return true;
   }
   return false;
+}
+
+String breedDetailNoResultsMessage(int shownEntryCount) {
+  if (shownEntryCount > 0) {
+    return '$shownEntryCount animals were shown, but no breed result details '
+        'were found. Review the results and regenerate this report.';
+  }
+  return 'None shown. No animals of this breed were shown in this show section.';
 }

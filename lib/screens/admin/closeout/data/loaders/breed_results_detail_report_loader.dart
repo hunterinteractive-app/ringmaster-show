@@ -1,3 +1,4 @@
+import 'club_report_shown_entries.dart';
 import '../../utils/report_entry_order.dart';
 // lib/screens/admin/closeout/data/loaders/breed_results_detail_report_loader.dart
 
@@ -52,11 +53,14 @@ class BreedResultsDetailReportLoader {
     final scope = (request.scope ?? '').trim().toUpperCase();
     final showLetter = (request.showLetter ?? '').trim().toUpperCase();
     final showHeader = await _loadShowHeader(showId);
-    final breedSanctionNumber = breedName.isEmpty
+    final sanctionBreedName = species == 'cavy'
+        ? cavyClubReportBreedName
+        : breedName;
+    final breedSanctionNumber = sanctionBreedName.isEmpty
         ? ''
         : await _loadBreedSanctionNumber(
             showId: showId,
-            breedName: breedName,
+            breedName: sanctionBreedName,
             clubName: clubName,
             scope: scope,
             showLetter: showLetter,
@@ -172,7 +176,7 @@ class BreedResultsDetailReportLoader {
       secretaryEmail: showHeader.secretaryEmail,
       breedAwards: section.breedAwards,
       varieties: section.varieties,
-      sections: const [],
+      sections: section.noResultsFound ? [section] : const [],
       noResultsFound: section.noResultsFound,
       secretaryPhone: showHeader.secretaryPhone,
     );
@@ -300,7 +304,14 @@ class BreedResultsDetailReportLoader {
       return BreedResultsDetailSection(
         showLetter: showLetter,
         judgeName: '',
-        totalAnimalsShown: 0,
+        totalAnimalsShown: await loadShownClubReportEntryCount(
+          repo: repo,
+          showId: showId,
+          scope: scope,
+          showLetter: showLetter,
+          species: species,
+          breedName: breedName,
+        ),
         breedAwards: const [],
         varieties: const [],
         noResultsFound: true,
