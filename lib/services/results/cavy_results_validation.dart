@@ -19,13 +19,14 @@ List<ResultsEntryBlockingIssue> validateCavyResults({
   required String Function(Map<String, dynamic>) sex,
 }) {
   final issues = <ResultsEntryBlockingIssue>[];
-  for (final entry in entries.where(isCodEntry)) {
-    if (codAwardsDisallowed(awardCodes(entry))) {
+  for (final entry in entries.where(isRecognitionRestricted)) {
+    if (recognitionAwardsDisallowed(entry, awardCodes(entry))) {
       issues.add(
         ResultsEntryBlockingIssue(
           code: 'cod_special_award',
-          title: 'COD entry has higher awards',
-          message: '${entryLabel(entry)}: $codAwardIneligibilityReason',
+          title: 'Entry has ineligible awards',
+          message:
+              '${entryLabel(entry)}: ${recognitionIneligibilityReason(entry)}',
           entry: entry,
         ),
       );
@@ -64,7 +65,12 @@ List<ResultsEntryBlockingIssue> validateCavyResults({
   }) {
     final result = <String, List<Map<String, dynamic>>>{};
     for (final entry in normal) {
-      if (!includeCod && isCodEntry(entry)) continue;
+      if ((!includeCod && isRecognitionRestricted(entry)) ||
+          (includeCod &&
+              isRecognitionRestricted(entry) &&
+              !isCodEntry(entry))) {
+        continue;
+      }
       final key = scope(entry);
       if (key.isNotEmpty) result.putIfAbsent(key, () => []).add(entry);
     }

@@ -56,7 +56,7 @@ void main() {
             'display_name': 'Cavy Open A',
             'letter': 'A',
           };
-        } else if (path == 'report_results_entry_rows_page') {
+        } else if (path == 'report_results_entry_rows_dated_page') {
           final params = jsonDecode(request.body) as Map;
           response = params['p_after_entry_id'] == null ? projection : [];
         } else if (path == 'entries') {

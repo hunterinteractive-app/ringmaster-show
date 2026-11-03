@@ -219,9 +219,9 @@ class RabbitResultsRules implements ResultsRules {
     required Set<String> selectedAwards,
   }) {
     final awards = normalizeStoredAwards(selectedAwards);
-    if (isCodEntry(entry) && codAwardsDisallowed(awards)) {
-      return const AwardCompatibilityResult.invalid(
-        codAwardIneligibilityReason,
+    if (recognitionAwardsDisallowed(entry, awards)) {
+      return AwardCompatibilityResult.invalid(
+        recognitionIneligibilityReason(entry),
       );
     }
     if (awards.contains(bestOppositeAwardCode) && !awards.contains('BOSB')) {
@@ -290,8 +290,7 @@ class RabbitResultsRules implements ResultsRules {
     if (!_eligible(effectiveStatus, entry) || effectivePlacement != '1') {
       return false;
     }
-    if (isCodEntry(entry) &&
-        !const {'BOV', 'BOSV'}.contains(_canonical(award))) {
+    if (recognitionAwardsDisallowed(entry, [_canonical(award)])) {
       return false;
     }
     final selected = normalizeStoredAwards(selectedAwards);
@@ -365,9 +364,8 @@ class RabbitResultsRules implements ResultsRules {
     required Map<String, dynamic> entry,
     required String award,
   }) {
-    if (isCodEntry(entry) &&
-        !const {'BOV', 'BOSV'}.contains(_canonical(award))) {
-      return codAwardIneligibilityReason;
+    if (recognitionAwardsDisallowed(entry, [_canonical(award)])) {
+      return recognitionIneligibilityReason(entry);
     }
     final code = _canonical(award);
     if (code == bestOppositeAwardCode) {

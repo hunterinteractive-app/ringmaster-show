@@ -3,6 +3,7 @@ import '../../utils/report_entry_order.dart';
 
 import 'package:ringmaster_show/utils/species_sex.dart';
 import 'package:ringmaster_show/services/results/cod_eligibility.dart';
+import 'package:ringmaster_show/services/catalog/recognition_timeline.dart';
 
 import '../../models/base/report_request.dart';
 import '../../models/legs/legs_certificate_data.dart';
@@ -102,8 +103,10 @@ String _legTextFromFirstKey(Map<String, dynamic> row, List<String> keys) {
 bool sectionAllowsReserveLeg(
   Map<String, dynamic> section,
   String species,
-  List<Map<String, dynamic>> breedCatalog,
-) {
+  List<Map<String, dynamic>> breedCatalog, {
+  List<Map<String, dynamic>> recognitionHistory = const [],
+  DateTime? judgingDate,
+}) {
   final scope = (section['breed_scope'] ?? '').toString().trim().toLowerCase();
   if (scope == 'all' || scope == 'all_breed') return true;
   if (scope != 'limited' || !const {'rabbit', 'cavy'}.contains(species)) {
@@ -117,7 +120,19 @@ bool sectionAllowsReserveLeg(
         breed['species'] == species &&
         breed['is_active'] == true &&
         breed['local_show_id'] == null &&
-        !isCodEntry({'breed': breed['name']}),
+        resolveRecognitionStatus(
+              breedName: breed['name'].toString(),
+              judgingDate: judgingDate,
+              transitions: recognitionHistory
+                  .where(
+                    (event) =>
+                        event['species'] == species &&
+                        event['breed_key'] ==
+                            recognitionKey(breed['name'].toString()),
+                  )
+                  .map(RecognitionTransition.fromJson),
+            ) ==
+            RecognitionStatus.recognized,
   );
   // An empty/unavailable catalog must not accidentally authorize RIS legs.
   return required.isNotEmpty &&
@@ -658,6 +673,16 @@ class LegsReportLoader {
           )
         : <Map<String, dynamic>>[];
 
+    final recognitionHistory = needsBreedCatalog
+        ? await readAllReportPages(
+            (from, to) => repo.supabase
+                .from('catalog_recognition_history')
+                .select()
+                .order('id')
+                .range(from, to),
+          )
+        : <Map<String, dynamic>>[];
+
     final allRows = <Map<String, dynamic>>[];
 
     for (final rawSection in List<Map<String, dynamic>>.from(sectionRows)) {
@@ -691,6 +716,12 @@ class LegsReportLoader {
           rawSection,
           legSpeciesFromResultRow(row),
           breedCatalog,
+          recognitionHistory: recognitionHistory,
+          judgingDate: DateTime.tryParse(
+            _str(row['recognition_judging_date']).isNotEmpty
+                ? _str(row['recognition_judging_date'])
+                : judgingDate,
+          ),
         );
         normalizeSpeciesSexPresentation(
           row,
@@ -764,7 +795,7 @@ class LegsReportLoader {
     for (final row in targetRows) {
       // COD animals never earn a leg, including FIRST and BOV. Keep the
       // report population intact; exclude only certificate candidates.
-      if (isCodEntry(row)) continue;
+      if (isRecognitionRestricted(row)) continue;
       final entryId = _str(row['entry_id']);
       if (entryId.isEmpty) continue;
 

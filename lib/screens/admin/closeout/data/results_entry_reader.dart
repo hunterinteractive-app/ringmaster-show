@@ -24,7 +24,7 @@ Future<ReportRows> loadResultsEntryRows(
   for (final chunk in chunks) {
     final page = await loadReportCursorRows(
       client,
-      'report_results_entry_rows_page',
+      'report_results_entry_rows_dated_page',
       params: {...params, 'p_entry_ids': chunk},
       cursorParameter: 'p_after_entry_id',
       idColumn: 'entry_id',

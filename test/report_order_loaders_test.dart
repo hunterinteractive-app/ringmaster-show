@@ -90,8 +90,8 @@ SupabaseClient fixture({bool cavy = false}) => SupabaseClient(
           {'id': 'exhibitor', 'display_name': 'Ordering Tester'},
         ];
       case 'report_checkin_entries':
-      case 'report_results_entry_rows':
-      case 'report_results_entry_rows_for_breed_detail':
+      case 'report_results_entry_rows_dated':
+      case 'report_results_entry_rows_for_breed_detail_dated':
         data = entryRows();
       case 'entries':
         data = [

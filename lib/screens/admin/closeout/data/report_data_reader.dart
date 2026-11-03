@@ -72,7 +72,14 @@ Future<ReportRows> loadReportRpcRows(
   required Map<String, dynamic> params,
 }) => readAllReportPages(
   (from, to) async => List<Map<String, dynamic>>.from(
-    await client.rpc(function, params: params).range(from, to),
+    await client
+        .rpc(switch (function) {
+          'report_results_entry_rows' => 'report_results_entry_rows_dated',
+          'report_results_entry_rows_for_breed_detail' =>
+            'report_results_entry_rows_for_breed_detail_dated',
+          _ => function,
+        }, params: params)
+        .range(from, to),
   ),
 );
 

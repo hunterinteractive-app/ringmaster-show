@@ -105,11 +105,13 @@ class BreedAward {
 
 class VarietySection {
   final String varietyName;
+  final bool? recognitionEligible;
   final List<BreedAward> awards;
   final List<SexSection> sexSections;
 
   const VarietySection({
     required this.varietyName,
+    this.recognitionEligible,
     required this.awards,
     required this.sexSections,
   });

@@ -10,6 +10,7 @@ import 'package:ringmaster_show/theme/app_theme.dart';
 import 'package:ringmaster_show/utils/species_sex.dart';
 import 'package:ringmaster_show/utils/catalog_label.dart';
 import 'animal_breed_service.dart';
+import 'package:ringmaster_show/services/catalog/recognition_catalog_labels.dart';
 
 import 'focus_open_autocomplete.dart';
 
@@ -144,7 +145,8 @@ class _AnimalEditorDialogState extends State<AnimalEditorDialog> {
 
       final match = _breedOptions.where((b) {
         final name = (b['name'] as String).trim().toLowerCase();
-        return name == typed;
+        return name == typed ||
+            catalogDisplayName(b).trim().toLowerCase() == typed;
       }).toList();
 
       if (match.isNotEmpty) {
@@ -240,7 +242,8 @@ class _AnimalEditorDialogState extends State<AnimalEditorDialog> {
 
     final match = _breedOptions.where((b) {
       final name = (b['name'] as String).trim().toLowerCase();
-      return name == typed;
+      return name == typed ||
+          catalogDisplayName(b).trim().toLowerCase() == typed;
     }).toList();
 
     if (match.isNotEmpty) {
@@ -508,12 +511,11 @@ class _AnimalEditorDialogState extends State<AnimalEditorDialog> {
                     labelText: 'Breed (required)',
                     hintText: 'Type to search and select a breed…',
                     options: _breedOptions,
-                    displayStringForOption: (opt) =>
-                        (opt['name'] ?? '').toString(),
+                    displayStringForOption: (opt) => catalogDisplayName(opt),
                     onSelectedAsync: (opt) async {
                       setState(() {
                         _breedId = (opt['id'] ?? '').toString();
-                        _breedText.text = (opt['name'] as String);
+                        _breedText.text = catalogDisplayName(opt);
                         _varietyText.clear();
                         _msg = null;
                       });
@@ -549,8 +551,7 @@ class _AnimalEditorDialogState extends State<AnimalEditorDialog> {
                         ? 'Select a breed first'
                         : 'Type to search and select a variety…',
                     options: _breedId == null ? const [] : _varietyOptions,
-                    displayStringForOption: (opt) =>
-                        (opt['name'] ?? '').toString(),
+                    displayStringForOption: (opt) => catalogDisplayName(opt),
                     enabled: _breedId != null,
                     readOnly: _breedId == null,
                     suffixIcon: _varietyText.text.trim().isEmpty
@@ -569,7 +570,7 @@ class _AnimalEditorDialogState extends State<AnimalEditorDialog> {
                           ),
                     onSelected: (opt) {
                       setState(() {
-                        _varietyText.text = (opt['name'] as String);
+                        _varietyText.text = catalogDisplayName(opt);
                         _msg = null;
                       });
                       FocusScope.of(context).requestFocus(_sexFocus);

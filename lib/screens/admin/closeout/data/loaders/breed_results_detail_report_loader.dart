@@ -605,6 +605,7 @@ class BreedResultsDetailReportLoader {
       sections.add(
         VarietySection(
           varietyName: varietyName,
+          recognitionEligible: regularByVariety[varietyName]!.any((row) => !isRecognitionRestricted(row)),
           awards: varietyAwardMap[varietyName] ?? const [],
           sexSections: _buildSexSections(
             regularByVariety[varietyName]!,
@@ -2385,7 +2386,7 @@ Map<String, dynamic> breedResultsDetailWithoutFurOrWoolFields(
 // COD placements remain visible in their own classes, but do not increase
 // recognized breed/show sweepstakes totals or breed award populations.
 bool breedResultsDetailIsSweepstakesCountable(Map<String, dynamic> row) =>
-    !isCodEntry(row) && breedResultsDetailIsCountableJudgedEntry(row);
+    !isRecognitionRestricted(row) && breedResultsDetailIsCountableJudgedEntry(row);
 
 bool breedResultsDetailIsCountableJudgedEntry(Map<String, dynamic> row) {
   if (!breedResultsDetailIsShownEntry(row) ||

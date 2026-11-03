@@ -6820,8 +6820,8 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
         (widget.entry['species'] ?? '').toString(),
       ).toString();
     }
-    if (isCodEntry(widget.entry) && codAwardsDisallowed(_selectedAwards)) {
-      return codAwardIneligibilityReason;
+    if (recognitionAwardsDisallowed(widget.entry, _selectedAwards)) {
+      return recognitionIneligibilityReason(widget.entry);
     }
     if (!_isEligibleForAwards(widget.entry) && _selectedAwards.isNotEmpty) {
       return 'This ${rules.speciesName.toLowerCase()} cannot receive awards because it is scratched, disqualified, not shown, or unworthy of award.';
@@ -7131,9 +7131,8 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
   }
 
   String _awardDisabledReason(String award) {
-    if (isCodEntry(widget.entry) &&
-        !const {'BOV', 'BOSV'}.contains(_canonicalAwardCode(award))) {
-      return codAwardIneligibilityReason;
+    if (recognitionAwardsDisallowed(widget.entry, [_canonicalAwardCode(award)])) {
+      return recognitionIneligibilityReason(widget.entry);
     }
     if (!_placedFirst(widget.entry)) {
       return _isCavyEntry(widget.entry)

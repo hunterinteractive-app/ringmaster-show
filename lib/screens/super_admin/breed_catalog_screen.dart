@@ -6,6 +6,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
 
 import 'breed_editor_screen.dart';
+import 'package:ringmaster_show/services/catalog/recognition_catalog_labels.dart';
+import 'recognition_timeline_screen.dart';
 
 final supabase = Supabase.instance.client;
 
@@ -20,6 +22,7 @@ class _BreedCatalogScreenState extends State<BreedCatalogScreen> {
   String _speciesFilter = 'all'; // all | rabbit | cavy
   String _search = '';
   String? _msg;
+  RecognitionCatalogLabels? _labels;
 
   Future<List<Map<String, dynamic>>> _loadBreeds() async {
     final List data;
@@ -40,6 +43,7 @@ class _BreedCatalogScreenState extends State<BreedCatalogScreen> {
           .order('name');
     }
 
+    _labels = await RecognitionCatalogLabels.load(supabase);
     final list = data.cast<Map<String, dynamic>>();
 
     final s = _search.trim().toLowerCase();
@@ -74,6 +78,24 @@ class _BreedCatalogScreenState extends State<BreedCatalogScreen> {
     });
 
     return filtered;
+  }
+
+  Future<void> _openRecognition(
+    String species,
+    String breed, [
+    String variety = '',
+  ]) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => RecognitionTimelineScreen(
+          species: species,
+          breedName: breed,
+          varietyName: variety,
+        ),
+      ),
+    );
+    if (mounted) setState(() {});
   }
 
   String _normalizeLookup(String value) {
@@ -398,7 +420,7 @@ class _BreedCatalogScreenState extends State<BreedCatalogScreen> {
             iconColor: AppColors.headerDark,
             collapsedIconColor: AppColors.muted,
             title: Text(
-              breedName,
+              _labels?.label(species, breedName) ?? breedName,
               style: TextStyle(
                 color: AppColors.text,
                 fontWeight: FontWeight.w700,
@@ -411,6 +433,14 @@ class _BreedCatalogScreenState extends State<BreedCatalogScreen> {
             ),
             trailing: const Icon(Icons.expand_more, color: AppColors.muted),
             children: [
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed: () => _openRecognition(species, breedName),
+                  icon: const Icon(Icons.history),
+                  label: const Text('Breed status history'),
+                ),
+              ),
               Row(
                 children: [
                   if (species == 'rabbit')
@@ -562,9 +592,16 @@ class _BreedCatalogScreenState extends State<BreedCatalogScreen> {
                       final isCavySop = v['is_cavy_sop'] == true;
 
                       return ListTile(
+                        leading: IconButton(
+                          tooltip: 'Variety status history',
+                          icon: const Icon(Icons.history),
+                          onPressed: () =>
+                              _openRecognition(species, breedName, varietyName),
+                        ),
                         contentPadding: EdgeInsets.zero,
                         title: Text(
-                          varietyName,
+                          _labels?.label(species, breedName, varietyName) ??
+                              varietyName,
                           style: TextStyle(
                             color: AppColors.text,
                             fontWeight: FontWeight.w600,
@@ -576,7 +613,9 @@ class _BreedCatalogScreenState extends State<BreedCatalogScreen> {
                         subtitle: Text(
                           isCavySop
                               ? 'Cavy SOP variety'
-                              : (isVarietyActive ? 'Active' : 'Disabled'),
+                              : (isVarietyActive
+                                    ? 'Available in catalog'
+                                    : 'Disabled'),
                           style: const TextStyle(color: AppColors.muted),
                         ),
                         trailing: isCavySop

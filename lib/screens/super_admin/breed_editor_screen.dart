@@ -1,6 +1,7 @@
 // lib/screens/super_admin/breed_editor_screen.dart
 
 import 'package:flutter/material.dart';
+import 'package:ringmaster_show/services/catalog/recognition_catalog_labels.dart';
 import 'package:ringmaster_show/theme/app_theme.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
@@ -21,6 +22,7 @@ class _BreedEditorScreenState extends State<BreedEditorScreen> {
   final _name = TextEditingController();
   String _classSystem = 'four';
   bool _active = true;
+  String? _initialDisplayName;
 
   bool _saving = false;
   String? _msg;
@@ -35,6 +37,23 @@ class _BreedEditorScreenState extends State<BreedEditorScreen> {
       _name.text = (e['name'] ?? '').toString();
       _classSystem = (e['class_system'] ?? 'four').toString();
       _active = e['is_active'] == true;
+      _loadDisplayName();
+    }
+  }
+
+  Future<void> _loadDisplayName() async {
+    try {
+      final original = widget.existing!['name'].toString();
+      final labels = await RecognitionCatalogLabels.load(supabase);
+      if (!mounted || _name.text != original) return;
+      setState(() {
+        _initialDisplayName = labels.label(widget.species, original);
+        _name.text = _initialDisplayName!;
+      });
+    } catch (e) {
+      if (mounted) {
+        setState(() => _msg = 'Could not load current recognition name: $e');
+      }
     }
   }
 
@@ -57,7 +76,9 @@ class _BreedEditorScreenState extends State<BreedEditorScreen> {
 
     try {
       final payload = {
-        'name': _name.text.trim(),
+        'name': _isEdit && _initialDisplayName == _name.text.trim()
+            ? widget.existing!['name']
+            : _name.text.trim(),
         'species': widget.species,
         'class_system': _classSystem,
         'is_active': _active,
@@ -134,6 +155,8 @@ class _BreedEditorScreenState extends State<BreedEditorScreen> {
                           decoration: const InputDecoration(
                             labelText: 'Breed name',
                             hintText: 'Enter breed name',
+                            helperText:
+                                'COD labels follow the dated status history.',
                           ),
                         ),
                         const SizedBox(height: 14),
@@ -163,7 +186,7 @@ class _BreedEditorScreenState extends State<BreedEditorScreen> {
                         const SizedBox(height: 8),
                         SwitchListTile(
                           contentPadding: EdgeInsets.zero,
-                          title: const Text('Active'),
+                          title: const Text('Available in catalog'),
                           subtitle: const Text(
                             'Inactive breeds stay in the database but are hidden from normal use.',
                           ),

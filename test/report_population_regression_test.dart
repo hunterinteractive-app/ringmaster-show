@@ -10,6 +10,78 @@ import 'package:ringmaster_show/screens/admin/closeout/data/loaders/legs_report_
 import 'package:ringmaster_show/screens/admin/closeout/models/base/report_request.dart';
 
 void main() {
+  for (final status in ['cod', 'recognized', 'retired']) {
+    test(
+      'leg and exhibitor reports honor dated $status despite COD label',
+      () async {
+        final rows = _qualificationRows();
+        for (final row in rows) {
+          row['variety_name'] = '${row['variety_name']} (COD)';
+          row['recognition_status'] = status;
+        }
+        final fixture = _Fixture(rows, award: 'BOV');
+        addTearDown(fixture.client.dispose);
+        final legs = await LegsReportLoader(fixture.repo).load(_request);
+        expect(legs.isNotEmpty, status == 'recognized');
+        final report = await ExhibitorReportLoader(fixture.repo).load(_request);
+        expect(
+          report.entries.any((entry) => entry.earnedLeg),
+          status == 'recognized',
+        );
+      },
+    );
+  }
+  test('all-breed RIS scope uses recognition on the judging date', () {
+    final catalog = [
+      {
+        'id': 'old',
+        'name': 'Recognized Breed',
+        'species': 'rabbit',
+        'is_active': true,
+      },
+      {
+        'id': 'new',
+        'name': 'New Breed (COD)',
+        'species': 'rabbit',
+        'is_active': true,
+      },
+    ];
+    final history = [
+      {
+        'id': 'event',
+        'species': 'rabbit',
+        'breed_key': 'new breed',
+        'variety_name': '',
+        'status': 'recognized',
+        'effective_date': '2026-12-01',
+      },
+    ];
+    final section = {
+      'breed_scope': 'limited',
+      'allowed_breed_ids': ['old'],
+    };
+    expect(
+      sectionAllowsReserveLeg(
+        section,
+        'rabbit',
+        catalog,
+        recognitionHistory: history,
+        judgingDate: DateTime(2026, 11, 30),
+      ),
+      isTrue,
+    );
+    expect(
+      sectionAllowsReserveLeg(
+        section,
+        'rabbit',
+        catalog,
+        recognitionHistory: history,
+        judgingDate: DateTime(2026, 12, 1),
+      ),
+      isFalse,
+    );
+  });
+
   for (final award in ['RIS', 'RESERVE IN SHOW', '1RIS']) {
     test('rabbit-only all-breed selection prints $award above BOB', () async {
       final fixture = _Fixture(

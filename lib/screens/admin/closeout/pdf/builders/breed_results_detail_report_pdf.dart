@@ -315,7 +315,11 @@ class BreedResultsDetailReportPdf {
     return varieties
         .where(
           (variety) =>
-              !isCodEntry({'breed': breedName, 'variety': variety.varietyName}),
+              (variety.recognitionEligible ??
+              !isCodEntry({
+                'breed': breedName,
+                'variety': variety.varietyName,
+              })),
         )
         .expand((variety) => variety.sexSections)
         .expand((sexSection) => sexSection.classes)

@@ -11,7 +11,12 @@ String? canonicalCatalogLabel(
       .where(
         (option) =>
             (selectedId == null || option['id']?.toString() == selectedId) &&
-            (option['name'] ?? '').toString().trim().toLowerCase() == key,
+            ((option['name'] ?? '').toString().trim().toLowerCase() == key ||
+                (option['display_name'] ?? '')
+                        .toString()
+                        .trim()
+                        .toLowerCase() ==
+                    key),
       )
       .map((option) => option['name'].toString())
       .toSet();

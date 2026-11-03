@@ -211,7 +211,7 @@ void main() {
               {'sanction_number': 'SANCTION'},
             ];
           if (request.url.queryParameters['offset'] == '0') {
-            if (table == 'report_results_entry_rows_for_breed_detail')
+            if (table == 'report_results_entry_rows_for_breed_detail_dated')
               rows = [
                 {
                   'entry_id': 'a',

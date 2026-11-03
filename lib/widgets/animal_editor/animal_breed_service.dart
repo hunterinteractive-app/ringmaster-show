@@ -1,6 +1,7 @@
 // lib/widgets/animal_editor/animal_breed_service.dart
 
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/catalog/recognition_catalog_labels.dart';
 
 final supabase = Supabase.instance.client;
 
@@ -12,6 +13,7 @@ class AnimalBreedService {
   static Future<List<Map<String, dynamic>>> loadBreedsForSpecies(
     String species,
   ) async {
+    final labels = await RecognitionCatalogLabels.load(supabase);
     // Try normal breeds table first for BOTH rabbit and cavy.
     final breedRows = await supabase
         .from('breeds')
@@ -20,17 +22,16 @@ class AnimalBreedService {
         .eq('is_active', true)
         .order('name');
 
-    final normalBreeds =
-        (breedRows as List).cast<Map<String, dynamic>>();
+    final normalBreeds = (breedRows as List).cast<Map<String, dynamic>>();
 
     // If cavy rows exist in breeds table, use them.
     if (species == 'cavy' && normalBreeds.isNotEmpty) {
-      return normalBreeds;
+      return labels.decorate(normalBreeds, species);
     }
 
     // Rabbit normal path.
     if (species == 'rabbit') {
-      return normalBreeds;
+      return labels.decorate(normalBreeds, species);
     }
 
     // Cavy fallback: build breed list from SOP table.
@@ -56,24 +57,19 @@ class AnimalBreedService {
 
     final result = byBreed.values.toList()
       ..sort((a, b) {
-        final ai =
-            int.tryParse((a['sort_order'] ?? '').toString()) ?? 9999;
+        final ai = int.tryParse((a['sort_order'] ?? '').toString()) ?? 9999;
 
-        final bi =
-            int.tryParse((b['sort_order'] ?? '').toString()) ?? 9999;
+        final bi = int.tryParse((b['sort_order'] ?? '').toString()) ?? 9999;
 
         final cmp = ai.compareTo(bi);
         if (cmp != 0) return cmp;
 
-        return (a['name'] ?? '')
-            .toString()
-            .toLowerCase()
-            .compareTo(
-              (b['name'] ?? '').toString().toLowerCase(),
-            );
+        return (a['name'] ?? '').toString().toLowerCase().compareTo(
+          (b['name'] ?? '').toString().toLowerCase(),
+        );
       });
 
-    return result;
+    return labels.decorate(result, species);
   }
 
   static Future<List<Map<String, dynamic>>> loadVarietiesForBreed({
@@ -82,13 +78,13 @@ class AnimalBreedService {
     required List<Map<String, dynamic>> breedOptions,
     String? showId,
   }) async {
+    final labels = await RecognitionCatalogLabels.load(supabase);
     final matchedBreed = breedOptions.firstWhere(
       (b) => (b['id'] ?? '').toString() == breedId,
       orElse: () => <String, dynamic>{},
     );
 
-    final breedName =
-        (matchedBreed['name'] ?? '').toString().trim();
+    final breedName = (matchedBreed['name'] ?? '').toString().trim();
 
     if (species == 'cavy') {
       final res = await supabase
@@ -97,26 +93,33 @@ class AnimalBreedService {
           .eq('breed_name', breedName)
           .order('variety_sort_order');
 
-      final effective = res.map((row) {
-        final map = Map<String, dynamic>.from(row as Map);
+      final effective = res
+          .map((row) {
+            final map = Map<String, dynamic>.from(row as Map);
 
-        return {
-          'id': (map['id'] ?? map['variety_name']).toString(),
-          'name': (map['variety_name'] ?? '').toString(),
-          'sort_order': map['variety_sort_order'],
-        };
-      }).where((v) {
-        return (v['name'] ?? '').toString().trim().isNotEmpty;
-      }).toList();
+            return {
+              'id': (map['id'] ?? map['variety_name']).toString(),
+              'name': (map['variety_name'] ?? '').toString(),
+              'sort_order': map['variety_sort_order'],
+            };
+          })
+          .where((v) {
+            return (v['name'] ?? '').toString().trim().isNotEmpty;
+          })
+          .toList();
 
-      return effective;
+      return labels.decorate(effective, species, breed: breedName);
     }
 
     if (isLopBreedName(breedName)) {
-      return const [
-        {'id': 'lop_broken', 'name': 'Broken'},
-        {'id': 'lop_solid', 'name': 'Solid'},
-      ];
+      return labels.decorate(
+        [
+          {'id': 'lop_broken', 'name': 'Broken'},
+          {'id': 'lop_solid', 'name': 'Solid'},
+        ],
+        species,
+        breed: breedName,
+      );
     }
 
     final globalRows = await supabase
@@ -137,7 +140,7 @@ class AnimalBreedService {
     // enabled/disabled/custom variety list. When showId is null, keep using
     // the global list so My Animals still works outside a show.
     if (trimmedShowId == null || trimmedShowId.isEmpty) {
-      return globalVarieties;
+      return labels.decorate(globalVarieties, species, breed: breedName);
     }
 
     final showRows = await supabase
@@ -146,8 +149,7 @@ class AnimalBreedService {
         .eq('show_id', trimmedShowId)
         .eq('breed_id', breedId);
 
-    final showVarieties =
-        (showRows as List).cast<Map<String, dynamic>>();
+    final showVarieties = (showRows as List).cast<Map<String, dynamic>>();
 
     final disabledVarietyIds = showVarieties
         .where((row) => row['is_enabled'] == false)
@@ -163,8 +165,7 @@ class AnimalBreedService {
     for (final row in showVarieties) {
       if (row['is_enabled'] != true) continue;
 
-      final customName =
-          (row['custom_name'] ?? '').toString().trim();
+      final customName = (row['custom_name'] ?? '').toString().trim();
       if (customName.isEmpty) continue;
 
       effective.add({
@@ -174,12 +175,11 @@ class AnimalBreedService {
     }
 
     effective.sort((a, b) {
-      return (a['name'] ?? '')
-          .toString()
-          .toLowerCase()
-          .compareTo((b['name'] ?? '').toString().toLowerCase());
+      return (a['name'] ?? '').toString().toLowerCase().compareTo(
+        (b['name'] ?? '').toString().toLowerCase(),
+      );
     });
 
-    return effective;
+    return labels.decorate(effective, species, breed: breedName);
   }
 }
