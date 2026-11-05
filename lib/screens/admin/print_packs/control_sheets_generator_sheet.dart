@@ -6,7 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:ringmaster_show/theme/app_theme.dart';
 import 'package:ringmaster_show/utils/entry_class_name.dart';
 import 'package:ringmaster_show/utils/species_sex.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/ringmaster_backend.dart';
 
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -17,7 +17,7 @@ import 'control_sheet_labels.dart';
 import 'control_sheet_judging_order.dart';
 import '../closeout/data/report_data_reader.dart';
 
-final supabase = Supabase.instance.client;
+SupabaseClient get supabase => ringMasterClient;
 
 // =======================================================
 

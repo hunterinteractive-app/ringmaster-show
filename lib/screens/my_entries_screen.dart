@@ -4,7 +4,7 @@
 import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'dart:html' as html;
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/ringmaster_backend.dart';
 import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
 
 import 'admin/closeout/data/report_catalog_order.dart';
@@ -22,7 +22,7 @@ import '../widgets/rm_widgets.dart';
 import '../widgets/stripe_payment_confirmation_dialog.dart';
 import '../widgets/submitted_balance_payment.dart';
 
-final supabase = Supabase.instance.client;
+SupabaseClient get supabase => ringMasterClient;
 
 class MyEntriesScreen extends StatefulWidget {
   const MyEntriesScreen({super.key});
@@ -646,7 +646,7 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
   }
 
   void _openAnimals(BuildContext context) {
-    if (AppSession.isSupportMode) {
+    if (AppSession.supportReadOnly) {
       setState(() {
         _msg = 'Animal management is disabled while viewing in support mode.';
       });
@@ -659,7 +659,7 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
   }
 
   void _openAccount(BuildContext context) {
-    if (AppSession.isSupportMode) {
+    if (AppSession.supportReadOnly) {
       setState(() {
         _msg = 'Account settings are disabled while viewing in support mode.';
       });
@@ -1020,20 +1020,20 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
           ),
         ),
         IconButton(
-          tooltip: AppSession.isSupportMode
+          tooltip: AppSession.supportReadOnly
               ? 'Animals disabled in support mode'
               : 'Animals',
           icon: const Icon(Icons.pets),
-          onPressed: AppSession.isSupportMode
+          onPressed: AppSession.supportReadOnly
               ? null
               : () => _openAnimals(context),
         ),
         IconButton(
-          tooltip: AppSession.isSupportMode
+          tooltip: AppSession.supportReadOnly
               ? 'Account disabled in support mode'
               : 'Account',
           icon: const Icon(Icons.manage_accounts),
-          onPressed: AppSession.isSupportMode
+          onPressed: AppSession.supportReadOnly
               ? null
               : () => _openAccount(context),
         ),
@@ -1049,7 +1049,7 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
           : ListView(
               padding: const EdgeInsets.all(AppSpacing.lg),
               children: [
-                if (AppSession.isSupportMode)
+                if (AppSession.supportReadOnly)
                   Padding(
                     padding: const EdgeInsets.only(bottom: AppSpacing.md),
                     child: RMCard(
@@ -1101,7 +1101,7 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
                     judgeOrderPublished: _judgeOrderPublishedForShow(showId),
                     deadlinePassed: _deadlinePassedForShow(showId),
                     closeAt: _parseTs(_showsById[showId]?['entry_close_at']),
-                    readOnly: AppSession.isSupportMode,
+                    readOnly: AppSession.supportReadOnly,
                     exhibitorBuckets: grouped[showId] ?? const {},
                     exhibitorLabel: _exhibitorLabelById,
                     sectionLabel: _sectionLabel,

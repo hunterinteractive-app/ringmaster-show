@@ -1,11 +1,11 @@
 //lib/services/app_init_service.dart
 
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/ringmaster_backend.dart';
 
 class AppInitService {
   AppInitService._();
 
-  static final SupabaseClient _supabase = Supabase.instance.client;
+  static SupabaseClient get _supabase => ringMasterClient;
 
   static String? _lastClaimedUserId;
   static String? _claimingUserId;

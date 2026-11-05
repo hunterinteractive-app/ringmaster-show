@@ -9,7 +9,7 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/ringmaster_backend.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:uuid/uuid.dart';
 import '../services/show_assistant_service.dart';
@@ -31,11 +31,11 @@ class _ShowAssistantOverlayState extends State<ShowAssistantOverlay> {
   @override
   void initState() {
     super.initState();
-    _actor = Supabase.instance.client.auth.currentUser?.id;
+    _actor = ringMasterClient.auth.currentUser?.id;
     controller.addListener(_refresh);
     HouseholdSession.selection.addListener(_reset);
     SupportImpersonationSession.current.addListener(_reset);
-    _auth = Supabase.instance.client.auth.onAuthStateChange.listen((s) {
+    _auth = ringMasterClient.auth.onAuthStateChange.listen((s) {
       if (_actor != s.session?.user.id) {
         _actor = s.session?.user.id;
         _reset();

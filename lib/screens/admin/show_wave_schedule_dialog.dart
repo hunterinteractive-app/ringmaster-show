@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/ringmaster_backend.dart';
 import 'package:uuid/uuid.dart';
 import '../../services/app_session.dart';
 import '../../services/show_wave_schedule.dart';
@@ -38,7 +38,7 @@ class ShowWaveScheduleDialog extends StatefulWidget {
 }
 
 class _ShowWaveScheduleDialogState extends State<ShowWaveScheduleDialog> {
-  late final _service = ShowWaveScheduleService(Supabase.instance.client);
+  late final _service = ShowWaveScheduleService(ringMasterClient);
   ShowWaveSchedule? _schedule;
   bool _loading = true;
   bool _saving = false;
@@ -46,7 +46,7 @@ class _ShowWaveScheduleDialogState extends State<ShowWaveScheduleDialog> {
   String _search = '';
   bool get _readOnly =>
       widget.readOnly ||
-      AppSession.isSupportMode ||
+      AppSession.supportReadOnly ||
       _schedule?.canConfigure != true;
   @override
   void initState() {

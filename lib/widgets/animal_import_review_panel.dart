@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/ringmaster_backend.dart';
 import '../services/app_session.dart';
 
 typedef ImportReviewCall = Future<dynamic> Function(Map<String, dynamic>);
@@ -26,7 +26,7 @@ class _AnimalImportReviewPanelState extends State<AnimalImportReviewPanel> {
   final offered = <String>{};
   Future<dynamic> call(Map<String, dynamic> args) =>
       widget.call?.call(args) ??
-      Supabase.instance.client.rpc('animal_import_review', params: args);
+      ringMasterClient.rpc('animal_import_review', params: args);
   @override
   void initState() {
     super.initState();
@@ -45,10 +45,10 @@ class _AnimalImportReviewPanelState extends State<AnimalImportReviewPanel> {
   }
 
   Future<void> load() async {
-    if (widget.ownerId == null || AppSession.isSupportMode) return;
+    if (widget.ownerId == null || AppSession.supportReadOnly) return;
     if (widget.call == null) {
       try {
-        if (widget.ownerId != Supabase.instance.client.auth.currentUser?.id) {
+        if (widget.ownerId != ringMasterClient.auth.currentUser?.id) {
           return;
         }
       } catch (_) {
@@ -178,7 +178,7 @@ class _AnimalImportReviewPanelState extends State<AnimalImportReviewPanel> {
 
   @override
   Widget build(BuildContext context) {
-    if (AppSession.isSupportMode || widget.ownerId == null) {
+    if (AppSession.supportReadOnly || widget.ownerId == null) {
       return const SizedBox.shrink();
     }
     if (reviews.isEmpty && error == null) return const SizedBox.shrink();

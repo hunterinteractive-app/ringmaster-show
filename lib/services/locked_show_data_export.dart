@@ -1,7 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:ringmaster_show/utils/file_download.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/ringmaster_backend.dart';
 
 /// Downloads the locked-show archive using the authenticated Functions client.
 ///
@@ -12,7 +12,7 @@ Future<void> downloadLockedShowDataExport({
   required String showId,
   required String showName,
 }) async {
-  final response = await Supabase.instance.client.functions.invoke(
+  final response = await ringMasterClient.functions.invoke(
     'export-locked-show-data',
     body: {'show_id': showId},
   );

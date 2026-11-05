@@ -4,10 +4,10 @@ import 'package:ringmaster_show/services/final_award_format.dart';
 import 'package:ringmaster_show/services/final_award_access_service.dart';
 import 'package:flutter/material.dart';
 import 'package:ringmaster_show/theme/app_theme.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/ringmaster_backend.dart';
 import 'package:ringmaster_show/services/show_lock_service.dart';
 
-final supabase = Supabase.instance.client;
+SupabaseClient get supabase => ringMasterClient;
 
 class ShowRulesDialog {
   static Future<void> open(

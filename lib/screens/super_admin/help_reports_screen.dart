@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/ringmaster_backend.dart';
 
 import 'package:ringmaster_show/theme/app_theme.dart';
 import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
@@ -12,7 +12,7 @@ class HelpReportsScreen extends StatefulWidget {
 }
 
 class _HelpReportsScreenState extends State<HelpReportsScreen> {
-  final supabase = Supabase.instance.client;
+  final supabase = ringMasterClient;
 
   bool _loading = true;
   String? _error;
@@ -336,7 +336,7 @@ class _HelpReportDetailsDialog extends StatefulWidget {
 }
 
 class _HelpReportDetailsDialogState extends State<_HelpReportDetailsDialog> {
-  final SupabaseClient supabase = Supabase.instance.client;
+  final SupabaseClient supabase = ringMasterClient;
   final TextEditingController _replyController = TextEditingController();
 
   bool _loadingMessages = true;

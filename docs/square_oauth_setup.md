@@ -58,7 +58,7 @@ The authorization request asks only for:
 
 1. Apply the migration, set sandbox secrets, and deploy all five functions.
 2. Sign in as a user with show-settings permission and open **Show Fees & Payments**.
-3. Confirm **Connect Square** is disabled for support-mode impersonation and locked/finalized shows.
+3. Confirm **Connect Square** is disabled for read-only support previews and locked/finalized shows. In an authorized delegated workspace, the selected user still needs normal show permissions and Square seller authorization.
 4. Connect a Square sandbox seller and approve the two requested scopes.
 5. Confirm the callback returns to `/#/square-connect`, reopens the correct show, and never places OAuth tokens in the URL.
 6. For a seller with one active location, confirm status becomes **Ready** automatically.

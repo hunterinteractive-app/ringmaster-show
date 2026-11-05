@@ -1,4 +1,4 @@
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/ringmaster_backend.dart';
 
 /// Resolves the shows a user may manage from the Superintendent workspace.
 ///
@@ -16,7 +16,7 @@ class SuperintendentAccessService {
   // `show_admins` table below.
   static const _secretaryRoles = <String>{'admin'};
 
-  static SupabaseClient get _supabase => Supabase.instance.client;
+  static SupabaseClient get _supabase => ringMasterClient;
 
   static Future<bool> hasWorkspaceAccess(String userId) async {
     final access = await loadShowAccess(userId);

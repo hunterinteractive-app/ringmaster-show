@@ -4,11 +4,11 @@ import 'package:ringmaster_show/screens/admin/closeout/data/results_entry_reader
 import 'package:flutter/material.dart';
 import 'package:ringmaster_show/theme/app_theme.dart';
 import 'package:ringmaster_show/utils/species_sex.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/ringmaster_backend.dart';
 
 import 'package:ringmaster_show/screens/admin/results/admin_results_entry_screen.dart';
 
-final supabase = Supabase.instance.client;
+SupabaseClient get supabase => ringMasterClient;
 
 class QrResultsEntryScreen extends StatefulWidget {
   final String showId;

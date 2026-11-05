@@ -9,7 +9,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:ringmaster_show/theme/app_theme.dart';
 import 'package:flutter/services.dart' show rootBundle;
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/ringmaster_backend.dart';
 import 'package:url_launcher/url_launcher_string.dart';
 import 'package:ringmaster_show/reporting_core/assets/flutter_report_asset_loader.dart';
 
@@ -74,7 +74,7 @@ import 'closeout/csv/builders/michelles_special_report_csv.dart';
 
 import '../../../utils/date_time_utils.dart';
 
-final supabase = Supabase.instance.client;
+SupabaseClient get supabase => ringMasterClient;
 
 class ShowCloseoutPage extends StatefulWidget {
   final String showId;
@@ -4384,7 +4384,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
   }
 
   bool get _isBusy => _loading || _generatingReport;
-  bool get _isSupportMode => AppSession.isSupportMode;
+  bool get _isSupportMode => AppSession.supportReadOnly;
 
   Future<bool> _currentUserIsShowSuperAdmin() async {
     final userId = supabase.auth.currentUser?.id;

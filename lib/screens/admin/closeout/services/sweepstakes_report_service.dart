@@ -2,7 +2,7 @@
 
 import 'dart:typed_data';
 
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/ringmaster_backend.dart';
 import 'package:ringmaster_show/reporting_core/assets/flutter_report_asset_loader.dart';
 
 import '../data/closeout_repository.dart';
@@ -16,11 +16,11 @@ class SweepstakesReportService {
     CloseoutRepository? repo,
     SweepstakesReportLoader? loader,
     SweepstakesReportPdf? pdfBuilder,
-  }) : _repo = repo ?? CloseoutRepository(Supabase.instance.client),
+  }) : _repo = repo ?? CloseoutRepository(ringMasterClient),
        _loader =
            loader ??
            SweepstakesReportLoader(
-             repo ?? CloseoutRepository(Supabase.instance.client),
+             repo ?? CloseoutRepository(ringMasterClient),
            ),
        _pdfBuilder =
            pdfBuilder ??

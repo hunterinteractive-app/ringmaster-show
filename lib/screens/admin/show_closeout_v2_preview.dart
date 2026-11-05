@@ -50,7 +50,7 @@ import 'package:ringmaster_show/services/show_role_contact_defaults.dart';
 import 'package:ringmaster_show/utils/file_download.dart';
 import 'package:ringmaster_show/widgets/accessible_icon_button.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/ringmaster_backend.dart';
 
 final _activeDeliveryProgress = ValueNotifier<_ActiveDeliveryProgress?>(null);
 
@@ -180,7 +180,7 @@ class _ShowCloseoutV2PreviewPageState extends State<ShowCloseoutV2PreviewPage> {
 
   Future<void> _refreshCubeStatus() async {
     try {
-      final client = Supabase.instance.client;
+      final client = ringMasterClient;
       final values = await Future.wait<dynamic>([
         client
             .from('shows')
@@ -638,7 +638,7 @@ class _ArbaDetailsPreviewPanelState extends State<_ArbaDetailsPreviewPanel> {
 
   Future<void> _loadSavedDetails() async {
     try {
-      final client = Supabase.instance.client;
+      final client = ringMasterClient;
       final results = await Future.wait<dynamic>([
         client
             .from('shows')
@@ -744,7 +744,7 @@ class _ArbaDetailsPreviewPanelState extends State<_ArbaDetailsPreviewPanel> {
   Future<void> _save() async {
     setState(() => _saving = true);
     try {
-      final client = Supabase.instance.client;
+      final client = ringMasterClient;
       final closeoutUpdate = <String, dynamic>{'show_id': widget.showId};
       if (_exhibitorSentDateChanged) {
         closeoutUpdate['exhibitor_emails_sent_at'] = closeoutSentDateToIso8601(
@@ -1025,7 +1025,7 @@ class _MustFixPanelState extends State<_MustFixPanel> {
       _error = null;
     });
     try {
-      final sections = await Supabase.instance.client
+      final sections = await ringMasterClient
           .from('show_sections')
           .select('id')
           .eq('show_id', widget.showId)
@@ -1042,11 +1042,11 @@ class _MustFixPanelState extends State<_MustFixPanel> {
         throw StateError('No enabled show sections found.');
       }
       final values = await Future.wait<Object?>([
-        Supabase.instance.client.rpc(
+        ringMasterClient.rpc(
           'show_results_blocking_entry_issues_scoped',
           params: {'p_show_id': widget.showId, 'p_section_ids': sectionIds},
         ),
-        Supabase.instance.client.rpc(
+        ringMasterClient.rpc(
           'show_results_readiness_scoped',
           params: {'p_show_id': widget.showId, 'p_section_ids': sectionIds},
         ),
@@ -1312,7 +1312,7 @@ Future<List<Map<String, dynamic>>> _optionalFinalAwards(
       .where((id) => id.isNotEmpty)
       .toList();
   if (sectionIds.isEmpty) return const [];
-  final readiness = await Supabase.instance.client.rpc(
+  final readiness = await ringMasterClient.rpc(
     'show_results_readiness_scoped',
     params: {'p_show_id': showId, 'p_section_ids': sectionIds},
   );
@@ -1348,7 +1348,7 @@ class _ReviewWarningsPanelState extends State<_ReviewWarningsPanel> {
       _error = null;
     });
     try {
-      final client = Supabase.instance.client;
+      final client = ringMasterClient;
       final results = await Future.wait<dynamic>([
         client
             .from('show_sections')
@@ -1654,7 +1654,7 @@ class _FinancialPayoutReviewPanelState
       _error = null;
     });
     try {
-      final client = Supabase.instance.client;
+      final client = ringMasterClient;
       final sectionsRaw = await client
           .from('show_sections')
           .select('id')
@@ -1728,7 +1728,7 @@ class _FinancialPayoutReviewPanelState
     const pageSize = 1000;
     final allRows = <Map<String, dynamic>>[];
     for (var from = 0; ; from += pageSize) {
-      final rows = await Supabase.instance.client
+      final rows = await ringMasterClient
           .rpc(rpcName, params: params)
           .range(from, from + pageSize - 1);
       final batch = (rows as List)
@@ -2073,7 +2073,7 @@ class _GenerateReportsPanelState extends State<_GenerateReportsPanel> {
         return;
       }
 
-      final sectionsRaw = await Supabase.instance.client
+      final sectionsRaw = await ringMasterClient
           .from('show_sections')
           .select('id')
           .eq('show_id', widget.showId)
@@ -2090,7 +2090,7 @@ class _GenerateReportsPanelState extends State<_GenerateReportsPanel> {
         throw StateError('No enabled show sections found.');
       }
       final dashboard = await retryTransient(
-        () => Supabase.instance.client.rpc(
+        () => ringMasterClient.rpc(
           'get_closeout_dashboard_scoped_for_species',
           params: {
             'p_show_id': widget.showId,
@@ -2120,7 +2120,7 @@ class _GenerateReportsPanelState extends State<_GenerateReportsPanel> {
   }
 
   Future<_ReportGenerationState?> _loadLatestProgress() async {
-    final progress = await Supabase.instance.client.rpc(
+    final progress = await ringMasterClient.rpc(
       'get_closeout_report_generation_progress',
       params: {'p_show_id': widget.showId, 'p_finalize_run_id': null},
     );
@@ -2158,7 +2158,7 @@ class _GenerateReportsPanelState extends State<_GenerateReportsPanel> {
   Future<_ReportGenerationState> _loadProgress(
     _ReportGenerationState current,
   ) async {
-    final progress = await Supabase.instance.client.rpc(
+    final progress = await ringMasterClient.rpc(
       'get_closeout_report_generation_progress',
       params: {
         'p_show_id': widget.showId,
@@ -2183,7 +2183,7 @@ class _GenerateReportsPanelState extends State<_GenerateReportsPanel> {
               .map((value) => value.toString())
               .toList()
             ..sort();
-      final dashboard = await Supabase.instance.client.rpc(
+      final dashboard = await ringMasterClient.rpc(
         'get_closeout_dashboard_scoped_for_species',
         params: {
           'p_show_id': widget.showId,
@@ -2281,7 +2281,7 @@ class _GenerateReportsPanelState extends State<_GenerateReportsPanel> {
           : state.hasFailures
           ? 'generate_remaining'
           : 'regenerate_all';
-      final response = await Supabase.instance.client.functions.invoke(
+      final response = await ringMasterClient.functions.invoke(
         'run-closeout',
         body: {
           'show_id': widget.showId,
@@ -2669,14 +2669,14 @@ class _PublishResultsPanelState extends State<_PublishResultsPanel> {
     });
     try {
       final responses = await Future.wait<dynamic>([
-        Supabase.instance.client
+        ringMasterClient
             .from('show_report_artifacts')
             .select(
               'id,show_id,finalize_run_id,report_name,artifact_status,file_name,storage_bucket,storage_path,generated_at,is_current,scope_key,section_ids,generation,created_at,error_count,metadata',
             )
             .eq('show_id', widget.showId)
             .eq('is_current', true),
-        Supabase.instance.client
+        ringMasterClient
             .from('show_sections')
             .select('id,display_name,kind,letter,sort_order')
             .eq('show_id', widget.showId)
@@ -2704,7 +2704,7 @@ class _PublishResultsPanelState extends State<_PublishResultsPanel> {
           .toSet()
           .toList();
       if (exhibitorIds.isNotEmpty) {
-        final rows = await Supabase.instance.client
+        final rows = await ringMasterClient
             .from('exhibitors')
             .select('id,email')
             .inFilter('id', exhibitorIds);
@@ -2917,7 +2917,7 @@ class _PublishResultsPanelState extends State<_PublishResultsPanel> {
       // off successfully. Individual failures remain visible in delivery
       // history and do not erase the date required by final closeout.
       if (successful > 0) {
-        await Supabase.instance.client.from('show_closeout_state').upsert({
+        await ringMasterClient.from('show_closeout_state').upsert({
           'show_id': widget.showId,
           clubs ? 'club_reports_sent_at' : 'exhibitor_emails_sent_at':
               DateTime.now().toUtc().toIso8601String(),
@@ -3131,7 +3131,7 @@ class _DeliveryStatusPanelState extends State<_DeliveryStatusPanel> {
     _loadInFlight = true;
     try {
       final data = await loadDeliveryStatus(
-        Supabase.instance.client,
+        ringMasterClient,
         widget.showId,
       );
       final allRows = data.deliveries;
@@ -3698,7 +3698,7 @@ class _FinalCloseoutPreviewPanelState
       _error = null;
     });
     try {
-      final sections = await Supabase.instance.client
+      final sections = await ringMasterClient
           .from('show_sections')
           .select('id')
           .eq('show_id', widget.showId)
@@ -3716,7 +3716,7 @@ class _FinalCloseoutPreviewPanelState
       }
       final values = await Future.wait<Object?>([
         retryTransient(
-          () => Supabase.instance.client.rpc(
+          () => ringMasterClient.rpc(
             'get_closeout_dashboard_scoped_for_species',
             params: {
               'p_show_id': widget.showId,
@@ -3728,14 +3728,14 @@ class _FinalCloseoutPreviewPanelState
             },
           ),
         ),
-        Supabase.instance.client
+        ringMasterClient
             .from('show_arba_report_details')
             .select(
               'secretary_name,secretary_address,secretary_email,secretary_phone,superintendent_name,superintendent_arba_number,sweepstakes_issue,sweepstakes_club,official_protest,arba_report_filed',
             )
             .eq('show_id', widget.showId)
             .maybeSingle(),
-        Supabase.instance.client
+        ringMasterClient
             .from('show_report_artifacts')
             .select(
               'id,show_id,finalize_run_id,report_name,artifact_status,file_name,storage_bucket,storage_path,generated_at,is_current,scope_key,section_ids,generation,created_at,error_count,metadata',
@@ -3745,12 +3745,12 @@ class _FinalCloseoutPreviewPanelState
             .eq('is_current', true)
             .order('generated_at', ascending: false)
             .order('created_at', ascending: false),
-        Supabase.instance.client
+        ringMasterClient
             .from('show_closeout_state')
             .select('exhibitor_emails_sent_at,club_reports_sent_at')
             .eq('show_id', widget.showId)
             .maybeSingle(),
-        Supabase.instance.client
+        ringMasterClient
             .from('shows')
             .select('is_locked,finalized_at')
             .eq('id', widget.showId)
@@ -3816,7 +3816,7 @@ class _FinalCloseoutPreviewPanelState
 
     setState(() => _savingLock = true);
     try {
-      await Supabase.instance.client
+      await ringMasterClient
           .from('shows')
           .update({
             'is_locked': nextLocked,
@@ -4102,7 +4102,7 @@ class _ArbaReportActionsState extends State<_ArbaReportActions> {
             runScopeKeys[runId] ??
             await _loadFinalizeRunScopeKey(showId: showId, runId: runId);
         runScopeKeys[runId] = runScopeKey;
-        await Supabase.instance.client.rpc(
+        await ringMasterClient.rpc(
           'requeue_closeout_artifacts',
           params: {
             'p_show_id': showId,
@@ -4132,7 +4132,7 @@ class _ArbaReportActionsState extends State<_ArbaReportActions> {
     required String showId,
     required String runId,
   }) async {
-    final row = await Supabase.instance.client
+    final row = await ringMasterClient
         .from('show_finalize_runs')
         .select('scope_key')
         .eq('id', runId)
@@ -4149,7 +4149,7 @@ class _ArbaReportActionsState extends State<_ArbaReportActions> {
     if (!_canView(artifact)) return;
     setState(() => _downloadingIds.add(artifact.id));
     try {
-      final bytes = await Supabase.instance.client.storage
+      final bytes = await ringMasterClient.storage
           .from(artifact.storageBucket!)
           .download(artifact.storagePath!);
       await downloadFileBytes(
@@ -4175,7 +4175,7 @@ class _ArbaReportActionsState extends State<_ArbaReportActions> {
   }
 
   Future<String?> _loadArbaEmailTarget() async {
-    final rows = await Supabase.instance.client
+    final rows = await ringMasterClient
         .from('show_sanctions')
         .select('sweepstakes_email')
         .eq('show_id', widget.showId)
@@ -4518,7 +4518,7 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
   };
   static const _reportAssets = FlutterReportAssetLoader();
 
-  final _supabase = Supabase.instance.client;
+  final _supabase = ringMasterClient;
   bool _loading = true;
   String? _error;
   String? _downloadingArtifactId;

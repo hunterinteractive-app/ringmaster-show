@@ -1,9 +1,9 @@
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/ringmaster_backend.dart';
 
 class FinalAwardAccessService {
   static Future<bool> canConfigureBestOpposite(String showId) async {
     try {
-      return await Supabase.instance.client.rpc(
+      return await ringMasterClient.rpc(
             'can_configure_best_opposite_final_award',
             params: {'p_show_id': showId},
           ) ==

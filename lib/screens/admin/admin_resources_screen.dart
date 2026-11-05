@@ -3,7 +3,7 @@
 // ignore_for_file: deprecated_member_use
 
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/ringmaster_backend.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
 import 'package:ringmaster_show/services/app_session.dart';
@@ -11,7 +11,7 @@ import 'package:ringmaster_show/services/app_session.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/rm_widgets.dart';
 
-final supabase = Supabase.instance.client;
+SupabaseClient get supabase => ringMasterClient;
 
 class AdminResourcesScreen extends StatefulWidget {
   const AdminResourcesScreen({super.key});
@@ -502,7 +502,7 @@ class _AdminResourcesScreenState extends State<AdminResourcesScreen> {
               padding: const EdgeInsets.all(AppSpacing.lg),
               child: Column(
                 children: [
-                  if (AppSession.isSupportMode) ...[
+                  if (AppSession.supportReadOnly) ...[
                     _SupportModeNotice(),
                     const SizedBox(height: AppSpacing.md),
                   ],
@@ -525,7 +525,7 @@ class _AdminResourcesScreenState extends State<AdminResourcesScreen> {
             padding: const EdgeInsets.all(AppSpacing.lg),
             child: Column(
               children: [
-                if (AppSession.isSupportMode) ...[
+                if (AppSession.supportReadOnly) ...[
                   _SupportModeNotice(),
                   const SizedBox(height: AppSpacing.md),
                 ],

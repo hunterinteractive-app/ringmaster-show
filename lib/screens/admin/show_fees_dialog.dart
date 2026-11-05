@@ -111,7 +111,7 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
   bool _isLocked = false;
   bool _isFinalized = false;
 
-  bool get _isReadOnly => _isLocked || _isFinalized || AppSession.isSupportMode;
+  bool get _isReadOnly => _isLocked || _isFinalized || AppSession.supportReadOnly;
 
   bool get _onlinePaymentsSelected => _paymentTimingMode != 'pay_at_show_only';
 
@@ -420,7 +420,7 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
   bool _validate() {
     if (_isReadOnly) {
       setState(
-        () => _msg = AppSession.isSupportMode
+        () => _msg = AppSession.supportReadOnly
             ? 'Support mode is read-only. Fees and payment settings cannot be changed.'
             : _isFinalized
             ? 'This show has been finalized. Fees and payment settings can no longer be changed.'
@@ -617,7 +617,7 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
   Future<void> _connectStripe() async {
     if (_isReadOnly) {
       setState(() {
-        _msg = AppSession.isSupportMode
+        _msg = AppSession.supportReadOnly
             ? 'Support mode is read-only. Stripe setup cannot be changed.'
             : _isFinalized
             ? 'This show has been finalized. Stripe setup can no longer be changed.'
@@ -724,7 +724,7 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
   Future<void> _refreshStripeStatus() async {
     if (_isReadOnly) {
       setState(() {
-        _msg = AppSession.isSupportMode
+        _msg = AppSession.supportReadOnly
             ? 'Support mode is read-only. Stripe status cannot be refreshed.'
             : _isFinalized
             ? 'This show has been finalized. Stripe status is view-only.'
@@ -2522,7 +2522,7 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
                                     ),
                                   ),
                                   child: Text(
-                                    AppSession.isSupportMode
+                                    AppSession.supportReadOnly
                                         ? 'Support mode is read-only. Fees and payment settings cannot be changed.'
                                         : _isFinalized
                                         ? 'This show has been finalized. Fees and payment settings are view-only.'

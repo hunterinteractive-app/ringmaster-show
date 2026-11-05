@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/ringmaster_backend.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../services/stripe_connect_service.dart';
 
@@ -36,7 +36,7 @@ class _SubmittedBalancePaymentState extends State<SubmittedBalancePayment> {
     try {
       final rows = widget.loadBalances != null
           ? await widget.loadBalances!()
-          : await Supabase.instance.client.rpc(
+          : await ringMasterClient.rpc(
               widget.readOnly
                   ? 'support_submitted_balances'
                   : 'list_my_submitted_balances',

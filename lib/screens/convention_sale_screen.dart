@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/ringmaster_backend.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:uuid/uuid.dart';
 import '../models/convention_sale.dart';
@@ -38,7 +38,7 @@ class _ConventionSaleScreenState extends State<ConventionSaleScreen> {
   Timer? _receiptTimer;
   int _receiptAttempts = 0;
   bool get _preview => widget.previewSettings != null;
-  SupabaseClient get _db => Supabase.instance.client;
+  SupabaseClient get _db => ringMasterClient;
 
   @override
   void initState() {
@@ -175,7 +175,7 @@ class _ConventionSaleScreenState extends State<ConventionSaleScreen> {
       );
       return;
     }
-    if (AppSession.isSupportMode) {
+    if (AppSession.supportReadOnly) {
       setState(() => _error = 'Exit View As User before making a purchase.');
       return;
     }

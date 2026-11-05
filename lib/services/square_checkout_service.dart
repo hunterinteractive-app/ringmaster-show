@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/ringmaster_backend.dart';
 
 class SquareHostedCheckout {
   const SquareHostedCheckout({
@@ -38,7 +38,7 @@ class SquarePaymentAttemptStatus {
 
 class SquareCheckoutService {
   SquareCheckoutService._();
-  static final _supabase = Supabase.instance.client;
+  static SupabaseClient get _supabase => ringMasterClient;
 
   static Future<SquareHostedCheckout> createHostedCheckout({
     required String cartId,

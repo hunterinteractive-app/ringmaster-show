@@ -1,4 +1,7 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'support_delegation.dart';
+import 'support_tab.dart';
 
 class SupportImpersonationSession {
   static final ValueNotifier<SupportImpersonatedUser?> current =
@@ -8,8 +11,53 @@ class SupportImpersonationSession {
 
   static String? get targetUserId => current.value?.userId;
 
+  static bool get readOnly => isActive && !RingMasterData.delegated;
+  static Future<void> begin(SupportImpersonatedUser user) async {
+    final grant = await RingMasterData.control('start', target: user.userId);
+    if (grant['mode'] == 'preview') {
+      start(user);
+      return;
+    }
+    if (grant['user']?['id'] != user.userId) {
+      throw StateError('Incorrect support account.');
+    }
+    if (restartSupportTab(grant['id'] as String)) return;
+    await RingMasterData.attach(grant);
+    start(user);
+  }
+
+  static Future<void> restore(String id) async {
+    final grant = await RingMasterData.control('resume', session: id);
+    await RingMasterData.attach(grant);
+    final u = RingMasterData.client.auth.currentUser!;
+    start(
+      SupportImpersonatedUser(
+        userId: u.id,
+        email: u.email ?? '',
+        displayName: u.userMetadata?['display_name']?.toString() ?? '',
+        exhibitorName: '',
+      ),
+    );
+  }
+
+  @visibleForTesting
   static void start(SupportImpersonatedUser user) {
     current.value = user;
+  }
+
+  static Future<void> finish() async {
+    if (RingMasterData.delegated) {
+      try {
+        await RingMasterData.end().timeout(const Duration(seconds: 8));
+      } finally {
+        if (!restartSupportTab(null)) {
+          await RingMasterData.detach();
+          stop();
+        }
+      }
+    } else {
+      stop();
+    }
   }
 
   static void stop() {

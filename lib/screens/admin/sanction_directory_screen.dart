@@ -1,14 +1,14 @@
 // lib/screens/admin/sanction_directory_screen.dart
 
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/ringmaster_backend.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../widgets/ringmaster_page_shell.dart';
 import '../../services/app_session.dart';
 import '../../services/show_permissions_service.dart';
 
-final _supabase = Supabase.instance.client;
+SupabaseClient get _supabase => ringMasterClient;
 
 enum SanctionDirectoryAccessMode { admin, exhibitor }
 
@@ -1195,7 +1195,7 @@ class _SanctionDirectoryScreenState extends State<SanctionDirectoryScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (AppSession.isSupportMode) ...[
+        if (AppSession.supportReadOnly) ...[
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(12),

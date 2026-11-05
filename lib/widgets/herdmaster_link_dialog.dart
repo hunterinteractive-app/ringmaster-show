@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/ringmaster_backend.dart';
 import '../services/app_session.dart';
 import 'herdmaster_pilot_link_button.dart';
 
@@ -26,13 +26,13 @@ class _HerdMasterLinkDialogState extends State<HerdMasterLinkDialog> {
   @override
   void initState() {
     super.initState();
-    final client = Supabase.instance.client;
+    final client = ringMasterClient;
     _authChanges = client.auth.onAuthStateChange.listen((_) {
       if (mounted &&
           !HerdMasterPilotLinkButton.canShow(
             client.auth.currentUser,
             AppSession.householdOwnerUserId,
-            AppSession.isSupportMode,
+            AppSession.supportReadOnly,
           )) {
         Navigator.of(context).pop();
       }
@@ -47,11 +47,11 @@ class _HerdMasterLinkDialogState extends State<HerdMasterLinkDialog> {
   }
 
   Future<void> _link() async {
-    final client = Supabase.instance.client;
+    final client = ringMasterClient;
     if (!HerdMasterPilotLinkButton.canShow(
       client.auth.currentUser,
       AppSession.householdOwnerUserId,
-      AppSession.isSupportMode,
+      AppSession.supportReadOnly,
     )) {
       setState(
         () => _error = 'Sign in to your pilot account to link $_partner.',
@@ -81,7 +81,7 @@ class _HerdMasterLinkDialogState extends State<HerdMasterLinkDialog> {
           !HerdMasterPilotLinkButton.canShow(
             client.auth.currentUser,
             AppSession.householdOwnerUserId,
-            AppSession.isSupportMode,
+            AppSession.supportReadOnly,
           )) {
         Navigator.of(context).pop();
         return;

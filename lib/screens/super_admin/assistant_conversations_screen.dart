@@ -1,6 +1,6 @@
 import 'assistant_answers_screen.dart';
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/ringmaster_backend.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../services/assistant_guide_links.dart';
 import '../../theme/app_theme.dart';
@@ -49,7 +49,7 @@ class _AssistantConversationsScreenState
     try {
       final result = widget.loadRows != null
           ? await widget.loadRows!(widget.conversationId, _rows.length)
-          : await Supabase.instance.client.rpc(
+          : await ringMasterClient.rpc(
               'chester_review',
               params: {
                 'p_conversation': widget.conversationId,
@@ -80,7 +80,7 @@ class _AssistantConversationsScreenState
     if (_busy) return;
     setState(() => _busy = true);
     try {
-      final draft = await Supabase.instance.client.rpc(
+      final draft = await ringMasterClient.rpc(
         'chester_answer_admin',
         params: {'p_action': 'create', 'p_source': messageId},
       );

@@ -1,7 +1,7 @@
 // lib/screens/my_help_requests_screen.dart
 
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/ringmaster_backend.dart';
 import 'package:ringmaster_show/services/app_session.dart';
 import 'package:ringmaster_show/theme/app_theme.dart';
 
@@ -15,7 +15,7 @@ class MyHelpRequestsScreen extends StatefulWidget {
 }
 
 class _MyHelpRequestsScreenState extends State<MyHelpRequestsScreen> {
-  final SupabaseClient supabase = Supabase.instance.client;
+  final SupabaseClient supabase = ringMasterClient;
 
   bool _loading = true;
   String? _error;
@@ -76,7 +76,7 @@ class _MyHelpRequestsScreenState extends State<MyHelpRequestsScreen> {
     final reportId = report['id']?.toString();
     final trimmed = message.trim();
 
-    if (AppSession.isSupportMode) {
+    if (AppSession.supportReadOnly) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -126,7 +126,7 @@ class _MyHelpRequestsScreenState extends State<MyHelpRequestsScreen> {
       context: context,
       builder: (_) => _MyHelpRequestDetailsDialog(
         report: report,
-        readOnly: AppSession.isSupportMode,
+        readOnly: AppSession.supportReadOnly,
         onReply: (message) => _addUserReply(report, message: message),
       ),
     );
@@ -286,7 +286,7 @@ class _MyHelpRequestDetailsDialog extends StatefulWidget {
 
 class _MyHelpRequestDetailsDialogState
     extends State<_MyHelpRequestDetailsDialog> {
-  final SupabaseClient supabase = Supabase.instance.client;
+  final SupabaseClient supabase = ringMasterClient;
   final TextEditingController _replyController = TextEditingController();
 
   bool _loadingMessages = true;

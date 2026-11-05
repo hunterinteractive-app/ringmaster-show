@@ -1,4 +1,4 @@
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/ringmaster_backend.dart';
 
 /// Contact details derived from the current show secretary and superintendent
 /// role assignments. These are suggestions only; callers keep saved show
@@ -21,7 +21,7 @@ class ShowRoleContactDefaults {
   final String superintendentArbaNumber;
 
   static Future<ShowRoleContactDefaults?> load(String showId) async {
-    final raw = await Supabase.instance.client.rpc(
+    final raw = await ringMasterClient.rpc(
       'show_role_contact_defaults',
       params: {'p_show_id': showId},
     );

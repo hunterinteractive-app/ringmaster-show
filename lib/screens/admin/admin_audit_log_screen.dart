@@ -6,7 +6,7 @@ import 'dart:html' as html;
 
 import 'package:flutter/material.dart';
 import 'package:ringmaster_show/theme/app_theme.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/ringmaster_backend.dart';
 import 'package:ringmaster_show/services/app_session.dart';
 
 class AdminAuditLogScreen extends StatefulWidget {
@@ -24,7 +24,7 @@ class AdminAuditLogScreen extends StatefulWidget {
 }
 
 class _AdminAuditLogScreenState extends State<AdminAuditLogScreen> {
-  final supabase = Supabase.instance.client;
+  final supabase = ringMasterClient;
 
   bool _loadingCorrections = true;
   bool _loadingWriters = true;
@@ -719,7 +719,7 @@ class _AdminAuditLogScreenState extends State<AdminAuditLogScreen> {
 
     return Column(
       children: [
-        if (AppSession.isSupportMode) ...[
+        if (AppSession.supportReadOnly) ...[
           _supportModeNotice(
             'Support Mode — Viewing QR correction overrides as an admin while viewing another user.',
           ),
@@ -863,7 +863,7 @@ class _AdminAuditLogScreenState extends State<AdminAuditLogScreen> {
 
     return Column(
       children: [
-        if (AppSession.isSupportMode) ...[
+        if (AppSession.supportReadOnly) ...[
           _supportModeNotice(
             'Support Mode — Viewing QR writer activity as an admin while viewing another user.',
           ),

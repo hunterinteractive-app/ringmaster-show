@@ -3,10 +3,10 @@ import 'package:ringmaster_show/reporting_core/network/transient_retry.dart';
 
 import 'dart:convert';
 
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/ringmaster_backend.dart';
 
 class StripeConnectService {
-  static final SupabaseClient _supabase = Supabase.instance.client;
+  static SupabaseClient get _supabase => ringMasterClient;
 
   /// Expose client if needed elsewhere
   static SupabaseClient get supabase => _supabase;

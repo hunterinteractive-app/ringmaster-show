@@ -1,11 +1,11 @@
 import 'dart:convert';
 
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/ringmaster_backend.dart';
 
 class SquareConnectService {
   SquareConnectService._();
 
-  static final SupabaseClient _supabase = Supabase.instance.client;
+  static SupabaseClient get _supabase => ringMasterClient;
 
   static Future<String> startConnection(String showId) async {
     await _ensureClubProviderLinks(showId);

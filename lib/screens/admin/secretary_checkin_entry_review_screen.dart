@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/ringmaster_backend.dart';
 
 import '../../theme/app_theme.dart';
 import '../../services/show_wave_schedule.dart';
@@ -30,7 +30,7 @@ class SecretaryCheckinEntryReviewScreen extends StatefulWidget {
 
 class _SecretaryCheckinEntryReviewScreenState
     extends State<SecretaryCheckinEntryReviewScreen> {
-  final _db = Supabase.instance.client;
+  final _db = ringMasterClient;
   List<Map<String, dynamic>> _entries = const [];
   String? _error;
   bool _loading = true;

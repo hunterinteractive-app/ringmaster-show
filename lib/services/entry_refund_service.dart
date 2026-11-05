@@ -1,13 +1,13 @@
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/ringmaster_backend.dart';
 import 'app_session.dart';
 
 class EntryRefundService {
   EntryRefundService({SupabaseClient? client})
-    : _client = client ?? Supabase.instance.client;
+    : _client = client ?? ringMasterClient;
   final SupabaseClient _client;
 
   Future<bool> canRefund(String showId) async {
-    if (AppSession.isSupportMode) return false;
+    if (AppSession.supportReadOnly) return false;
     return await _client.rpc(
           'can_refund_show_entries',
           params: {'p_show_id': showId},
@@ -60,7 +60,7 @@ class EntryRefundService {
   }
 
   void _assertWritable() {
-    if (AppSession.isSupportMode) {
+    if (AppSession.supportReadOnly) {
       throw StateError('Exit support mode to manage refunds.');
     }
   }

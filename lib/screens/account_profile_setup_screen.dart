@@ -26,7 +26,7 @@ class _AccountProfileSetupScreenState extends State<AccountProfileSetupScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (AppSession.isSupportMode) {
+      if (AppSession.supportReadOnly) {
         if (!mounted) return;
         setState(() {
           _opening = false;
@@ -40,7 +40,7 @@ class _AccountProfileSetupScreenState extends State<AccountProfileSetupScreen> {
   }
 
   Future<void> _openBuilder() async {
-    if (AppSession.isSupportMode) {
+    if (AppSession.supportReadOnly) {
       if (!mounted) return;
       setState(() {
         _msg = null;
@@ -101,7 +101,7 @@ class _AccountProfileSetupScreenState extends State<AccountProfileSetupScreen> {
   @override
   Widget build(BuildContext context) {
     final isEdit = widget.exhibitorId != null;
-    final isSupportMode = AppSession.isSupportMode;
+    final isSupportMode = AppSession.supportReadOnly;
 
     return RingMasterPageShell(
       title: 'RingMaster Show',

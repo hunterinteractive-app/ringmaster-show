@@ -2,7 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:ringmaster_show/theme/app_theme.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/ringmaster_backend.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:uuid/uuid.dart';
 import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
@@ -24,7 +24,7 @@ import 'show_addons_screen.dart';
 
 import 'my_entries_screen.dart';
 
-final supabase = Supabase.instance.client;
+SupabaseClient get supabase => ringMasterClient;
 
 class CartScreen extends StatefulWidget {
   final String cartId;
@@ -397,7 +397,7 @@ class _CartScreenState extends State<CartScreen> {
 
   Future<void> _refreshQuotePreview() async {
     final provider = _selectedOnlineProvider;
-    if (AppSession.isSupportMode ||
+    if (AppSession.supportReadOnly ||
         (_items.isEmpty &&
             _exhibitorFees.isEmpty &&
             _addons.isNotEmpty &&
@@ -445,7 +445,7 @@ class _CartScreenState extends State<CartScreen> {
     return !_loading &&
         !_payingOnline &&
         !_confirming &&
-        !AppSession.isSupportMode &&
+        !AppSession.supportReadOnly &&
         (_items.isEmpty || !_deadlinePassed()) &&
         _hasCheckoutItems &&
         _selectedPaymentTiming == 'online' &&
@@ -923,7 +923,7 @@ class _CartScreenState extends State<CartScreen> {
       setState(() => _msg = _breedScopeErrors.first);
       return;
     }
-    if (AppSession.isSupportMode) {
+    if (AppSession.supportReadOnly) {
       setState(() {
         _msg = 'Online payment is disabled while viewing in support mode.';
       });
@@ -1037,7 +1037,7 @@ class _CartScreenState extends State<CartScreen> {
   }
 
   Future<void> _confirmDayOf() async {
-    if (AppSession.isSupportMode) return;
+    if (AppSession.supportReadOnly) return;
     if (_breedScopeErrors.isNotEmpty) {
       setState(() => _msg = _breedScopeErrors.first);
       return;
@@ -1290,7 +1290,7 @@ class _CartScreenState extends State<CartScreen> {
             tooltip: 'Contests & Add-Ons',
             icon: const Icon(Icons.confirmation_number_outlined),
             onPressed:
-                (_confirming || _payingOnline || AppSession.isSupportMode)
+                (_confirming || _payingOnline || AppSession.supportReadOnly)
                 ? null
                 : () async {
                     await Navigator.push(
@@ -1329,7 +1329,7 @@ class _CartScreenState extends State<CartScreen> {
           ? const Center(child: CircularProgressIndicator())
           : ListView(
               children: [
-                if (AppSession.isSupportMode)
+                if (AppSession.supportReadOnly)
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
                     child: Container(
@@ -1591,7 +1591,7 @@ class _CartScreenState extends State<CartScreen> {
                             onPressed:
                                 (_confirming ||
                                     _payingOnline ||
-                                    AppSession.isSupportMode)
+                                    AppSession.supportReadOnly)
                                 ? null
                                 : () async {
                                     try {
@@ -1699,7 +1699,7 @@ class _CartScreenState extends State<CartScreen> {
                     width: double.infinity,
                     child: freeAddons
                         ? FilledButton(
-                            onPressed: _confirming || AppSession.isSupportMode
+                            onPressed: _confirming || AppSession.supportReadOnly
                                 ? null
                                 : _confirmDayOf,
                             child: Text(
@@ -1723,7 +1723,7 @@ class _CartScreenState extends State<CartScreen> {
                         : FilledButton(
                             onPressed:
                                 (_confirming ||
-                                    AppSession.isSupportMode ||
+                                    AppSession.supportReadOnly ||
                                     (_items.isNotEmpty && _deadlinePassed()) ||
                                     !_hasCheckoutItems)
                                 ? null

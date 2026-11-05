@@ -1,6 +1,6 @@
 // lib/screens/admin/closeout/data/loaders/coop_cards_report_loader.dart
 
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/ringmaster_backend.dart';
 import 'package:ringmaster_show/utils/species_sex.dart';
 
 import '../../models/coop_cards/coop_cards_report_data.dart';
@@ -10,7 +10,7 @@ class CoopCardsReportLoader {
   final SupabaseClient supabase;
 
   CoopCardsReportLoader({SupabaseClient? supabase})
-    : supabase = supabase ?? Supabase.instance.client;
+    : supabase = supabase ?? ringMasterClient;
 
   static const int _rpcPageSize = 1000;
 

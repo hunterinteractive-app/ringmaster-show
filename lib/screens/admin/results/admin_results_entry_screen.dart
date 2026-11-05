@@ -7,7 +7,7 @@ import 'package:ringmaster_show/screens/admin/closeout/data/manual_judging_reade
 
 import 'package:flutter/material.dart';
 import 'package:ringmaster_show/theme/app_theme.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/ringmaster_backend.dart';
 import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
 import 'package:ringmaster_show/services/show_lock_service.dart';
 import 'package:ringmaster_show/services/app_session.dart';
@@ -23,7 +23,7 @@ import 'package:ringmaster_show/utils/species_sex.dart';
 import 'package:ringmaster_show/screens/admin/admin_entry_management_screen.dart'
     show showAdminEntryEditSheet;
 
-final supabase = Supabase.instance.client;
+SupabaseClient get supabase => ringMasterClient;
 
 const String kDefaultFinalAwardMode = 'four_six_bis';
 
@@ -2607,7 +2607,7 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
                     ),
                   ),
                 ),
-                if (AppSession.isSupportMode)
+                if (AppSession.supportReadOnly)
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
                     child: Container(
@@ -3464,7 +3464,7 @@ class _ResultsGroupScreenState extends State<_ResultsGroupScreen> {
                                   );
                                 },
                         ),
-                        if (AppSession.isSupportMode)
+                        if (AppSession.supportReadOnly)
                           Padding(
                             padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
                             child: Container(
@@ -7596,7 +7596,7 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
                       ),
                     )
                     .toList(),
-                onChanged: scratched || _saving || AppSession.isSupportMode
+                onChanged: scratched || _saving || AppSession.supportReadOnly
                     ? null
                     : (value) {
                         if (value == null) return;
@@ -7674,7 +7674,7 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
                   onChanged:
                       (scratched ||
                           _saving ||
-                          AppSession.isSupportMode ||
+                          AppSession.supportReadOnly ||
                           (!checked && (!canAward || !allowed)))
                       ? null
                       : (v) {

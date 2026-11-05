@@ -68,3 +68,7 @@ verify_jwt = false
 [functions.send-breeder-billing]
 # Server-only relay authorized with existing Breeder integration key.
 verify_jwt = false
+
+[functions.support-session]
+# The broker verifies the live Auth user and binds the admin session on every request.
+verify_jwt = false

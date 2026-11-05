@@ -1,6 +1,6 @@
 import '../services/app_session.dart';
 import '../widgets/household_exhibitor_invite_row.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/ringmaster_backend.dart';
 import 'package:flutter/material.dart';
 import '../services/household_session.dart';
 import '../widgets/ringmaster_page_shell.dart';
@@ -16,7 +16,7 @@ class _HouseholdAccessScreenState extends State<HouseholdAccessScreen> {
   bool _sharingReady = false;
   List<Map<String, dynamic>> _households = [];
   List<Map<String, dynamic>> _invitations = [];
-  bool get _readOnly => AppSession.isSupportMode;
+  bool get _readOnly => AppSession.supportReadOnly;
   bool _busy = true;
   String? _error;
   @override
@@ -35,7 +35,7 @@ class _HouseholdAccessScreenState extends State<HouseholdAccessScreen> {
     try {
       final actor = AppSession.effectiveUserId;
       if (actor == null) throw StateError('Not signed in.');
-      final rows = await Supabase.instance.client
+      final rows = await ringMasterClient
           .from('exhibitors')
           .select('id,showing_name,display_name,email,type,birth_date')
           .eq('owner_user_id', actor)
@@ -43,7 +43,7 @@ class _HouseholdAccessScreenState extends State<HouseholdAccessScreen> {
           .order('display_name');
       _exhibitors = List<Map<String, dynamic>>.from(rows);
       if (_readOnly) {
-        final snapshot = await Supabase.instance.client.rpc(
+        final snapshot = await ringMasterClient.rpc(
           'support_household_access',
           params: {'p_target_user_id': actor},
         );
@@ -77,7 +77,7 @@ class _HouseholdAccessScreenState extends State<HouseholdAccessScreen> {
     if (_readOnly || !_sharingReady) {
       throw StateError('Household sharing is not available yet.');
     }
-    final client = Supabase.instance.client;
+    final client = ringMasterClient;
     final actor = client.auth.currentUser;
     if (actor == null) throw StateError('Not signed in.');
     await client

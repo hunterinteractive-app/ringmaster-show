@@ -11,7 +11,7 @@ import 'package:ringmaster_show/reporting_core/network/transient_retry.dart';
 
 import 'package:flutter/material.dart';
 import '../widgets/convention_sale_banner.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/ringmaster_backend.dart';
 
 import 'package:ringmaster_show/screens/admin/admin_shows_screen.dart';
 import 'package:ringmaster_show/screens/admin/edit_show_settings_screen.dart';
@@ -44,7 +44,7 @@ import '../widgets/rm_widgets.dart';
 import '../widgets/show_list_header.dart';
 import '../widgets/rm_timezone_notice_banner.dart';
 
-final supabase = Supabase.instance.client;
+SupabaseClient get supabase => ringMasterClient;
 
 enum _ShowInformationChoice { breedCounts, sanctions }
 
@@ -130,7 +130,7 @@ class _ShowListScreenState extends State<ShowListScreen> {
   final Set<String> _favoriteBusy = {};
 
   Future<void> _loadFavorites() async {
-    if (widget.demoMode || SupportImpersonationSession.isActive) return;
+    if (widget.demoMode || SupportImpersonationSession.readOnly) return;
     final user = supabase.auth.currentUser;
     if (user == null) return;
     try {
@@ -612,7 +612,7 @@ class _ShowListScreenState extends State<ShowListScreen> {
     var canSuperintendent = false;
 
     try {
-      if (SupportImpersonationSession.isActive) {
+      if (SupportImpersonationSession.readOnly) {
         final supportAccess = await _loadSupportAccessSnapshot();
         canAdmin = supportAccess.canAccessAdmin;
         canSuperintendent = false;
@@ -916,7 +916,7 @@ class _ShowListScreenState extends State<ShowListScreen> {
     final shows = await _loadShows();
     final exhibitorWelcome = await _loadExhibitorWelcome();
     _scheduleHouseholdNotice(exhibitorWelcome);
-    final supportAccess = SupportImpersonationSession.isActive
+    final supportAccess = SupportImpersonationSession.readOnly
         ? await _loadSupportAccessSnapshot()
         : null;
     final isSuper =
@@ -1284,6 +1284,7 @@ class _ShowListScreenState extends State<ShowListScreen> {
   }
 
   Future<void> _logout(BuildContext context) async {
+    if (AppSession.isSupportMode) { await _exitSupportMode(); return; }
     await supabase.auth.signOut();
     if (!context.mounted) return;
     Navigator.of(context).pushAndRemoveUntil(
@@ -1292,8 +1293,8 @@ class _ShowListScreenState extends State<ShowListScreen> {
     );
   }
 
-  void _exitSupportMode() {
-    SupportImpersonationSession.stop();
+  Future<void> _exitSupportMode() async {
+    await SupportImpersonationSession.finish();
     if (!mounted) return;
     ScaffoldMessenger.of(
       context,
@@ -2016,7 +2017,7 @@ class _ShowListScreenState extends State<ShowListScreen> {
                                                     ),
                                                     if (!widget.demoMode &&
                                                         !SupportImpersonationSession
-                                                            .isActive)
+                                                            .readOnly)
                                                       ShowFavoriteButton(
                                                         selected: _favorites
                                                             .contains(showId),

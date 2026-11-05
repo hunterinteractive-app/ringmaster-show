@@ -3,7 +3,7 @@
 // lib/widgets/my_help_requests_button.dart
 
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/ringmaster_backend.dart';
 
 import 'package:ringmaster_show/screens/my_help_requests_screen.dart';
 
@@ -24,7 +24,7 @@ class MyHelpRequestsButton extends StatefulWidget {
 }
 
 class _MyHelpRequestsButtonState extends State<MyHelpRequestsButton> {
-  final SupabaseClient supabase = Supabase.instance.client;
+  final SupabaseClient supabase = ringMasterClient;
 
   int _waitingCount = 0;
   bool _loading = true;

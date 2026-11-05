@@ -35,7 +35,7 @@ class _AnimalSyncPanelState extends State<_LinkedRefreshPanel> {
   void _bind() {
     _controller?.removeListener(_changed);
     final owner = widget.ownerId;
-    _controller = owner == null || AppSession.isSupportMode
+    _controller = owner == null || AppSession.supportReadOnly
         ? null
         : (widget.controller ?? AnimalSyncService.forOwner(owner));
     _controller?.addListener(_changed);
@@ -57,7 +57,7 @@ class _AnimalSyncPanelState extends State<_LinkedRefreshPanel> {
   @override
   Widget build(BuildContext context) {
     final state = _controller;
-    if (state == null || AppSession.isSupportMode) {
+    if (state == null || AppSession.supportReadOnly) {
       return const SizedBox.shrink();
     }
     if (state.providers.isEmpty) {

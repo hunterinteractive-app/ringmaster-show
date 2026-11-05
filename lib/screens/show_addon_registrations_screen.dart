@@ -507,7 +507,7 @@ class _ShowAddonRegistrationsScreenState
                           ),
                           if (_offering != null && _tab == 'Results')
                             FilledButton(
-                              onPressed: _busy || AppSession.isSupportMode
+                              onPressed: _busy || AppSession.supportReadOnly
                                   ? null
                                   : _publish,
                               child: Text(
@@ -520,7 +520,7 @@ class _ShowAddonRegistrationsScreenState
                                   true &&
                               _tab == 'Registrations')
                             FilledButton.icon(
-                              onPressed: _busy || AppSession.isSupportMode
+                              onPressed: _busy || AppSession.supportReadOnly
                                   ? null
                                   : _walkup,
                               icon: const Icon(Icons.person_add),
@@ -579,7 +579,7 @@ class _ShowAddonRegistrationsScreenState
     );
     final team = data['team'] as Map?;
     final published = r['results_published_at'] != null;
-    final writable = _manage && !_busy && !AppSession.isSupportMode;
+    final writable = _manage && !_busy && !AppSession.supportReadOnly;
     return Card(
       child: ExpansionTile(
         key: ValueKey('${r['id']}:$_tab'),

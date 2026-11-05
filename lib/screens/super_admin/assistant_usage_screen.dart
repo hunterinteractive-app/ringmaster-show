@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/ringmaster_backend.dart';
 import '../../widgets/ringmaster_page_shell.dart';
 
 class AssistantUsageScreen extends StatefulWidget {
@@ -33,7 +33,7 @@ class _AssistantUsageScreenState extends State<AssistantUsageScreen> {
       _error = null;
     });
     try {
-      final result = await Supabase.instance.client.rpc(
+      final result = await ringMasterClient.rpc(
         'assistant_admin',
         params: {'p_enabled': enabled, 'p_budget': budget},
       );

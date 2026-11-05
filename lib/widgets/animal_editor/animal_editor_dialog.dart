@@ -4,7 +4,7 @@ import 'package:ringmaster_show/reporting_core/network/transient_retry.dart';
 // lib/widgets/animal_editor/animal_editor_dialog.dart
 
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/ringmaster_backend.dart';
 import 'package:ringmaster_show/services/app_session.dart';
 import 'package:ringmaster_show/theme/app_theme.dart';
 import 'package:ringmaster_show/utils/species_sex.dart';
@@ -14,7 +14,7 @@ import 'package:ringmaster_show/services/catalog/recognition_catalog_labels.dart
 
 import 'focus_open_autocomplete.dart';
 
-final supabase = Supabase.instance.client;
+SupabaseClient get supabase => ringMasterClient;
 
 class AnimalEditorDialog extends StatefulWidget {
   final Map<String, dynamic>? existing;

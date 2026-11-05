@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/ringmaster_backend.dart';
 
 class ShowPaymentProviderOption {
   const ShowPaymentProviderOption({
@@ -82,7 +82,7 @@ class ShowPaymentConfiguration {
 class ShowPaymentConfigurationService {
   ShowPaymentConfigurationService._();
 
-  static final SupabaseClient _supabase = Supabase.instance.client;
+  static SupabaseClient get _supabase => ringMasterClient;
 
   static Future<ShowPaymentConfiguration> load(String showId) async {
     final response = await _supabase.rpc(

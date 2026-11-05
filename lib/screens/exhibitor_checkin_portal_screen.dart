@@ -2,7 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:ringmaster_show/theme/app_theme.dart';
 import 'package:ringmaster_show/utils/entry_class_options.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/ringmaster_backend.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class ExhibitorCheckinPortalScreen extends StatefulWidget {
@@ -17,7 +17,7 @@ class ExhibitorCheckinPortalScreen extends StatefulWidget {
 
 class _ExhibitorCheckinPortalScreenState
     extends State<ExhibitorCheckinPortalScreen> {
-  final _supabase = Supabase.instance.client;
+  final _supabase = ringMasterClient;
   final _exhibitorNumber = TextEditingController();
   final _lastName = TextEditingController();
   final _initials = TextEditingController();

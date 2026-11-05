@@ -7,11 +7,9 @@ import 'package:ringmaster_show/services/final_award_access_service.dart';
 import 'package:flutter/material.dart';
 import 'show_addon_settings_screen.dart';
 import 'package:ringmaster_show/theme/app_theme.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/ringmaster_backend.dart';
 import 'package:ringmaster_show/widgets/help_report_dialog.dart';
-import 'dart:convert';
-import 'dart:html' as html;
-import 'dart:typed_data';
+import '../../services/locked_show_data_export.dart';
 
 import '../show_list_screen.dart';
 import '../../services/club_service.dart';
@@ -43,7 +41,7 @@ import 'package:ringmaster_show/screens/admin/show_closeout_v2_preview.dart';
 import 'admin_audit_log_screen.dart';
 import '../../superintendent/superintendent_lineup_screen.dart';
 
-final supabase = Supabase.instance.client;
+SupabaseClient get supabase => ringMasterClient;
 
 class EditShowSettingsScreen extends StatefulWidget {
   final String showId;
@@ -1052,52 +1050,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
     });
 
     try {
-      final session = supabase.auth.currentSession;
-      final accessToken = session?.accessToken;
-
-      if (accessToken == null || accessToken.isEmpty) {
-        throw Exception('You must be signed in to download the archive.');
-      }
-
-      final uri = Uri.parse(
-        'https://yzjoycrvqkyfrksmaixf.supabase.co/functions/v1/export-locked-show-data',
-      );
-
-      final request = await html.HttpRequest.request(
-        uri.toString(),
-        method: 'POST',
-        requestHeaders: {
-          'Authorization': 'Bearer $accessToken',
-          'Content-Type': 'application/json',
-        },
-        sendData: jsonEncode({'show_id': widget.showId}),
-        responseType: 'arraybuffer',
-      );
-
-      final status = request.status ?? 0;
-      if (status < 200 || status >= 300) {
-        throw Exception('Export failed with status $status.');
-      }
-
-      final buffer = request.response as ByteBuffer;
-      final bytes = Uint8List.view(buffer);
-
-      final safeShowName = _effectiveShowName()
-          .replaceAll(RegExp(r'[^A-Za-z0-9_-]+'), '_')
-          .replaceAll(RegExp(r'_+'), '_')
-          .replaceAll(RegExp(r'^_|_$'), '');
-
-      final fileName =
-          '${safeShowName}_locked_show_export_${DateTime.now().millisecondsSinceEpoch}.zip';
-
-      final blob = html.Blob([bytes], 'application/zip');
-      final url = html.Url.createObjectUrlFromBlob(blob);
-
-      html.AnchorElement(href: url)
-        ..download = fileName
-        ..click();
-
-      html.Url.revokeObjectUrl(url);
+      await downloadLockedShowDataExport(showId: widget.showId, showName: _effectiveShowName());
 
       if (!mounted) return;
       setState(() {
@@ -1442,17 +1395,17 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
   Widget build(BuildContext context) {
     ShowAssistantController.instance.register(context, 'Show Settings', widget.showId);
     final canManageShow =
-        _permissions.canManageShow || AppSession.isSupportMode;
+        _permissions.canManageShow;
     final canManageShowSettings =
-        _permissions.canManageShowSettings || AppSession.isSupportMode;
+        _permissions.canManageShowSettings;
     final canManageEntries =
-        _permissions.canManageEntries || AppSession.isSupportMode;
+        _permissions.canManageEntries;
     final canManageJudges =
-        _permissions.canManageJudges || AppSession.isSupportMode;
+        _permissions.canManageJudges;
     final canEnterResults =
-        _permissions.canEnterResults || AppSession.isSupportMode;
+        _permissions.canEnterResults;
     final canFinalizeShow =
-        _permissions.canFinalizeShow || AppSession.isSupportMode;
+        _permissions.canFinalizeShow;
 
     return Scaffold(
       appBar: AppBar(
@@ -1542,7 +1495,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                         _buildStatusBanner(),
                         if (canManageShowSettings)
                           _buildStripeAdminWarningBanner(),
-                        if (AppSession.isSupportMode)
+                        if (AppSession.supportReadOnly)
                           Container(
                             width: double.infinity,
                             margin: const EdgeInsets.only(bottom: 16),
