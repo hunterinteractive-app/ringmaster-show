@@ -1,7 +1,7 @@
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/ringmaster_backend.dart';
 
 class ConventionSaleService {
-  static SupabaseClient get _client => Supabase.instance.client;
+  static SupabaseClient get _client => ringMasterClient;
   static Future<Map<String, dynamic>> settings({bool admin = false}) async =>
       Map<String, dynamic>.from(
         await _client.rpc(

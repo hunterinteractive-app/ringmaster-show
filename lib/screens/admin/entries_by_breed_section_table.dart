@@ -4,7 +4,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:ringmaster_show/theme/app_theme.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/ringmaster_backend.dart';
 import 'package:ringmaster_show/utils/csv_exporter.dart';
 import 'package:ringmaster_show/services/app_session.dart';
 import 'package:ringmaster_show/utils/species_sex.dart';
@@ -12,7 +12,7 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 
-final supabase = Supabase.instance.client;
+SupabaseClient get supabase => ringMasterClient;
 
 class EntriesByBreedSectionTable extends StatefulWidget {
   final String showId;
@@ -991,7 +991,7 @@ class _EntriesByBreedSectionTableState
                     ],
                   ),
                 ),
-                if (AppSession.isSupportMode)
+                if (AppSession.supportReadOnly)
                   Container(
                     width: double.infinity,
                     margin: const EdgeInsets.fromLTRB(12, 4, 12, 0),

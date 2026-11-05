@@ -10,9 +10,9 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:ringmaster_show/theme/app_theme.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/ringmaster_backend.dart';
 
-final supabase = Supabase.instance.client;
+SupabaseClient get supabase => ringMasterClient;
 
 class ExhibitorBuilderDialog extends StatefulWidget {
   final String? exhibitorId;

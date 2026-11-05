@@ -1,6 +1,6 @@
 // lib/services/license_service.dart
 
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/ringmaster_backend.dart';
 
 class LicenseSnapshot {
   final int purchasedShowDays;
@@ -64,7 +64,7 @@ class LicenseSnapshot {
 class LicenseService {
   LicenseService._();
 
-  static final SupabaseClient _supabase = Supabase.instance.client;
+  static SupabaseClient get _supabase => ringMasterClient;
 
   static Future<LicenseSnapshot> loadCurrentUserLicense() async {
     final user = _supabase.auth.currentUser;

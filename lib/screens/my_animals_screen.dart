@@ -2,7 +2,7 @@ import '../widgets/animal_sync_panel.dart';
 // lib/screens/my_animals_screen.dart
 
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/ringmaster_backend.dart';
 
 import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
 
@@ -17,7 +17,7 @@ import '../widgets/rm_widgets.dart';
 
 import '../widgets/animal_editor/open_animal_editor_dialog.dart';
 
-final supabase = Supabase.instance.client;
+SupabaseClient get supabase => ringMasterClient;
 
 class MyAnimalsScreen extends StatefulWidget {
   const MyAnimalsScreen({super.key});
@@ -134,7 +134,7 @@ class _MyAnimalsScreenState extends State<MyAnimalsScreen> {
   }
 
   void _openAccount(BuildContext context) {
-    if (AppSession.isSupportMode) {
+    if (AppSession.supportReadOnly) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
@@ -185,16 +185,16 @@ class _MyAnimalsScreenState extends State<MyAnimalsScreen> {
           onPressed: () => _openEntries(context),
         ),
         IconButton(
-          tooltip: AppSession.isSupportMode
+          tooltip: AppSession.supportReadOnly
               ? 'Account disabled in support mode'
               : 'Account',
           icon: const Icon(Icons.manage_accounts),
-          onPressed: AppSession.isSupportMode
+          onPressed: AppSession.supportReadOnly
               ? null
               : () => _openAccount(context),
         ),
         IconButton(
-          tooltip: AppSession.isSupportMode
+          tooltip: AppSession.supportReadOnly
               ? 'Add animal while viewing as this user'
               : 'Add Animal',
           icon: const Icon(Icons.add),
@@ -277,7 +277,7 @@ class _MyAnimalsScreenState extends State<MyAnimalsScreen> {
                                       ),
                                     ),
                                     PopupMenuButton<String>(
-                                      tooltip: AppSession.isSupportMode
+                                      tooltip: AppSession.supportReadOnly
                                           ? 'Actions while viewing as this user'
                                           : 'Actions',
                                       color: AppColors.surface,

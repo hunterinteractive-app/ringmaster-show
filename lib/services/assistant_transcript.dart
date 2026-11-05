@@ -1,4 +1,4 @@
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/ringmaster_backend.dart';
 import 'package:uuid/uuid.dart';
 import 'support_impersonation_session.dart';
 
@@ -18,9 +18,9 @@ class AssistantTranscript {
     required String topic,
     String source = 'chat',
   }) async {
-    final client = Supabase.instance.client;
+    final client = ringMasterClient;
     final actor = client.auth.currentUser?.id;
-    if (actor == null || SupportImpersonationSession.isActive) return;
+    if (actor == null || SupportImpersonationSession.readOnly) return;
     _actor ??= actor;
     if (_actor != actor) return;
     _pending.add({
@@ -38,7 +38,7 @@ class AssistantTranscript {
     try {
       while (_pending.isNotEmpty &&
           client.auth.currentUser?.id == _actor &&
-          !SupportImpersonationSession.isActive) {
+          !SupportImpersonationSession.readOnly) {
         await client
             .rpc('chester_append', params: _pending.first)
             .timeout(const Duration(seconds: 15));

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:ringmaster_show/theme/app_theme.dart';
 import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/ringmaster_backend.dart';
 
 class ClubPaymentProviderMigrationReviewsScreen extends StatefulWidget {
   const ClubPaymentProviderMigrationReviewsScreen({super.key});
@@ -16,7 +16,7 @@ class _ClubPaymentProviderMigrationReviewsScreenState
   late Future<List<Map<String, dynamic>>> _reviews = _loadReviews();
 
   Future<List<Map<String, dynamic>>> _loadReviews() async {
-    final rows = await Supabase.instance.client
+    final rows = await ringMasterClient
         .from('club_payment_provider_migration_reviews')
         .select('id, provider, reason, status, created_at, clubs(name), shows(name)')
         .eq('status', 'pending')

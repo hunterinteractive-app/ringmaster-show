@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/ringmaster_backend.dart';
 
 class PaymentQuotePreview {
   const PaymentQuotePreview({
@@ -25,7 +25,7 @@ class PaymentQuotePreview {
     required String cartId,
     required String provider,
   }) async {
-    final response = await Supabase.instance.client.functions.invoke(
+    final response = await ringMasterClient.functions.invoke(
       'payment-quote-preview',
       body: {'cart_id': cartId, 'provider': provider, 'timing': 'online'},
     );

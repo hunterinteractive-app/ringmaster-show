@@ -3,14 +3,14 @@
 
 import 'package:flutter/material.dart';
 import 'package:ringmaster_show/theme/app_theme.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/ringmaster_backend.dart';
 import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
 
 import '../services/app_session.dart';
 import '../services/club_service.dart';
 import '../widgets/rm_timezone_notice_banner.dart';
 
-final supabase = Supabase.instance.client;
+SupabaseClient get supabase => ringMasterClient;
 
 class CreateShowScreen extends StatefulWidget {
   const CreateShowScreen({super.key});
@@ -176,7 +176,7 @@ class _CreateShowScreenState extends State<CreateShowScreen> {
   }
 
   bool _validate() {
-    if (AppSession.isSupportMode) {
+    if (AppSession.supportReadOnly) {
       setState(
         () =>
             _msg = 'Creating shows is disabled while viewing in support mode.',
@@ -403,7 +403,7 @@ class _CreateShowScreenState extends State<CreateShowScreen> {
         child: Column(
           children: [
             const RMTimezoneNoticeBanner(),
-            if (AppSession.isSupportMode) ...[
+            if (AppSession.supportReadOnly) ...[
               Container(
                 width: double.infinity,
                 margin: const EdgeInsets.only(bottom: 12),
@@ -839,7 +839,7 @@ class _CreateShowScreenState extends State<CreateShowScreen> {
             SizedBox(
               width: double.infinity,
               child: Tooltip(
-                message: AppSession.isSupportMode
+                message: AppSession.supportReadOnly
                     ? 'Exit impersonation to create a show.'
                     : 'Create show',
                 child: FilledButton(
@@ -848,7 +848,7 @@ class _CreateShowScreenState extends State<CreateShowScreen> {
                     foregroundColor: AppColors.primaryButtonText,
                     padding: const EdgeInsets.symmetric(vertical: 16),
                   ),
-                  onPressed: (_saving || AppSession.isSupportMode)
+                  onPressed: (_saving || AppSession.supportReadOnly)
                       ? null
                       : _create,
                   child: Text(_saving ? 'Creating…' : 'Create'),

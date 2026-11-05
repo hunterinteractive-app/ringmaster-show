@@ -4,7 +4,7 @@ import '../models/contest_settings.dart';
 import '../widgets/contests/contest_registration_fields.dart';
 import '../widgets/contests/contest_answer_field.dart';
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/ringmaster_backend.dart';
 import '../models/show_addon.dart';
 import '../utils/date_time_utils.dart';
 import '../services/app_session.dart';
@@ -58,7 +58,7 @@ class _ShowAddonsScreenState extends State<ShowAddonsScreen> {
       final data = await _service.catalog(widget.showId);
       final cart = await _service.cart(widget.cartId);
       final drafts = await _service.drafts(widget.cartId);
-      final exhibitors = await Supabase.instance.client
+      final exhibitors = await ringMasterClient
           .from('exhibitors')
           .select('id,showing_name,display_name,exhibitor_number')
           .eq('owner_user_id', ownerId)
@@ -363,7 +363,7 @@ class _ShowAddonsScreenState extends State<ShowAddonsScreen> {
                                                   _busy ||
                                                       !item
                                                           .registrationIsOpen ||
-                                                      AppSession.isSupportMode
+                                                      AppSession.supportReadOnly
                                                   ? null
                                                   : () => _choose(
                                                       item,
@@ -375,7 +375,7 @@ class _ShowAddonsScreenState extends State<ShowAddonsScreen> {
                                               tooltip: 'Remove',
                                               onPressed:
                                                   _busy ||
-                                                      AppSession.isSupportMode
+                                                      AppSession.supportReadOnly
                                                   ? null
                                                   : () => _remove(row),
                                               icon: const Icon(
@@ -400,7 +400,7 @@ class _ShowAddonsScreenState extends State<ShowAddonsScreen> {
                                           onPressed:
                                               _busy ||
                                                   !item.registrationIsOpen ||
-                                                  AppSession.isSupportMode
+                                                  AppSession.supportReadOnly
                                               ? null
                                               : () => _choose(
                                                   item,
@@ -426,7 +426,7 @@ class _ShowAddonsScreenState extends State<ShowAddonsScreen> {
                                             _busy ||
                                                 _exhibitorId == null ||
                                                 !item.registrationIsOpen ||
-                                                AppSession.isSupportMode
+                                                AppSession.supportReadOnly
                                             ? null
                                             : () => _choose(item),
                                         child: Text(
@@ -443,7 +443,7 @@ class _ShowAddonsScreenState extends State<ShowAddonsScreen> {
                                           _selection(item) != null)
                                         TextButton(
                                           onPressed:
-                                              _busy || AppSession.isSupportMode
+                                              _busy || AppSession.supportReadOnly
                                               ? null
                                               : () =>
                                                     _remove(_selection(item)!),

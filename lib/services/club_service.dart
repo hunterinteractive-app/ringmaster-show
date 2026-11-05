@@ -1,9 +1,9 @@
 // lib/services/club_service.dart
 
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/ringmaster_backend.dart';
 import 'app_session.dart';
 
-final supabase = Supabase.instance.client;
+SupabaseClient get supabase => ringMasterClient;
 
 class ClubService {
   static Future<List<Map<String, dynamic>>> loadMyClubs() async {
@@ -43,7 +43,7 @@ class ClubService {
   }
 
   static Future<Map<String, dynamic>> createClub({required String name}) async {
-    if (AppSession.isSupportMode) {
+    if (AppSession.supportReadOnly) {
       throw Exception('Club management is unavailable in support mode.');
     }
 
@@ -77,7 +77,7 @@ class ClubService {
     required String clubId,
     required String name,
   }) async {
-    if (AppSession.isSupportMode) {
+    if (AppSession.supportReadOnly) {
       throw Exception('Club management is unavailable in support mode.');
     }
 

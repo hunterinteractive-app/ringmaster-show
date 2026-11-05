@@ -2,7 +2,7 @@ import '../../services/show_assistant_service.dart';
 // lib/screens/admin/admin_shows_screen.dart
 
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/ringmaster_backend.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'admin_resources_screen.dart';
@@ -17,7 +17,7 @@ import '../../theme/app_theme.dart';
 import '../../services/app_session.dart';
 import '../../widgets/rm_widgets.dart';
 
-final supabase = Supabase.instance.client;
+SupabaseClient get supabase => ringMasterClient;
 
 class AdminShowsScreen extends StatefulWidget {
   final List<String> allowedShowIds;
@@ -253,7 +253,7 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
         message: 'Demo mode is limited to the shared demo show.',
       );
     }
-    if (AppSession.isSupportMode) {
+    if (AppSession.supportReadOnly) {
       final targetUserId = AppSession.effectiveUserId;
       if (targetUserId == null) {
         return const _ShowCreationStatus(
@@ -504,7 +504,7 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
   }
 
   Future<void> _openCreate() async {
-    if (AppSession.isSupportMode || _isDemoMode) return;
+    if (AppSession.supportReadOnly || _isDemoMode) return;
     final ok = await Navigator.push<bool>(
       context,
       MaterialPageRoute(builder: (_) => const CreateShowScreen()),
@@ -760,7 +760,7 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
         return Scaffold(
           appBar: _AdminShowsAppBar(
             canCreate:
-                !AppSession.isSupportMode &&
+                !AppSession.supportReadOnly &&
                 license.canCreate &&
                 snap.connectionState != ConnectionState.waiting,
             demoMode: _isDemoMode,
@@ -773,7 +773,7 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
                 ? null
                 : _reload,
             onCreate:
-                (AppSession.isSupportMode ||
+                (AppSession.supportReadOnly ||
                     snap.connectionState == ConnectionState.waiting ||
                     !license.canCreate)
                 ? null
@@ -817,16 +817,16 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
                             RMCard(
                               child: Row(
                                 crossAxisAlignment: CrossAxisAlignment.start,
-                                children: const [
-                                  Icon(
+                                children: [
+                                  const Icon(
                                     Icons.support_agent,
                                     color: Colors.orange,
                                   ),
-                                  SizedBox(width: AppSpacing.md),
+                                  const SizedBox(width: AppSpacing.md),
                                   Expanded(
                                     child: Text(
-                                      'Support Mode — You are managing shows as an admin while viewing another user. Creating shows is disabled.',
-                                      style: TextStyle(
+                                      AppSession.supportReadOnly ? 'Support preview — creating shows is disabled.' : 'New shows belong to ${AppSession.impersonatedUserEmail} and use that account’s license.',
+                                      style: const TextStyle(
                                         fontWeight: FontWeight.w700,
                                       ),
                                     ),

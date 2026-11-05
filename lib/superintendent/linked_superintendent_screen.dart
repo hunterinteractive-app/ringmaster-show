@@ -1,7 +1,7 @@
 import 'specialty_lineup_dialog.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/ringmaster_backend.dart';
 import '../services/app_session.dart';
 import '../theme/app_theme.dart';
 import '../widgets/ringmaster_page_shell.dart';
@@ -25,7 +25,7 @@ class LinkedSuperintendentScreen extends StatefulWidget {
 
 class _LinkedSuperintendentScreenState
     extends State<LinkedSuperintendentScreen> {
-  final _client = Supabase.instance.client;
+  final _client = ringMasterClient;
   List<Map<String, dynamic>>? _sections;
   List<Map<String, dynamic>> _counts = [];
   List<Map<String, dynamic>> _judges = [];
@@ -152,7 +152,7 @@ class _LinkedSuperintendentScreenState
             for (final show in widget.shows)
               show['id'].toString(): show['name'].toString(),
           },
-          readOnly: AppSession.isSupportMode,
+          readOnly: AppSession.supportReadOnly,
         ),
       ),
     );
@@ -161,7 +161,7 @@ class _LinkedSuperintendentScreenState
   }
 
   Future<void> _edit(Map<String, dynamic> row) async {
-    if (AppSession.isSupportMode || _error != null) return;
+    if (AppSession.supportReadOnly || _error != null) return;
     _editing = true;
     final table = TextEditingController(
       text: (row['table_number'] ?? '').toString(),
@@ -343,7 +343,7 @@ class _LinkedSuperintendentScreenState
                       ],
                     ),
                   ),
-                if (AppSession.isSupportMode)
+                if (AppSession.supportReadOnly)
                   _card(
                     const Text(
                       'Support Mode — shared logistics are view-only.',
@@ -501,7 +501,7 @@ class _LinkedSuperintendentScreenState
                             ),
                             trailing:
                                 row['is_judge_change'] == true ||
-                                    AppSession.isSupportMode ||
+                                    AppSession.supportReadOnly ||
                                     _error != null
                                 ? null
                                 : IconButton(

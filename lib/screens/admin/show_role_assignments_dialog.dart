@@ -4,9 +4,9 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:ringmaster_show/theme/app_theme.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/ringmaster_backend.dart';
 
-final supabase = Supabase.instance.client;
+SupabaseClient get supabase => ringMasterClient;
 
 class ShowRoleAssignmentsDialog {
   static Future<void> open(

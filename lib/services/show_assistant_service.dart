@@ -1,6 +1,6 @@
 import 'assistant_transcript.dart';
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/ringmaster_backend.dart';
 import 'package:uuid/uuid.dart';
 import 'household_session.dart';
 import 'support_impersonation_session.dart';
@@ -116,10 +116,10 @@ abstract class ReviewedAnswerGateway {
 
 class SupabaseAssistantGateway
     implements AssistantGateway, ReviewedAnswerGateway {
-  SupabaseClient get _client => Supabase.instance.client;
+  SupabaseClient get _client => ringMasterClient;
   @override
   bool get canAsk =>
-      _client.auth.currentUser != null && !SupportImpersonationSession.isActive;
+      _client.auth.currentUser != null && !SupportImpersonationSession.readOnly;
   @override
   Future<String?> reviewedAnswer(String question) async {
     if (!canAsk) return null;

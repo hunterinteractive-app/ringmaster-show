@@ -1,6 +1,6 @@
 import 'package:ringmaster_show/reporting_core/network/transient_retry.dart';
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/ringmaster_backend.dart';
 
 import '../../theme/app_theme.dart';
 import 'checkin_change_requests_screen.dart';
@@ -20,7 +20,7 @@ class ShowCheckinDashboardScreen extends StatefulWidget {
 
 class _ShowCheckinDashboardScreenState
     extends State<ShowCheckinDashboardScreen> {
-  final _db = Supabase.instance.client;
+  final _db = ringMasterClient;
   Map<String, dynamic>? _data;
   String? _error;
   bool _loading = true;

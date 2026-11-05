@@ -4,14 +4,14 @@ import 'household_access_screen.dart';
 // lib/screens/account_settings_screen.dart
 
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/ringmaster_backend.dart';
 import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
 
 import '../theme/app_theme.dart';
 import '../services/app_session.dart';
 import '../widgets/exhibitor_builder_dialog.dart';
 
-final supabase = Supabase.instance.client;
+SupabaseClient get supabase => ringMasterClient;
 
 class AccountSettingsScreen extends StatefulWidget {
   const AccountSettingsScreen({super.key});
@@ -117,7 +117,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
         primaryExhibitorId = defaultExhibitor?['id']?.toString();
 
         if (primaryExhibitorId != null &&
-            !AppSession.isSupportMode &&
+            !AppSession.supportReadOnly &&
             userId == supabase.auth.currentUser?.id) {
           await supabase
               .from('profiles')
@@ -147,7 +147,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
   // Exhibitor Dialog (NEW)
   // ------------------------------
   Future<void> _openExhibitorEditor({Map<String, dynamic>? existing}) async {
-    if (AppSession.isSupportMode) {
+    if (AppSession.supportReadOnly) {
       setState(() {
         _msg = 'Exhibitor editing is disabled while viewing in support mode.';
       });
@@ -170,7 +170,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
   // Set Primary Exhibitor
   // ------------------------------
   Future<void> _setPrimaryExhibitor(Map<String, dynamic> exhibitor) async {
-    if (AppSession.isSupportMode) {
+    if (AppSession.supportReadOnly) {
       setState(() {
         _msg =
             'Changing the primary exhibitor is disabled while viewing in support mode.';
@@ -214,7 +214,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
   // Toggle Active
   // ------------------------------
   Future<void> _toggleActive(String id, bool newActive) async {
-    if (AppSession.isSupportMode) {
+    if (AppSession.supportReadOnly) {
       setState(() {
         _msg =
             'Activating and deactivating exhibitors is disabled while viewing in support mode.';
@@ -246,7 +246,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
   }
 
   Future<void> _removeFromAccountView(String id) async {
-    if (AppSession.isSupportMode) return;
+    if (AppSession.supportReadOnly) return;
     final owner = AppSession.householdOwnerUserId;
     if (owner == null) return;
     try {
@@ -303,11 +303,11 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
           },
         ),
         IconButton(
-          tooltip: AppSession.isSupportMode
+          tooltip: AppSession.supportReadOnly
               ? 'Add exhibitor is disabled while viewing as another user'
               : 'Add Exhibitor',
           icon: const Icon(Icons.person_add_alt_1),
-          onPressed: (_loading || AppSession.isSupportMode)
+          onPressed: (_loading || AppSession.supportReadOnly)
               ? null
               : () => _openExhibitorEditor(),
         ),
@@ -331,7 +331,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                           partnerName: pedigreeHQ ? 'PedigreeHQ' : 'HerdMaster',
                           user: supabase.auth.currentUser,
                           ownerUserId: AppSession.householdOwnerUserId,
-                          supportMode: AppSession.isSupportMode,
+                          supportMode: AppSession.supportReadOnly,
                           onPressed: () => showDialog<void>(
                             context: context,
                             barrierDismissible: false,
@@ -342,7 +342,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                     ],
                   ),
                 ),
-                if (AppSession.isSupportMode)
+                if (AppSession.supportReadOnly)
                   Padding(
                     padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
                     child: Container(
@@ -385,7 +385,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                   child: _exhibitors.isEmpty
                       ? Center(
                           child: Text(
-                            AppSession.isSupportMode
+                            AppSession.supportReadOnly
                                 ? 'No exhibitors yet.'
                                 : 'No exhibitors yet.\nTap + to add one.',
                             textAlign: TextAlign.center,
@@ -509,11 +509,11 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                                           .bodyMedium
                                           ?.copyWith(color: AppColors.muted),
                                     ),
-                                    onTap: AppSession.isSupportMode
+                                    onTap: AppSession.supportReadOnly
                                         ? null
                                         : () =>
                                               _openExhibitorEditor(existing: e),
-                                    trailing: AppSession.isSupportMode
+                                    trailing: AppSession.supportReadOnly
                                         ? null
                                         : PopupMenuButton<String>(
                                             color: AppColors.surface,

@@ -4,6 +4,9 @@ import 'screens/account_settings_screen.dart';
 import 'screens/household_access_screen.dart';
 import 'screens/admin/edit_show_settings_screen.dart';
 import 'services/household_session.dart';
+import 'services/support_delegation.dart';
+import 'services/support_impersonation_session.dart';
+import 'services/support_tab.dart';
 import 'services/show_assistant_service.dart';
 import 'widgets/show_assistant.dart';
 import 'screens/my_entries_screen.dart';
@@ -12,7 +15,7 @@ import 'screens/exhibitor_past_reports_screen.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/ringmaster_backend.dart';
 import 'package:screenshot/screenshot.dart';
 import 'package:ringmaster_show/services/help_report_service.dart';
 
@@ -32,7 +35,7 @@ import 'config/release_config.dart';
 import 'theme/app_theme.dart';
 import 'services/app_init_service.dart';
 
-final supabase = Supabase.instance.client;
+SupabaseClient get supabase => ringMasterClient;
 
 Uri? initialQrUri;
 Uri? initialCheckinUri;
@@ -48,6 +51,34 @@ Future<void> main() async {
     anonKey: SupabaseConfig.anonKey,
   );
 
+  // Restore before any widget or data service can capture a client. A failed
+  // restore must never continue into an admin workspace with stale show URLs.
+  final id = savedSupportSession;
+  if (id != null) {
+    try {
+      await SupportImpersonationSession.restore(id);
+    } catch (_) {
+      runApp(
+        MaterialApp(
+          home: Scaffold(
+            body: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('This support session is no longer available.'),
+                  TextButton(
+                    onPressed: () => restartSupportTab(null),
+                    child: const Text('Return to administrator account'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+      return;
+    }
+  }
   initialQrUri = _qrUriFromBrowser();
   initialCheckinUri = _checkinUriFromBrowser();
   initialDemoMode = _demoModeFromBrowser();
@@ -154,6 +185,33 @@ class MyApp extends StatelessWidget {
         navigatorObservers: [ShowAssistantController.instance.navigation],
         builder: (context, child) => Column(
           children: [
+            if (RingMasterData.delegated)
+              Material(
+                color: AppColors.secondaryButton,
+                child: SafeArea(
+                  bottom: false,
+                  child: Row(
+                    children: [
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          'Support Mode • ${SupportImpersonationSession.current.value?.email}',
+                          style: const TextStyle(color: Colors.white),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () async {
+                          await SupportImpersonationSession.finish();
+                        },
+                        child: const Text(
+                          'Exit',
+                          style: TextStyle(color: Colors.white),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             Expanded(
               child: ShowAssistantOverlay(
                 child: child ?? const SizedBox.shrink(),
@@ -334,7 +392,7 @@ class _RootState extends State<Root> {
       return;
     }
 
-    if (demoMode) {
+    if (demoMode || RingMasterData.delegated) {
       if (!mounted) return;
       setState(() {
         _loading = false;

@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/ringmaster_backend.dart';
 
 import 'qr_results_entry_screen.dart';
 
-final supabase = Supabase.instance.client;
+SupabaseClient get supabase => ringMasterClient;
 
 class TableQrQueueScreen extends StatefulWidget {
   final String showId;

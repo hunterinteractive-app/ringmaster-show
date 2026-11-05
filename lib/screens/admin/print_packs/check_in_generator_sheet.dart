@@ -6,7 +6,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:ringmaster_show/theme/app_theme.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/ringmaster_backend.dart';
 import 'package:ringmaster_show/services/app_session.dart';
 import 'package:ringmaster_show/utils/species_sex.dart';
 
@@ -18,7 +18,7 @@ import '../../../services/show_wave_schedule.dart';
 import 'package:intl/intl.dart';
 import '../closeout/data/report_data_reader.dart';
 
-final supabase = Supabase.instance.client;
+SupabaseClient get supabase => ringMasterClient;
 
 class CheckInGeneratorSheet extends StatefulWidget {
   final String showId;
@@ -519,7 +519,7 @@ class _CheckInGeneratorSheetState extends State<CheckInGeneratorSheet> {
   }
 
   Future<void> _emailCheckInSheets() async {
-    if (AppSession.isSupportMode) {
+    if (AppSession.supportReadOnly) {
       setState(() {
         _msg = 'Email sending is disabled while viewing in support mode.';
       });

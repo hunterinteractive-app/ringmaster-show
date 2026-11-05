@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/ringmaster_backend.dart';
 import 'package:ringmaster_show/services/catalog/recognition_timeline.dart';
 import 'package:ringmaster_show/theme/app_theme.dart';
 import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
@@ -78,7 +78,7 @@ class _RecognitionTimelineScreenState extends State<RecognitionTimelineScreen> {
       final events = <RecognitionTransition>[];
       // Read all transitions even when the API caps pages below our limit.
       while (true) {
-        final rows = await Supabase.instance.client
+        final rows = await ringMasterClient
             .from('catalog_recognition_history')
             .select()
             .eq('species', widget.species)
@@ -113,7 +113,7 @@ class _RecognitionTimelineScreenState extends State<RecognitionTimelineScreen> {
       _error = null;
     });
     try {
-      await Supabase.instance.client
+      await ringMasterClient
           .from('catalog_recognition_history')
           .insert({
             'species': widget.species,
@@ -160,7 +160,7 @@ class _RecognitionTimelineScreenState extends State<RecognitionTimelineScreen> {
     if (confirmed != true || !mounted) return;
     setState(() => _saving = true);
     try {
-      await Supabase.instance.client
+      await ringMasterClient
           .from('catalog_recognition_history')
           .delete()
           .eq('id', event.id)

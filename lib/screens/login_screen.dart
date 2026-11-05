@@ -4,7 +4,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/ringmaster_backend.dart';
 
 import '../theme/app_theme.dart';
 import '../utils/date_time_utils.dart';
@@ -23,7 +23,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 //dev backdoor
 
-final supabase = Supabase.instance.client;
+SupabaseClient get supabase => ringMasterClient;
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key, this.afterLogin, this.rootManaged = false});

@@ -7,7 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:screenshot/screenshot.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/ringmaster_backend.dart';
 
 import 'package:ringmaster_show/config/app_versions.dart';
 import 'package:ringmaster_show/services/app_session.dart';
@@ -19,7 +19,7 @@ class HelpReportService {
 
   static final ScreenshotController screenshotController =
       ScreenshotController();
-  static final _supabase = Supabase.instance.client;
+  static SupabaseClient get _supabase => ringMasterClient;
 
   static Future<void> submitReport({
     required String message,

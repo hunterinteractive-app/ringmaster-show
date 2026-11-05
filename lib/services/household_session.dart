@@ -1,5 +1,5 @@
 import 'package:flutter/foundation.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/ringmaster_backend.dart';
 
 /// Household data context only. Never use this identity for staff permissions,
 /// legal acceptance, licenses, authentication, or audit attribution.
@@ -10,7 +10,7 @@ class HouseholdSession {
   static List<Map<String, dynamic>> invitations = [];
 
   static String? get ownerUserId {
-    final actor = Supabase.instance.client.auth.currentUser?.id;
+    final actor = ringMasterClient.auth.currentUser?.id;
     if (_loginId != actor) return actor;
     return selection.value ?? actor;
   }
@@ -20,7 +20,7 @@ class HouseholdSession {
     String? id,
     String? email,
   }) async {
-    final client = Supabase.instance.client;
+    final client = ringMasterClient;
     final actor = client.auth.currentUser?.id;
     if (_loginId != actor) {
       _loginId = actor;
@@ -53,7 +53,7 @@ class HouseholdSession {
   }
 
   static Future<void> sendInvitation(String email) async {
-    final response = await Supabase.instance.client.functions.invoke(
+    final response = await ringMasterClient.functions.invoke(
       'household-send-invitation',
       body: {'email': email.trim().toLowerCase()},
     );

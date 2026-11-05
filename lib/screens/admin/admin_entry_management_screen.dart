@@ -6,7 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:ringmaster_show/theme/app_theme.dart';
 import 'package:flutter/services.dart';
 import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/ringmaster_backend.dart';
 import 'package:ringmaster_show/services/show_lock_service.dart';
 import 'package:ringmaster_show/services/app_session.dart';
 import 'package:ringmaster_show/policies/manual_exhibitor_information_policy.dart';
@@ -20,7 +20,7 @@ import 'entry_management_loader.dart';
 import 'closeout/data/report_data_reader.dart';
 import '../../services/manual_animal_lookup.dart';
 
-final supabase = Supabase.instance.client;
+SupabaseClient get supabase => ringMasterClient;
 
 String _entryLookupKey(String value) {
   return value.toLowerCase().replaceAll(RegExp(r'\s+'), ' ').trim();
@@ -280,7 +280,7 @@ class _AdminEntryManagementScreenState
     Map<String, dynamic> entry, {
     bool selectEntry = false,
   }) async {
-    if (!_canRefund || AppSession.isSupportMode) return;
+    if (!_canRefund || AppSession.supportReadOnly) return;
     final exhibitorId = entry['exhibitor_id']?.toString();
     if (exhibitorId == null || exhibitorId.isEmpty) return;
     await showDialog<bool>(
@@ -741,7 +741,7 @@ class _AdminEntryManagementScreenState
   }
 
   Widget _messageBanner() {
-    if (AppSession.isSupportMode) {
+    if (AppSession.supportReadOnly) {
       return Padding(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
         child: Container(
@@ -866,7 +866,7 @@ class _AdminEntryManagementScreenState
       useScrollView: false,
       bodyPadding: EdgeInsets.zero,
       actions: [
-        if (_canRefund && !AppSession.isSupportMode)
+        if (_canRefund && !AppSession.supportReadOnly)
           IconButton(
             tooltip: 'Refund History',
             icon: const Icon(Icons.history),
@@ -880,7 +880,7 @@ class _AdminEntryManagementScreenState
             },
           ),
         IconButton(
-          tooltip: AppSession.isSupportMode
+          tooltip: AppSession.supportReadOnly
               ? 'Add entry while viewing as another user'
               : 'Add Entry',
           icon: const Icon(Icons.add),
@@ -1077,7 +1077,7 @@ class _AdminEntryManagementScreenState
                                 ),
                               if (hasExhibitor &&
                                   _canRefund &&
-                                  !AppSession.isSupportMode)
+                                  !AppSession.supportReadOnly)
                                 IconButton(
                                   tooltip: 'Refund & Remove Entries',
                                   icon: const Icon(Icons.currency_exchange),
@@ -1167,7 +1167,7 @@ class _AdminEntryManagementScreenState
                                     : Text(subtitle),
                                 isThreeLine: subtitle.length > 80,
                                 trailing: PopupMenuButton<String>(
-                                  tooltip: AppSession.isSupportMode
+                                  tooltip: AppSession.supportReadOnly
                                       ? 'Actions while viewing as another user'
                                       : 'Actions',
                                   onSelected: (v) {
@@ -1200,7 +1200,7 @@ class _AdminEntryManagementScreenState
                                       value: 'delete',
                                       child: Text('Remove Entry'),
                                     ),
-                                    if (_canRefund && !AppSession.isSupportMode)
+                                    if (_canRefund && !AppSession.supportReadOnly)
                                       const PopupMenuItem(
                                         value: 'refund',
                                         child: Text('Refund & Remove Entries'),
@@ -3118,7 +3118,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
               ))
                 OutlinedButton.icon(
                   onPressed:
-                      (_saving || AppSession.isSupportMode || !hasExhibitor)
+                      (_saving || AppSession.supportReadOnly || !hasExhibitor)
                       ? null
                       : () => _selectRabbitForCommercialEntry(code),
                   style: OutlinedButton.styleFrom(
@@ -3132,7 +3132,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                 OutlinedButton.icon(
                   onPressed:
                       (_saving ||
-                          AppSession.isSupportMode ||
+                          AppSession.supportReadOnly ||
                           _exhibitorId == null ||
                           !_hasSelectedMeatSection)
                       ? null
@@ -4569,7 +4569,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
   }
 
   Future<String> _createNewExhibitor() async {
-    if (AppSession.isSupportMode) {
+    if (AppSession.supportReadOnly) {
       throw Exception(
         'Creating exhibitors is disabled while viewing in support mode.',
       );
@@ -4680,7 +4680,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
   }
 
   Future<void> _save({bool reset = false}) async {
-    if (AppSession.isSupportMode) {
+    if (AppSession.supportReadOnly) {
       setState(
         () =>
             _msg = 'Adding entries is disabled while viewing in support mode.',
@@ -5238,7 +5238,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                               title: Text(
                                 (s['display_name'] ?? s['letter']).toString(),
                               ),
-                              onChanged: (_saving || AppSession.isSupportMode)
+                              onChanged: (_saving || AppSession.supportReadOnly)
                                   ? null
                                   : (v) {
                                       setState(() {
@@ -5283,7 +5283,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                       'Create a show/local exhibitor with contact info',
                     ),
                     value: _addNewExhibitor,
-                    onChanged: (_saving || AppSession.isSupportMode)
+                    onChanged: (_saving || AppSession.supportReadOnly)
                         ? null
                         : (v) {
                             setState(() {
@@ -5327,7 +5327,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                                 child: TextField(
                                   controller: _firstName,
                                   enabled:
-                                      !_saving && !AppSession.isSupportMode,
+                                      !_saving && !AppSession.supportReadOnly,
                                   decoration: const InputDecoration(
                                     labelText: 'First Name',
                                     border: OutlineInputBorder(),
@@ -5339,7 +5339,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                                 child: TextField(
                                   controller: _lastName,
                                   enabled:
-                                      !_saving && !AppSession.isSupportMode,
+                                      !_saving && !AppSession.supportReadOnly,
                                   decoration: const InputDecoration(
                                     labelText: 'Last Name',
                                     border: OutlineInputBorder(),
@@ -5351,7 +5351,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                           const SizedBox(height: 10),
                           TextField(
                             controller: _email,
-                            enabled: !_saving && !AppSession.isSupportMode,
+                            enabled: !_saving && !AppSession.supportReadOnly,
                             decoration: const InputDecoration(
                               labelText: 'Email',
                               border: OutlineInputBorder(),
@@ -5360,7 +5360,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                           const SizedBox(height: 10),
                           TextField(
                             controller: _phone,
-                            enabled: !_saving && !AppSession.isSupportMode,
+                            enabled: !_saving && !AppSession.supportReadOnly,
                             decoration: const InputDecoration(
                               labelText: 'Phone',
                               border: OutlineInputBorder(),
@@ -5369,7 +5369,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                           const SizedBox(height: 10),
                           TextField(
                             controller: _arbaNumber,
-                            enabled: !_saving && !AppSession.isSupportMode,
+                            enabled: !_saving && !AppSession.supportReadOnly,
                             decoration: const InputDecoration(
                               labelText: 'ARBA Number',
                               border: OutlineInputBorder(),
@@ -5378,7 +5378,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                           const SizedBox(height: 10),
                           TextField(
                             controller: _addressLine1,
-                            enabled: !_saving && !AppSession.isSupportMode,
+                            enabled: !_saving && !AppSession.supportReadOnly,
                             textCapitalization: TextCapitalization.words,
                             decoration: InputDecoration(
                               labelText: _allowNameOnlyManualExhibitors
@@ -5390,7 +5390,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                           const SizedBox(height: 10),
                           TextField(
                             controller: _addressLine2,
-                            enabled: !_saving && !AppSession.isSupportMode,
+                            enabled: !_saving && !AppSession.supportReadOnly,
                             textCapitalization: TextCapitalization.words,
                             decoration: const InputDecoration(
                               labelText: 'Address Line 2',
@@ -5400,7 +5400,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                           const SizedBox(height: 10),
                           TextField(
                             controller: _city,
-                            enabled: !_saving && !AppSession.isSupportMode,
+                            enabled: !_saving && !AppSession.supportReadOnly,
                             textCapitalization: TextCapitalization.words,
                             decoration: InputDecoration(
                               labelText: _allowNameOnlyManualExhibitors
@@ -5417,7 +5417,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                                 child: TextField(
                                   controller: _state,
                                   enabled:
-                                      !_saving && !AppSession.isSupportMode,
+                                      !_saving && !AppSession.supportReadOnly,
                                   textCapitalization:
                                       TextCapitalization.characters,
                                   inputFormatters: [UpperCaseTextFormatter()],
@@ -5435,7 +5435,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                                 child: TextField(
                                   controller: _zip,
                                   enabled:
-                                      !_saving && !AppSession.isSupportMode,
+                                      !_saving && !AppSession.supportReadOnly,
                                   decoration: InputDecoration(
                                     labelText: _allowNameOnlyManualExhibitors
                                         ? 'ZIP Code'
@@ -5463,7 +5463,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                                 child: Text('Youth'),
                               ),
                             ],
-                            onChanged: (_saving || AppSession.isSupportMode)
+                            onChanged: (_saving || AppSession.supportReadOnly)
                                 ? null
                                 : (v) => setState(
                                     () => _exhibitorType = v ?? 'adult',
@@ -5491,7 +5491,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                             return TextField(
                               controller: textEditingController,
                               focusNode: focusNode,
-                              enabled: !_saving && !AppSession.isSupportMode,
+                              enabled: !_saving && !AppSession.supportReadOnly,
                               style: _entrySheetDropdownTextStyle,
                               decoration: InputDecoration(
                                 labelText: 'Exhibitor',
@@ -5510,7 +5510,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                                         icon: const Icon(Icons.clear),
                                         onPressed:
                                             (_saving ||
-                                                AppSession.isSupportMode)
+                                                AppSession.supportReadOnly)
                                             ? null
                                             : () {
                                                 setState(() {
@@ -5662,7 +5662,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                               ),
                             )
                             .toList(),
-                        onChanged: (_saving || AppSession.isSupportMode)
+                        onChanged: (_saving || AppSession.supportReadOnly)
                             ? null
                             : (v) => setState(() {
                                 _animal = v;
@@ -5686,7 +5686,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                     OutlinedButton.icon(
                       onPressed:
                           (_saving ||
-                              AppSession.isSupportMode ||
+                              AppSession.supportReadOnly ||
                               _exhibitorId == null)
                           ? null
                           : _openSharedAnimalEditorForAdd,
@@ -5728,7 +5728,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                           ),
                         ),
                       ],
-                      onChanged: (_saving || AppSession.isSupportMode)
+                      onChanged: (_saving || AppSession.supportReadOnly)
                           ? null
                           : (v) async {
                               final newSpecies = v ?? 'rabbit';
@@ -5751,7 +5751,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                     const SizedBox(height: 10),
                     TextField(
                       controller: _animalName,
-                      enabled: !_saving && !AppSession.isSupportMode,
+                      enabled: !_saving && !AppSession.supportReadOnly,
                       style: _entrySheetDropdownTextStyle,
                       decoration: const InputDecoration(
                         labelText: 'Animal Name (optional)',
@@ -5763,7 +5763,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                     const SizedBox(height: 10),
                     TextField(
                       controller: _tattoo,
-                      enabled: !_saving && !AppSession.isSupportMode,
+                      enabled: !_saving && !AppSession.supportReadOnly,
                       textCapitalization: TextCapitalization.characters,
                       inputFormatters: [UpperCaseTextFormatter()],
                       style: _entrySheetDropdownTextStyle,
@@ -5793,7 +5793,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                           ) => TextField(
                             controller: textEditingController,
                             focusNode: focusNode,
-                            enabled: !_saving && !AppSession.isSupportMode,
+                            enabled: !_saving && !AppSession.supportReadOnly,
                             style: _entrySheetDropdownTextStyle,
                             textInputAction: TextInputAction.next,
                             decoration: const InputDecoration(
@@ -5863,7 +5863,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                             focusNode: focusNode,
                             enabled:
                                 !_saving &&
-                                !AppSession.isSupportMode &&
+                                !AppSession.supportReadOnly &&
                                 _breedId != null,
                             style: _entrySheetDropdownTextStyle,
                             textInputAction: TextInputAction.next,
@@ -5910,7 +5910,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                           ) => TextField(
                             controller: textEditingController,
                             focusNode: focusNode,
-                            enabled: !_saving && !AppSession.isSupportMode,
+                            enabled: !_saving && !AppSession.supportReadOnly,
                             style: _entrySheetDropdownTextStyle,
                             textInputAction: TextInputAction.next,
                             decoration: const InputDecoration(
@@ -5965,7 +5965,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                         ) => TextField(
                           controller: textEditingController,
                           focusNode: focusNode,
-                          enabled: !_saving && !AppSession.isSupportMode,
+                          enabled: !_saving && !AppSession.supportReadOnly,
                           style: _entrySheetDropdownTextStyle,
                           textInputAction: TextInputAction.next,
                           decoration: InputDecoration(
@@ -6015,7 +6015,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                       'Mark this animal as entered in Fur/Wool for this section',
                     ),
                     value: _isFur,
-                    onChanged: (_saving || AppSession.isSupportMode)
+                    onChanged: (_saving || AppSession.supportReadOnly)
                         ? null
                         : (v) => setState(() {
                             _isFur = v;
@@ -6027,7 +6027,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                     const SizedBox(height: 10),
                     TextField(
                       controller: _furNotes,
-                      enabled: !_saving && !AppSession.isSupportMode,
+                      enabled: !_saving && !AppSession.supportReadOnly,
                       minLines: 2,
                       maxLines: 4,
                       style: _entrySheetDropdownTextStyle,
@@ -6065,7 +6065,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                           ),
                         ),
                       ],
-                      onChanged: (_saving || AppSession.isSupportMode)
+                      onChanged: (_saving || AppSession.supportReadOnly)
                           ? null
                           : (value) {
                               setState(() {

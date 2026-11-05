@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/ringmaster_backend.dart';
 import '../../theme/app_theme.dart';
 import '../../services/assistant_guide_catalog.dart';
 import '../../services/assistant_guide_links.dart';
@@ -28,7 +28,7 @@ class _AssistantAnswersScreenState extends State<AssistantAnswersScreen> {
       if (reset) _rows.clear();
     });
     try {
-      final data = await Supabase.instance.client.rpc(
+      final data = await ringMasterClient.rpc(
         'chester_answer_admin',
         params: {'p_action': 'list', 'p_offset': _rows.length},
       );
@@ -154,7 +154,7 @@ class _AssistantAnswerEditorState extends State<AssistantAnswerEditor> {
   Future<void> _save(String action) async {
     setState(() => _busy = true);
     try {
-      final response = await Supabase.instance.client.rpc(
+      final response = await ringMasterClient.rpc(
         'chester_answer_admin',
         params: {
           'p_action': action,

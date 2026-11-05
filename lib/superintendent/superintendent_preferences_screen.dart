@@ -1,13 +1,13 @@
 // lib/superintendent/superintendent_preferences_screen.dart
 
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/ringmaster_backend.dart';
 
 import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
 import 'package:ringmaster_show/services/app_session.dart';
 import 'package:ringmaster_show/theme/app_theme.dart';
 
-final supabase = Supabase.instance.client;
+SupabaseClient get supabase => ringMasterClient;
 
 class SuperintendentPreferencesScreen extends StatefulWidget {
   const SuperintendentPreferencesScreen({super.key});
@@ -82,7 +82,7 @@ class _SuperintendentPreferencesScreenState
 
     final preferences = List<Map<String, dynamic>>.from(preferenceRows as List);
     if (preferences.isEmpty) {
-      if (!AppSession.isSupportMode) {
+      if (!AppSession.supportReadOnly) {
         await supabase.from('show_superintendent_user_preferences').insert({
           'user_id': userId,
         });
@@ -125,7 +125,7 @@ class _SuperintendentPreferencesScreenState
 
   Future<void> _savePreferences() async {
     final userId = _userId;
-    if (AppSession.isSupportMode) {
+    if (AppSession.supportReadOnly) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -194,7 +194,7 @@ class _SuperintendentPreferencesScreenState
 
   Future<void> _loadJudgeRatings() async {
     final userId = _userId;
-    if (userId == null || AppSession.isSupportMode) {
+    if (userId == null || AppSession.supportReadOnly) {
       _judgeRatings = const <Map<String, dynamic>>[];
       return;
     }
@@ -312,7 +312,7 @@ class _SuperintendentPreferencesScreenState
 
     if (judgeId == null || judgeId.isEmpty) return;
 
-    if (AppSession.isSupportMode) return;
+    if (AppSession.supportReadOnly) return;
 
     final ratingPayload = await supabase.rpc(
       'get_private_judge_rating',
@@ -355,7 +355,7 @@ class _SuperintendentPreferencesScreenState
   Future<void> _saveJudgeRating() async {
     final userId = _userId;
     final judgeId = _selectedJudgeId;
-    if (AppSession.isSupportMode) {
+    if (AppSession.supportReadOnly) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -414,7 +414,7 @@ class _SuperintendentPreferencesScreenState
   }
 
   Future<void> _openJudgeRatingsDialog() async {
-    if (AppSession.isSupportMode) {
+    if (AppSession.supportReadOnly) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
@@ -828,7 +828,7 @@ class _SuperintendentPreferencesScreenState
             );
           }
 
-          final readOnly = AppSession.isSupportMode;
+          final readOnly = AppSession.supportReadOnly;
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [

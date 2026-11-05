@@ -3,10 +3,10 @@
 import 'package:flutter/material.dart';
 import 'package:ringmaster_show/services/catalog/recognition_catalog_labels.dart';
 import 'package:ringmaster_show/theme/app_theme.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/ringmaster_backend.dart';
 import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
 
-final supabase = Supabase.instance.client;
+SupabaseClient get supabase => ringMasterClient;
 
 class BreedEditorScreen extends StatefulWidget {
   final String species;

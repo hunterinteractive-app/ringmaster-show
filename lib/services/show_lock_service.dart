@@ -1,8 +1,8 @@
 // lib/services/show_lock_service.dart
 
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/ringmaster_backend.dart';
 
-final supabase = Supabase.instance.client;
+SupabaseClient get supabase => ringMasterClient;
 
 class ShowLockService {
   static Future<bool> isShowLocked(String showId) async {

@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/ringmaster_backend.dart';
 
 class LinkedAnimalProvider {
   final String key;
@@ -32,7 +32,7 @@ class AnimalSyncController extends ChangeNotifier {
 
   Future<Map<String, dynamic>> _call(Map<String, dynamic> body) async {
     if (transport != null) return transport!({...body, 'owner_id': ownerId});
-    final result = await Supabase.instance.client.functions
+    final result = await ringMasterClient.functions
         .invoke('animal-sync', body: {...body, 'owner_id': ownerId})
         .timeout(const Duration(seconds: 90));
     if (result.status != 200 || result.data is! Map) {
@@ -101,7 +101,7 @@ class AnimalSyncService {
   static final _controllers = <String, AnimalSyncController>{};
   static String? _sessionUser;
   static AnimalSyncController forOwner(String ownerId) {
-    final user = Supabase.instance.client.auth.currentUser?.id;
+    final user = ringMasterClient.auth.currentUser?.id;
     if (user != _sessionUser) {
       // Do not carry another signed-in user's linked account state forward.
       _controllers.clear();

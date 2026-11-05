@@ -40,7 +40,7 @@ class _AdminShowReportsScreenState extends State<AdminShowReportsScreen> {
       ],
       body: Column(
         children: [
-          if (AppSession.isSupportMode)
+          if (AppSession.supportReadOnly)
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
               child: Container(

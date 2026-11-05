@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/ringmaster_backend.dart';
 
 class ShowCheckinActivityScreen extends StatefulWidget {
   const ShowCheckinActivityScreen({super.key, required this.showId});
@@ -12,7 +12,7 @@ class ShowCheckinActivityScreen extends StatefulWidget {
 }
 
 class _ShowCheckinActivityScreenState extends State<ShowCheckinActivityScreen> {
-  final _db = Supabase.instance.client;
+  final _db = ringMasterClient;
   List<Map<String, dynamic>> _events = const [];
   bool _loading = true;
   String? _error;

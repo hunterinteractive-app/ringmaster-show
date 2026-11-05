@@ -2,7 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:ringmaster_show/theme/app_theme.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/ringmaster_backend.dart';
 import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
 import 'package:ringmaster_show/services/app_session.dart';
 import 'package:ringmaster_show/services/show_role_contact_defaults.dart';
@@ -13,7 +13,7 @@ import 'print_packs/control_sheets_generator_sheet.dart';
 import 'print_packs/coop_cards_generator_sheet.dart';
 import 'print_packs/remark_cards_generator_sheet.dart';
 
-final supabase = Supabase.instance.client;
+SupabaseClient get supabase => ringMasterClient;
 
 class AdminPrintPacksScreen extends StatefulWidget {
   final String showId;
@@ -329,7 +329,7 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
   Future<void> _saveSecretaryInfo() async {
     if (_savingSecretaryInfo) return;
 
-    if (AppSession.isSupportMode) {
+    if (AppSession.supportReadOnly) {
       setState(() {
         _msg =
             'Secretary information cannot be changed while viewing in support mode.';
@@ -653,7 +653,7 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
   }
 
   Widget _buildSecretaryInfoCard() {
-    final readOnly = AppSession.isSupportMode;
+    final readOnly = AppSession.supportReadOnly;
     final complete = _secretaryInfoComplete;
 
     return Container(
@@ -834,7 +834,7 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
               padding: const EdgeInsets.all(16),
               children: [
                 _messageBanner(),
-                if (AppSession.isSupportMode)
+                if (AppSession.supportReadOnly)
                   Container(
                     width: double.infinity,
                     margin: const EdgeInsets.only(bottom: 16),

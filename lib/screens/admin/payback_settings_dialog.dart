@@ -1,7 +1,7 @@
 // lib/screens/admin/payback_settings_dialog.dart
 
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/ringmaster_backend.dart';
 
 import '../../theme/app_theme.dart';
 
@@ -15,7 +15,7 @@ class PaybackSettingsDialog extends StatefulWidget {
 }
 
 class _PaybackSettingsDialogState extends State<PaybackSettingsDialog> {
-  final _supabase = Supabase.instance.client;
+  final _supabase = ringMasterClient;
 
   bool _loading = true;
   bool _saving = false;

@@ -1,4 +1,4 @@
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/ringmaster_backend.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:uuid/uuid.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -7,10 +7,10 @@ import 'app_session.dart';
 
 class ShowAddonService {
   ShowAddonService({SupabaseClient? client})
-    : _client = client ?? Supabase.instance.client;
+    : _client = client ?? ringMasterClient;
   final SupabaseClient _client;
   void _writeAllowed() {
-    if (AppSession.isSupportMode) {
+    if (AppSession.supportReadOnly) {
       throw StateError('Exit support mode to make changes.');
     }
   }

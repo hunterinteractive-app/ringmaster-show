@@ -2,7 +2,7 @@ import '../services/show_assistant_service.dart';
 // lib/screens/exhibitor_past_reports_screen.dart
 
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/ringmaster_backend.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../services/app_session.dart';
@@ -10,7 +10,7 @@ import '../theme/app_theme.dart';
 import '../utils/date_time_utils.dart';
 import '../widgets/rm_widgets.dart';
 
-final supabase = Supabase.instance.client;
+SupabaseClient get supabase => ringMasterClient;
 
 class ExhibitorPastReportsScreen extends StatefulWidget {
   const ExhibitorPastReportsScreen({super.key});
@@ -29,7 +29,7 @@ class _ExhibitorPastReportsScreenState
 
   String? get _supportTargetUserId {
     final userId = AppSession.impersonatedUserId;
-    if (!AppSession.isSupportMode || userId == null || userId.isEmpty) {
+    if (!AppSession.supportReadOnly || userId == null || userId.isEmpty) {
       return null;
     }
     return userId;

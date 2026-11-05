@@ -161,8 +161,9 @@ class RingMasterPageShell extends StatelessWidget {
             if (isSupportMode)
               _SupportModeBanner(
                 label: impersonatedLabel,
-                onExit: () {
-                  AppSession.stopImpersonation();
+                onExit: () async {
+                  await AppSession.stopImpersonation();
+                  if (!context.mounted) return;
 
                   Navigator.of(context).pushAndRemoveUntil(
                     MaterialPageRoute(builder: (_) => const ShowListScreen()),
@@ -263,7 +264,7 @@ class _SupportModeBanner extends StatelessWidget {
             const SizedBox(width: 8),
             Expanded(
               child: Text(
-                'Viewing as $displayLabel — support mode',
+                'Support Mode — ${AppSession.supportReadOnly ? 'viewing' : 'acting for'} $displayLabel',
                 style: const TextStyle(
                   color: AppColors.warning,
                   fontWeight: FontWeight.w700,

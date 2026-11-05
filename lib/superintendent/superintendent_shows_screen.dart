@@ -3,7 +3,7 @@
 import 'package:flutter/material.dart';
 import 'linked_workspace_data.dart';
 import 'linked_superintendent_screen.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/ringmaster_backend.dart';
 
 import 'package:ringmaster_show/services/app_session.dart';
 import 'package:ringmaster_show/services/superintendent_access_service.dart';
@@ -12,7 +12,7 @@ import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
 import 'package:ringmaster_show/superintendent/superintendent_lineup_screen.dart';
 import 'package:ringmaster_show/superintendent/superintendent_preferences_screen.dart';
 
-final supabase = Supabase.instance.client;
+SupabaseClient get supabase => ringMasterClient;
 
 class SuperintendentShowsScreen extends StatefulWidget {
   const SuperintendentShowsScreen({super.key});
@@ -47,7 +47,7 @@ class _SuperintendentShowsScreenState extends State<SuperintendentShowsScreen> {
     // A super-admin role is global and does not require one assignment per
     // show. Support Mode intentionally keeps the selected user's assignment
     // scope so support staff do not gain broader access through impersonation.
-    if (access.isSuperAdmin && !AppSession.isSupportMode) {
+    if (access.isSuperAdmin && !AppSession.supportReadOnly) {
       final rows = await supabase
           .from('shows')
           .select('id, name, start_date, end_date, location_name');
@@ -191,7 +191,7 @@ class _SuperintendentShowsScreenState extends State<SuperintendentShowsScreen> {
           'Build and manage line-ups for your assigned shows, or secretary shows without a superintendent.',
       actions: [
         TextButton.icon(
-          onPressed: AppSession.isSupportMode ? null : _openPreferences,
+          onPressed: AppSession.supportReadOnly ? null : _openPreferences,
           icon: const Icon(Icons.tune),
           label: const Text('Preferences'),
           style: TextButton.styleFrom(
@@ -223,7 +223,7 @@ class _SuperintendentShowsScreenState extends State<SuperintendentShowsScreen> {
 
           final shows = snapshot.data ?? const <Map<String, dynamic>>[];
 
-          final supportBanner = AppSession.isSupportMode
+          final supportBanner = AppSession.supportReadOnly
               ? Padding(
                   padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
                   child: AppTheme.surfaceTextScope(

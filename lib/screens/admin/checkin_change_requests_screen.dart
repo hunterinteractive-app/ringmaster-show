@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:ringmaster_show/widgets/accessible_icon_button.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/ringmaster_backend.dart';
 
 class CheckinChangeRequestsScreen extends StatefulWidget {
   const CheckinChangeRequestsScreen({super.key, required this.showId});
@@ -10,7 +10,7 @@ class CheckinChangeRequestsScreen extends StatefulWidget {
 }
 
 class _State extends State<CheckinChangeRequestsScreen> {
-  final db = Supabase.instance.client;
+  final db = ringMasterClient;
   List<Map<String, dynamic>> rows = [];
   bool loading = true;
   String filter = 'pending';

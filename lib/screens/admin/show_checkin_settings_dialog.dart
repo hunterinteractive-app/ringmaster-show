@@ -2,7 +2,7 @@ import 'package:barcode_widget/barcode_widget.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:ringmaster_show/theme/app_theme.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/ringmaster_backend.dart';
 
 class ShowCheckinSettingsDialog {
   static Future<void> open(
@@ -35,7 +35,7 @@ class _ShowCheckinSettingsDialog extends StatefulWidget {
 
 class _ShowCheckinSettingsDialogState
     extends State<_ShowCheckinSettingsDialog> {
-  final _supabase = Supabase.instance.client;
+  final _supabase = ringMasterClient;
   static const _permissions = <String, String>{
     'ear_number': 'Ear Number',
     'breed': 'Breed',

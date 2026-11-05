@@ -6,7 +6,7 @@ import 'package:flutter/material.dart';
 import '../../services/support_impersonation_session.dart';
 export '../../services/support_impersonation_session.dart';
 import 'package:ringmaster_show/theme/app_theme.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/ringmaster_backend.dart';
 import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
 import 'package:ringmaster_show/screens/super_admin/help_reports_screen.dart';
 import 'package:ringmaster_show/screens/super_admin/club_payment_provider_migration_reviews_screen.dart';
@@ -16,7 +16,7 @@ import 'breed_catalog_screen.dart';
 import 'assistant_usage_screen.dart';
 import 'convention_sale_admin_screen.dart';
 
-final supabase = Supabase.instance.client;
+SupabaseClient get supabase => ringMasterClient;
 
 class SuperadminHomeScreen extends StatefulWidget {
   const SuperadminHomeScreen({super.key});
@@ -544,8 +544,22 @@ class _SupportImpersonationScreenState
     }
   }
 
+  bool _startingSupport = false;
+
   Future<void> _startImpersonation(SupportImpersonatedUser user) async {
-    SupportImpersonationSession.start(user);
+    if (_startingSupport) return;
+    setState(() => _startingSupport = true);
+    try {
+      await SupportImpersonationSession.begin(user);
+    } catch (e) {
+      if (mounted) setState(() => _error = 'Could not start Support Mode: $e');
+      return;
+    } finally {
+      if (mounted) setState(() => _startingSupport = false);
+    }
+    if (!SupportImpersonationSession.isActive) {
+      return; // Web is opening the new workspace.
+    }
 
     if (!mounted) return;
 

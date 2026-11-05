@@ -1,6 +1,6 @@
 # Manual linked animal refresh
 
-The Flutter control is shared by My Animals and Enter Show. There are no automatic herd pulls on screen load. The server verifies the signed-in user and household access; support impersonation cannot refresh. Status queries do not pull animals.
+The Flutter control is shared by My Animals and Enter Show. There are no automatic herd pulls on screen load. The server verifies the signed-in user and household access; read-only support previews cannot refresh; authorized delegated sessions use the selected account. Status queries do not pull animals.
 
 ## Rollout
 

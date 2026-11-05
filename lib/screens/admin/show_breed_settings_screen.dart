@@ -2,12 +2,12 @@
 
 import 'package:flutter/material.dart';
 import 'package:ringmaster_show/theme/app_theme.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/ringmaster_backend.dart';
 import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
 import 'package:ringmaster_show/services/show_lock_service.dart';
 import 'package:ringmaster_show/services/app_session.dart';
 
-final supabase = Supabase.instance.client;
+SupabaseClient get supabase => ringMasterClient;
 
 /// Show Admin / Super Admin screen:
 /// Manage per-show allowed breeds + varieties (overrides).
@@ -1684,7 +1684,7 @@ class _ShowBreedSettingsScreenState extends State<ShowBreedSettingsScreen> {
         padding: const EdgeInsets.all(12),
         child: Column(
           children: [
-            if (AppSession.isSupportMode)
+            if (AppSession.supportReadOnly)
               Container(
                 width: double.infinity,
                 margin: const EdgeInsets.only(bottom: 12),

@@ -6,7 +6,7 @@ import 'package:ringmaster_show/reporting_core/network/transient_retry.dart';
 
 import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/ringmaster_backend.dart';
 import 'package:ringmaster_show/theme/app_theme.dart';
 import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
 import 'package:ringmaster_show/widgets/exhibitor_builder_dialog.dart';
@@ -20,7 +20,7 @@ import 'cart_screen.dart';
 import 'show_addons_screen.dart';
 import '../services/show_addon_service.dart';
 
-final supabase = Supabase.instance.client;
+SupabaseClient get supabase => ringMasterClient;
 
 class EnterShowScreen extends StatefulWidget {
   final String showId;
@@ -377,7 +377,7 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
       return;
     }
 
-    final cartId = AppSession.isSupportMode
+    final cartId = AppSession.supportReadOnly
         ? await _getActiveCartIdIfExists(showId: widget.showId, userId: userId)
         : await _getOrCreateActiveCartId(showId: widget.showId, userId: userId);
 
@@ -422,7 +422,7 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
   }
 
   Widget _cartDestination(String cartId) =>
-      _hasShowAddons && !AppSession.isSupportMode
+      _hasShowAddons && !AppSession.supportReadOnly
       ? ShowAddonsScreen(
           cartId: cartId,
           showId: widget.showId,
@@ -2577,7 +2577,7 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
           useScrollView: false,
           actions: [
             IconButton(
-              tooltip: AppSession.isSupportMode
+              tooltip: AppSession.supportReadOnly
                   ? 'Add animal while viewing as this user'
                   : 'Add Animal',
               icon: const Icon(Icons.add),
@@ -2644,7 +2644,7 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
                               padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
                               child: OutlinedButton.icon(
                                 onPressed:
-                                    _submitting || AppSession.isSupportMode
+                                    _submitting || AppSession.supportReadOnly
                                     ? null
                                     : _viewCart,
                                 icon: const Icon(Icons.emoji_events_outlined),

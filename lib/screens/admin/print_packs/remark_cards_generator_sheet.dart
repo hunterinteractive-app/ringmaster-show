@@ -5,13 +5,13 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:ringmaster_show/theme/app_theme.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/ringmaster_backend.dart';
 
 import 'print_pack_pdf_helpers.dart';
 import 'remark_cards_pdf.dart';
 import '../closeout/data/report_data_reader.dart';
 
-final supabase = Supabase.instance.client;
+SupabaseClient get supabase => ringMasterClient;
 
 class RemarkCardsGeneratorSheet extends StatefulWidget {
   final String showId;

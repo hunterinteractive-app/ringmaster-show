@@ -1,12 +1,12 @@
 // lib/screens/admin/judging/services/judging_context_resolver.dart
 
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/ringmaster_backend.dart';
 
 import '../models/judging_entry_context.dart';
 
 class JudgingContextResolver {
   JudgingContextResolver({SupabaseClient? supabase})
-      : supabase = supabase ?? Supabase.instance.client;
+      : supabase = supabase ?? ringMasterClient;
 
   final SupabaseClient supabase;
 

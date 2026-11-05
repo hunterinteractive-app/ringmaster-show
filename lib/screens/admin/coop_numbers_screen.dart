@@ -2,7 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:ringmaster_show/utils/species_sex.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/ringmaster_backend.dart';
 
 import 'package:ringmaster_show/theme/app_theme.dart';
 
@@ -21,7 +21,7 @@ class AdminCoopNumbersScreen extends StatefulWidget {
 }
 
 class _AdminCoopNumbersScreenState extends State<AdminCoopNumbersScreen> {
-  final SupabaseClient _supabase = Supabase.instance.client;
+  final SupabaseClient _supabase = ringMasterClient;
   final TextEditingController _searchController = TextEditingController();
 
   bool _loading = true;

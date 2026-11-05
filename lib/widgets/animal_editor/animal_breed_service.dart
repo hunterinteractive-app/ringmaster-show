@@ -1,9 +1,9 @@
 // lib/widgets/animal_editor/animal_breed_service.dart
 
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/ringmaster_backend.dart';
 import 'package:ringmaster_show/services/catalog/recognition_catalog_labels.dart';
 
-final supabase = Supabase.instance.client;
+SupabaseClient get supabase => ringMasterClient;
 
 class AnimalBreedService {
   static bool isLopBreedName(String breedName) {

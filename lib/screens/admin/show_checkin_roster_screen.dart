@@ -1,6 +1,6 @@
 import 'closeout/data/report_data_reader.dart';
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/ringmaster_backend.dart';
 
 import '../../theme/app_theme.dart';
 
@@ -20,7 +20,7 @@ class ShowCheckinRosterScreen extends StatefulWidget {
 }
 
 class _ShowCheckinRosterScreenState extends State<ShowCheckinRosterScreen> {
-  final _db = Supabase.instance.client;
+  final _db = ringMasterClient;
   final _search = TextEditingController();
   List<Map<String, dynamic>> _rows = const [];
   late String _status;

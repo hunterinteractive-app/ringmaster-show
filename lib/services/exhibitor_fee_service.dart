@@ -1,4 +1,4 @@
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/ringmaster_backend.dart';
 
 class ExhibitorFee {
   const ExhibitorFee({
@@ -12,7 +12,7 @@ class ExhibitorFee {
   final int amountCents;
 
   static Future<List<ExhibitorFee>> forCart(String cartId) async {
-    final result = await Supabase.instance.client.rpc(
+    final result = await ringMasterClient.rpc(
       'get_cart_exhibitor_fees',
       params: {'p_cart_id': cartId},
     );

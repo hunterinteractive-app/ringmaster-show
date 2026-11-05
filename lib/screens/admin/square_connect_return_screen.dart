@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/ringmaster_backend.dart';
 
 import '../../services/show_permissions_service.dart';
 import '../../theme/app_theme.dart';
@@ -39,7 +39,7 @@ class _SquareConnectReturnScreenState extends State<SquareConnectReturnScreen> {
       if (!permissions.canManageShowSettings && !permissions.isSupportMode) {
         throw Exception('You do not have permission to manage this show.');
       }
-      final show = await Supabase.instance.client
+      final show = await ringMasterClient
           .from('shows')
           .select('name')
           .eq('id', showId)

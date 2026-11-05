@@ -1,6 +1,6 @@
 // lib/services/show_permissions_service.dart
 
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ringmaster_show/services/ringmaster_backend.dart';
 import 'package:ringmaster_show/services/app_session.dart';
 
 class ShowPermissions {
@@ -42,12 +42,12 @@ class ShowPermissions {
 class ShowPermissionsService {
   ShowPermissionsService._();
 
-  static final _client = Supabase.instance.client;
+  static SupabaseClient get _client => ringMasterClient;
 
   static Future<ShowPermissions> load(String showId) async {
     final user = _client.auth.currentUser;
     final effectiveUserId = AppSession.effectiveUserId ?? user?.id;
-    final isSupportMode = AppSession.isSupportMode;
+    final isSupportMode = AppSession.supportReadOnly;
 
     if (user == null || effectiveUserId == null || effectiveUserId.isEmpty) {
       return ShowPermissions.none;
