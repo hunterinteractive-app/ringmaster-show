@@ -156,6 +156,41 @@ void main() {
   );
 
   test(
+    'function proxy preserves body and query without nested gateway prefix',
+    () async {
+      final transport = SupportTransport(
+        project: Uri.parse(SupabaseConfig.url),
+        sessionId: 'fixture',
+        expiresAt: DateTime.now().millisecondsSinceEpoch ~/ 1000 + 100,
+        actorBearer: () async => 'actor',
+        inner: MockClient((request) async {
+          expect(
+            request.url.path,
+            '/functions/v1/support-session/proxy/invoke/payment-quote-preview',
+          );
+          expect(request.url.queryParameters['region'], 'us-east-1');
+          expect(jsonDecode(request.body)['cart_id'], 'cart');
+          expect(request.headers['authorization'], 'Bearer actor');
+          expect(request.headers['x-rm-session'], 'fixture');
+          return http.Response('{"amount_due_cents":1084}', 200);
+        }),
+      );
+      final response = await transport.post(
+        Uri.parse(
+          '${SupabaseConfig.url}/functions/v1/payment-quote-preview?region=us-east-1',
+        ),
+        headers: {
+          'Authorization': 'Bearer display-only',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({'cart_id': 'cart'}),
+      );
+      expect(jsonDecode(response.body)['amount_due_cents'], 1084);
+      transport.close();
+    },
+  );
+
+  test(
     'unsupported destinations and expired or stopped workspaces fail closed',
     () async {
       int sends = 0;

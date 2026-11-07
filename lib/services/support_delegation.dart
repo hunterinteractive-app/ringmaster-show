@@ -198,8 +198,12 @@ class SupportTransport extends http.BaseClient {
     if (_closed || bearer == null) {
       throw http.ClientException('Administrator sign-in required.');
     }
+    // Avoid nesting /functions/v1/ inside the gateway's function route.
+    final proxyPath = url.path.startsWith('/functions/v1/')
+        ? url.path.replaceFirst('/functions/v1/', '/invoke/')
+        : url.path;
     final dest = url.replace(
-      path: '/functions/v1/support-session/proxy${url.path}',
+      path: '/functions/v1/support-session/proxy$proxyPath',
     );
     final out = http.Request(request.method, dest);
     // Finalizing MultipartRequest sets its boundary in the Content-Type header.

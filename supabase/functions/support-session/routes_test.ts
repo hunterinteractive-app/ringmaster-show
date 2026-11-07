@@ -1,4 +1,4 @@
-import { route } from "./routes.ts";
+import { proxyTargetPath, route } from "./routes.ts";
 Deno.test("scope support requests to intended application resources", () => {
   for (
     const [path, valid] of [
@@ -15,4 +15,20 @@ Deno.test("scope support requests to intended application resources", () => {
       ["/functions/v1/stripe-webhook", false],
     ] as const
   ) if (!!route(path) !== valid) throw new Error(path);
+});
+
+Deno.test("gateway-safe aliases retain the same function permissions", () => {
+  for (
+    const [path, expected] of [
+      ["/invoke/payment-quote-preview", "function/payment-quote-preview"],
+      ["/invoke/animal-sync", "function/animal-sync"],
+      ["/invoke/support-session", null],
+      ["/invoke/stripe-webhook", null],
+      ["/invoke/../auth/v1/user", null],
+      ["/invoke/%2e%2e/auth/v1/user", null],
+      ["/functions/v1/payment-quote-preview", "function/payment-quote-preview"],
+    ] as const
+  ) {
+    if (route(proxyTargetPath(path)) !== expected) throw new Error(path);
+  }
 });

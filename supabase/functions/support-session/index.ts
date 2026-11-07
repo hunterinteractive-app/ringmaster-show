@@ -1,6 +1,11 @@
 import { createClient } from "npm:@supabase/supabase-js@2.95.0";
 import { authenticatedUser, serviceClient } from "../_shared/supabase.ts";
-import { forwardHeaders, responseHeaders, route } from "./routes.ts";
+import {
+  forwardHeaders,
+  proxyTargetPath,
+  responseHeaders,
+  route,
+} from "./routes.ts";
 
 const project = Deno.env.get("SUPABASE_URL")!;
 const anon = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -131,7 +136,7 @@ Deno.serve(async (req) => {
     const prefix = "/support-session/proxy/";
     const idx = url.pathname.indexOf(prefix);
     if (idx >= 0) {
-      const path = url.pathname.slice(idx + prefix.length - 1);
+      const path = proxyTargetPath(url.pathname.slice(idx + prefix.length - 1));
       const resource = route(path);
       if (!resource) {
         return json({ error: "Unsupported support request." }, 403);

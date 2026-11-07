@@ -6,6 +6,8 @@ import {
 } from "../_shared/payment.ts";
 import { authenticatedUser, serviceClient } from "../_shared/supabase.ts";
 
+import { currentCartBalances } from "./balances.ts";
+
 type RequestBody = { cart_id?: string; provider?: string; timing?: string };
 
 Deno.serve(async (request: Request) => {
@@ -78,7 +80,12 @@ Deno.serve(async (request: Request) => {
       { p_cart_id: cartId },
     );
     if (balanceError) throw new Error(balanceError.message);
-    const rows = Array.isArray(balances) ? balances : [];
+    // Match create_payment_quote_attempt: only exhibitors still in the cart.
+    // Keep old balance rows intact for payment history and audit.
+    const { data: items, error: itemsError } = await backend
+      .from("entry_cart_items").select("exhibitor_id").eq("cart_id", cartId);
+    if (itemsError) throw new Error("Unable to load current cart items.");
+    const rows = currentCartBalances(balances, items ?? []);
     const currencies = new Set(
       rows.map((row) => String(row.currency ?? "").toLowerCase()),
     );

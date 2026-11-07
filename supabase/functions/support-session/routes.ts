@@ -85,3 +85,11 @@ export const responseHeaders = [
   "etag",
   "preference-applied",
 ];
+
+// An alias avoids a second /functions/v1/ segment being interpreted by the
+// Edge gateway. The normal function allowlist still authorizes the target.
+export function proxyTargetPath(path: string): string {
+  return path.startsWith("/invoke/")
+    ? "/functions/v1/" + path.slice("/invoke/".length)
+    : path;
+}

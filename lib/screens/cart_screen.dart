@@ -73,6 +73,7 @@ class _CartScreenState extends State<CartScreen> {
   String? _squareClientAttemptKey;
   PaymentQuotePreview? _quotePreview;
   bool _quotePreviewLoading = false;
+  int _quotePreviewRequest = 0;
   String? _quotePreviewError;
   static const String _defaultOnlinePaymentFeeLabel = 'Online Payment Fee';
   static const String _defaultOnlinePaymentFeeDescription =
@@ -396,6 +397,7 @@ class _CartScreenState extends State<CartScreen> {
   }
 
   Future<void> _refreshQuotePreview() async {
+    final request = ++_quotePreviewRequest;
     final provider = _selectedOnlineProvider;
     if (AppSession.supportReadOnly ||
         (_items.isEmpty &&
@@ -424,18 +426,22 @@ class _CartScreenState extends State<CartScreen> {
         provider: provider,
       );
       if (!mounted ||
+          request != _quotePreviewRequest ||
           provider != _selectedOnlineProvider ||
           _selectedPaymentTiming != 'online') {
         return;
       }
       setState(() => _quotePreview = preview);
-    } catch (error) {
-      if (!mounted) return;
+    } catch (_) {
+      if (!mounted || request != _quotePreviewRequest) return;
       setState(() {
-        _quotePreviewError = error.toString().replaceFirst('Exception: ', '');
+        _quotePreviewError =
+            'Unable to calculate the online total. Please retry.';
       });
     } finally {
-      if (mounted && provider == _selectedOnlineProvider) {
+      if (mounted &&
+          request == _quotePreviewRequest &&
+          provider == _selectedOnlineProvider) {
         setState(() => _quotePreviewLoading = false);
       }
     }
@@ -443,6 +449,9 @@ class _CartScreenState extends State<CartScreen> {
 
   bool get _canPayOnline {
     return !_loading &&
+        !_quotePreviewLoading &&
+        _quotePreview != null &&
+        _quotePreviewError == null &&
         !_payingOnline &&
         !_confirming &&
         !AppSession.supportReadOnly &&
@@ -1505,11 +1514,19 @@ class _CartScreenState extends State<CartScreen> {
                                         ),
                                       ),
                                     ),
+                                    TextButton(
+                                      onPressed: _quotePreviewLoading
+                                          ? null
+                                          : _refreshQuotePreview,
+                                      child: const Text('Retry payment total'),
+                                    ),
                                   ],
                                   const SizedBox(height: 8),
                                   Text(
                                     _selectedPaymentTiming == 'online'
-                                        ? 'Total due online: ${_money(totalDue, currency: currency)}'
+                                        ? (_quotePreview == null && !freeAddons
+                                              ? 'Total due online: awaiting calculation'
+                                              : 'Total due online: ${_money(totalDue, currency: currency)}')
                                         : 'Total due at show: ${_money(totalDue, currency: currency)}',
                                     style: Theme.of(context)
                                         .textTheme
@@ -1715,6 +1732,8 @@ class _CartScreenState extends State<CartScreen> {
                             label: Text(
                               _payingOnline
                                   ? 'Processing…'
+                                  : _quotePreview == null
+                                  ? 'Awaiting online total'
                                   : _selectedOnlineProvider == 'square'
                                   ? 'Continue to Secure Square Checkout'
                                   : 'Pay ${_money(totalDue, currency: currency)} Online',
