@@ -1,6 +1,7 @@
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../config/supabase_config.dart';
+import 'support_idle_controller.dart';
 
 /// The real login stays in the SDK's usual storage. The support client exists
 /// only in memory, and can reach application data only through the broker.
@@ -8,6 +9,7 @@ class RingMasterData {
   static SupabaseClient? _delegated;
   static SupportTransport? _transport;
   static String? _sessionId;
+  static SupportIdleController? idle;
   static SupabaseClient get client => _delegated ?? Supabase.instance.client;
   static bool get delegated => _delegated != null;
 
@@ -76,6 +78,19 @@ class RingMasterData {
     _transport = transport;
     _delegated = target;
     _sessionId = id;
+    idle?.dispose();
+    idle = SupportIdleController(
+      expiresAt: DateTime.fromMillisecondsSinceEpoch(expiry * 1000),
+      renew: () async {
+        final result = await control('activity', session: id);
+        if (_transport != transport || result['id'] != id) {
+          throw StateError('Support session changed.');
+        }
+        final seconds = (result['expires_at'] as num).floor();
+        transport.expiresAt = seconds;
+        return DateTime.fromMillisecondsSinceEpoch(seconds * 1000);
+      },
+    );
   }
 
   static Future<http.Response> refreshBreederConnection(String body) async {
@@ -93,11 +108,14 @@ class RingMasterData {
   static Future<void> end() async {
     final id = _sessionId;
     if (id == null) return;
+    idle?.stop();
     _transport?.close();
     await control('end', session: id);
   }
 
   static Future<void> detach() async {
+    idle?.dispose();
+    idle = null;
     _transport?.close();
     final old = _delegated;
     _delegated = null;
@@ -158,7 +176,7 @@ class SupportTransport extends http.BaseClient {
   }) : _inner = inner ?? http.Client();
   final Uri project;
   final String sessionId;
-  final int expiresAt;
+  int expiresAt;
   final Future<String?> Function() actorBearer;
   final http.Client _inner;
   bool _closed = false;

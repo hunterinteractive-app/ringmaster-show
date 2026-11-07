@@ -5,6 +5,7 @@ import 'screens/household_access_screen.dart';
 import 'screens/admin/edit_show_settings_screen.dart';
 import 'services/household_session.dart';
 import 'services/support_delegation.dart';
+import 'widgets/support_idle_guard.dart';
 import 'services/support_impersonation_session.dart';
 import 'services/support_tab.dart';
 import 'services/show_assistant_service.dart';
@@ -183,42 +184,46 @@ class MyApp extends StatelessWidget {
         theme: AppTheme.lightTheme,
         navigatorKey: ShowAssistantController.instance.navigatorKey,
         navigatorObservers: [ShowAssistantController.instance.navigation],
-        builder: (context, child) => Column(
-          children: [
-            if (RingMasterData.delegated)
-              Material(
-                color: AppColors.secondaryButton,
-                child: SafeArea(
-                  bottom: false,
-                  child: Row(
-                    children: [
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          'Support Mode • ${SupportImpersonationSession.current.value?.email}',
-                          style: const TextStyle(color: Colors.white),
+        builder: (context, child) => SupportIdleGuard(
+          controller: RingMasterData.idle,
+          onExit: SupportImpersonationSession.finish,
+          child: Column(
+            children: [
+              if (RingMasterData.delegated)
+                Material(
+                  color: AppColors.secondaryButton,
+                  child: SafeArea(
+                    bottom: false,
+                    child: Row(
+                      children: [
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            'Support Mode • ${SupportImpersonationSession.current.value?.email}',
+                            style: const TextStyle(color: Colors.white),
+                          ),
                         ),
-                      ),
-                      TextButton(
-                        onPressed: () async {
-                          await SupportImpersonationSession.finish();
-                        },
-                        child: const Text(
-                          'Exit',
-                          style: TextStyle(color: Colors.white),
+                        TextButton(
+                          onPressed: () async {
+                            await SupportImpersonationSession.finish();
+                          },
+                          child: const Text(
+                            'Exit',
+                            style: TextStyle(color: Colors.white),
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
+              Expanded(
+                child: ShowAssistantOverlay(
+                  child: child ?? const SizedBox.shrink(),
+                ),
               ),
-            Expanded(
-              child: ShowAssistantOverlay(
-                child: child ?? const SizedBox.shrink(),
-              ),
-            ),
-            const _BuildGenerationFooter(),
-          ],
+              const _BuildGenerationFooter(),
+            ],
+          ),
         ),
         home: const Root(),
         onGenerateRoute: (settings) {

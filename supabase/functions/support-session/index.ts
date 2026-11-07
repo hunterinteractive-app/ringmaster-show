@@ -7,6 +7,12 @@ import {
   route,
 } from "./routes.ts";
 
+import {
+  checkedRefresh,
+  needsRefresh,
+  parseCredentials,
+} from "./credentials.ts";
+
 const project = Deno.env.get("SUPABASE_URL")!;
 const anon = Deno.env.get("SUPABASE_ANON_KEY")!;
 const enc = new TextEncoder();
@@ -76,11 +82,14 @@ function workspace(
   expiresAt: string,
   token: string,
   user: DisplayAccount,
+  renewable = false,
 ) {
   const meta = user.user_metadata ?? {};
   return json({
     id,
-    expires_at: Math.min(Date.parse(expiresAt) / 1000, decodeJwt(token).exp),
+    expires_at: renewable
+      ? Date.parse(expiresAt) / 1000
+      : Math.min(Date.parse(expiresAt) / 1000, decodeJwt(token).exp),
     user: {
       id: user.id,
       email: user.email,
@@ -132,6 +141,31 @@ Deno.serve(async (req) => {
       }
       return data;
     };
+    const accessFor = async (
+      session: { id: string; target: string; sealed: string },
+    ) => {
+      const credentials = parseCredentials(
+        await open(session.id, session.sealed),
+      );
+      if (
+        !needsRefresh(credentials.access_token) || !credentials.refresh_token
+      ) return credentials;
+      const verifier = createClient(project, anon, {
+        auth: { persistSession: false, autoRefreshToken: false },
+      });
+      const { data, error } = await verifier.auth.refreshSession({
+        refresh_token: credentials.refresh_token,
+      });
+      if (error) throw new Error("Support session ended. Reopen Support Mode.");
+      const renewed = checkedRefresh(session.target, data);
+      const saved = await manage("refresh", {
+        p_session: session.id,
+        p_expected_sealed: session.sealed,
+        p_sealed: await seal(session.id, JSON.stringify(renewed)),
+        p_target_session: decodeJwt(renewed.access_token).session_id,
+      });
+      return parseCredentials(await open(saved.id, saved.sealed));
+    };
     const url = new URL(req.url);
     const prefix = "/support-session/proxy/";
     const idx = url.pathname.indexOf(prefix);
@@ -165,7 +199,7 @@ Deno.serve(async (req) => {
         p_method: req.method,
         p_resource: resource,
       });
-      const token = await open(session.id, session.sealed);
+      const token = (await accessFor(session)).access_token;
       const headers = new Headers({
         Authorization: "Bearer " + token,
         apikey: anon,
@@ -224,9 +258,31 @@ Deno.serve(async (req) => {
     if (body.action === "end") {
       const s = await manage("end", { p_session: body.session_id });
       if (s.sealed) {
-        await db.auth.admin.signOut(await open(s.id, s.sealed), "local");
+        await db.auth.admin.signOut(
+          parseCredentials(await open(s.id, s.sealed)).access_token,
+          "local",
+        );
       }
       return json({ ok: true });
+    }
+    if (body.action === "activity") {
+      const s = await manage("request", {
+        p_session: body.session_id,
+        p_method: "POST",
+        p_resource: "session/activity",
+      });
+      const credentials = await accessFor(s);
+      if (!credentials.refresh_token) {
+        return json({
+          error:
+            "Please exit and reopen Support Mode to enable session renewal.",
+        }, 409);
+      }
+      const renewed = await manage("continue", { p_session: s.id });
+      return json({
+        id: renewed.id,
+        expires_at: Date.parse(renewed.expires_at) / 1000,
+      });
     }
     if (body.action === "resume") {
       const s = await manage("request", {
@@ -234,12 +290,19 @@ Deno.serve(async (req) => {
         p_method: "GET",
         p_resource: "session/resume",
       });
-      const token = await open(s.id, s.sealed);
+      const credentials = await accessFor(s);
+      const token = credentials.access_token;
       const { data, error } = await db.auth.getUser(token);
       if (error || data.user?.id !== s.target) {
         return json({ error: "Support session expired." }, 403);
       }
-      return workspace(s.id, s.expires_at, token, data.user);
+      return workspace(
+        s.id,
+        s.expires_at,
+        token,
+        data.user,
+        !!credentials.refresh_token,
+      );
     }
     if (body.action !== "start") return json({ error: "Invalid action." }, 400);
     const s = await manage("start", { p_target: body.target_id });
@@ -274,10 +337,16 @@ Deno.serve(async (req) => {
       if (data.user?.id !== s.target) throw new Error();
       await manage("activate", {
         p_session: s.id,
-        p_sealed: await seal(s.id, access),
+        p_sealed: await seal(
+          s.id,
+          JSON.stringify({
+            access_token: access,
+            refresh_token: data.session.refresh_token,
+          }),
+        ),
         p_target_session: decodeJwt(access).session_id,
       });
-      return workspace(s.id, s.expires_at, access, account.user);
+      return workspace(s.id, s.expires_at, access, account.user, true);
     } catch {
       await manage("end", { p_session: s.id });
       if (access) await db.auth.admin.signOut(access, "local");
