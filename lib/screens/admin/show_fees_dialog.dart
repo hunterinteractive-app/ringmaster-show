@@ -12,6 +12,7 @@ import '../../services/role_service.dart';
 import '../../services/square_connect_service.dart';
 import '../../services/stripe_connect_service.dart';
 import '../../services/final_award_access_service.dart';
+import '../../widgets/discounts/show_discount_codes.dart';
 
 class ShowFeesDialog {
   static Future<void> open(
@@ -111,7 +112,8 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
   bool _isLocked = false;
   bool _isFinalized = false;
 
-  bool get _isReadOnly => _isLocked || _isFinalized || AppSession.supportReadOnly;
+  bool get _isReadOnly =>
+      _isLocked || _isFinalized || AppSession.supportReadOnly;
 
   bool get _onlinePaymentsSelected => _paymentTimingMode != 'pay_at_show_only';
 
@@ -1377,6 +1379,11 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
 
   Widget _buildDiscountSection() {
     return _section('Discounts', [
+      ShowDiscountCodes(
+        showId: widget.showId,
+        readOnly: _saving || _isReadOnly,
+      ),
+      const Divider(height: 32),
       if (_canManageCanadaSpecial) ...[
         DropdownButtonFormField<String>(
           initialValue: _discountEditor,

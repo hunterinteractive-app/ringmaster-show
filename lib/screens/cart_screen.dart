@@ -17,6 +17,8 @@ import '../widgets/stripe_payment_confirmation_dialog.dart';
 import '../services/show_payment_configuration_service.dart';
 import '../services/square_checkout_service.dart';
 import '../services/payment_quote_preview_service.dart';
+import '../services/entry_discount_service.dart';
+import '../widgets/discounts/cart_discount_codes.dart';
 import '../services/exhibitor_fee_service.dart';
 import '../services/show_addon_service.dart';
 import '../models/show_addon.dart';
@@ -44,6 +46,43 @@ class CartScreen extends StatefulWidget {
 
 class _CartScreenState extends State<CartScreen> {
   bool _loading = true;
+  bool _pricingReady = false;
+  List<Map<String, dynamic>> _pricedBalances = [];
+  List<Map<String, dynamic>> _acceptedCodes = [];
+  bool get _freeCart =>
+      _pricingReady &&
+      _hasCheckoutItems &&
+      _pricedBalances.isNotEmpty &&
+      _pricedBalances.every((b) => (b['balance_due_cents'] as num? ?? 0) == 0);
+
+  Future<void> _applyDiscountCode(String code, String exhibitorId) async {
+    await EntryDiscountService.cart(
+      cartId: widget.cartId,
+      code: code,
+      exhibitorId: exhibitorId,
+    );
+    await _load();
+  }
+
+  Map<String, dynamic> _serverFees(List<Map<String, dynamic>> items) {
+    if (!_pricingReady) return {};
+    final ids = items.map((i) => i['exhibitor_id']).toSet();
+    final rows = _pricedBalances
+        .where(
+          (b) => identical(items, _items) || ids.contains(b['exhibitor_id']),
+        )
+        .toList();
+    double amount(String key) =>
+        rows.fold<num>(0, (sum, b) => sum + (b[key] as num? ?? 0)) / 100.0;
+    return {
+      'entries_subtotal': amount('entries_subtotal_cents'),
+      'fur_subtotal': amount('fur_subtotal_cents'),
+      'show_fee': amount('show_fee_subtotal_cents'),
+      'discount_amount': amount('discount_cents'),
+      'total': amount('balance_due_cents'),
+    };
+  }
+
   bool _confirming = false;
   bool _payingOnline = false;
   bool _handledStripeReturn = false;
@@ -95,6 +134,7 @@ class _CartScreenState extends State<CartScreen> {
   Future<void> _load() async {
     setState(() {
       _loading = true;
+      _pricingReady = false;
       _msg = null;
       _checkoutUrl = null;
     });
@@ -105,7 +145,7 @@ class _CartScreenState extends State<CartScreen> {
           .select(
             'id,name,entry_close_at,entry_open_at,start_date,'
             'online_payment_fee_mode,online_payment_fee_label,'
-            'online_payment_fee_description,online_payment_provider',
+            'online_payment_fee_description',
           )
           .eq('id', widget.showId)
           .single();
@@ -190,6 +230,15 @@ class _CartScreenState extends State<CartScreen> {
       final exhibitorFees = await ExhibitorFee.forCart(widget.cartId);
       final addons = await ShowAddonService().cart(widget.cartId);
       final addonsAvailable = await ShowAddonService().available(widget.showId);
+      final pricing = (items as List).isEmpty || AppSession.supportReadOnly
+          ? <String, dynamic>{'balances': [], 'codes': []}
+          : await EntryDiscountService.cart(cartId: widget.cartId);
+      final pricedBalances = (pricing['balances'] as List)
+          .map((b) => Map<String, dynamic>.from(b))
+          .toList();
+      final acceptedCodes = (pricing['codes'] as List)
+          .map((b) => Map<String, dynamic>.from(b))
+          .toList();
       final breedScopeErrors = <String>[];
       for (final item in parsedItems) {
         final section = parsedSections[item['section_id']?.toString()];
@@ -229,6 +278,11 @@ class _CartScreenState extends State<CartScreen> {
 
       if (!mounted) return;
       setState(() {
+        _pricedBalances = pricedBalances;
+        _acceptedCodes = acceptedCodes;
+        _pricingReady =
+            !AppSession.supportReadOnly &&
+            ((items as List).isEmpty || pricedBalances.isNotEmpty);
         _show = show;
         _feeSettings = fee;
         _sectionById = parsedSections;
@@ -400,6 +454,7 @@ class _CartScreenState extends State<CartScreen> {
     final request = ++_quotePreviewRequest;
     final provider = _selectedOnlineProvider;
     if (AppSession.supportReadOnly ||
+        _freeCart ||
         (_items.isEmpty &&
             _exhibitorFees.isEmpty &&
             _addons.isNotEmpty &&
@@ -449,6 +504,7 @@ class _CartScreenState extends State<CartScreen> {
 
   bool get _canPayOnline {
     return !_loading &&
+        _pricingReady &&
         !_quotePreviewLoading &&
         _quotePreview != null &&
         _quotePreviewError == null &&
@@ -744,6 +800,7 @@ class _CartScreenState extends State<CartScreen> {
       'canada_special_applied': canadaSpecialApplied,
       'discount_amount': discountAmount,
       'total': total < 0 ? 0.0 : total,
+      ..._serverFees(items),
     };
   }
 
@@ -1046,7 +1103,7 @@ class _CartScreenState extends State<CartScreen> {
   }
 
   Future<void> _confirmDayOf() async {
-    if (AppSession.supportReadOnly) return;
+    if (AppSession.supportReadOnly || !_pricingReady) return;
     if (_breedScopeErrors.isNotEmpty) {
       setState(() => _msg = _breedScopeErrors.first);
       return;
@@ -1085,7 +1142,12 @@ class _CartScreenState extends State<CartScreen> {
           _exhibitorFees.isEmpty &&
           _addons.isNotEmpty &&
           _addonsTotalCents == 0;
-      final res = freeAddons
+      final res = _freeCart
+          ? await supabase.rpc(
+              'commit_free_entry_cart',
+              params: {'p_cart_id': widget.cartId},
+            )
+          : freeAddons
           ? await supabase.rpc(
               'commit_free_addon_cart',
               params: {'p_cart_id': widget.cartId},
@@ -1106,7 +1168,7 @@ class _CartScreenState extends State<CartScreen> {
           title: const Text('Registration Received'),
           content: Text(
             _addons.isNotEmpty
-                ? 'Your ${insertedCount > 0 ? '$insertedCount animal entries and ' : ''}contests and add-ons have been received. View them under My Entries → Contests & Add-Ons.${freeAddons ? '' : ' Your balance can be paid at the show.'}'
+                ? 'Your ${insertedCount > 0 ? '$insertedCount animal entries and ' : ''}contests and add-ons have been received. View them under My Entries → Contests & Add-Ons.${freeAddons || _freeCart ? '' : ' Your balance can be paid at the show.'}'
                 : _items.isEmpty
                 ? 'Your exhibitor fee is recorded and can be paid at the show.'
                 : insertedCount == 1
@@ -1430,6 +1492,26 @@ class _CartScreenState extends State<CartScreen> {
                               fontWeight: FontWeight.w600,
                             ),
                           ),
+                        if (_items.isNotEmpty) ...[
+                          const SizedBox(height: 14),
+                          CartDiscountCodes(
+                            exhibitors: {
+                              for (final id
+                                  in _items
+                                      .map((i) => i['exhibitor_id']?.toString())
+                                      .whereType<String>()
+                                      .toSet())
+                                id: _exhibitorLabelById[id] ?? 'Exhibitor',
+                            },
+                            codes: _acceptedCodes,
+                            disabled:
+                                _loading ||
+                                _payingOnline ||
+                                _confirming ||
+                                AppSession.supportReadOnly,
+                            apply: _applyDiscountCode,
+                          ),
+                        ],
                         const SizedBox(height: 14),
                         Text(
                           'Overall Fees',
@@ -1714,9 +1796,12 @@ class _CartScreenState extends State<CartScreen> {
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                   child: SizedBox(
                     width: double.infinity,
-                    child: freeAddons
+                    child: freeAddons || _freeCart
                         ? FilledButton(
-                            onPressed: _confirming || AppSession.supportReadOnly
+                            onPressed:
+                                _confirming ||
+                                    !_pricingReady ||
+                                    AppSession.supportReadOnly
                                 ? null
                                 : _confirmDayOf,
                             child: Text(
@@ -1742,6 +1827,7 @@ class _CartScreenState extends State<CartScreen> {
                         : FilledButton(
                             onPressed:
                                 (_confirming ||
+                                    !_pricingReady ||
                                     AppSession.supportReadOnly ||
                                     (_items.isNotEmpty && _deadlinePassed()) ||
                                     !_hasCheckoutItems)

@@ -93,6 +93,18 @@ void main() {
               };
             } else if (path.endsWith('/get_show_addons')) {
               data = {'items': []};
+            } else if (path.endsWith('/entry_cart_discounts')) {
+              data = {
+                'codes': [],
+                'balances': [
+                  {
+                    'exhibitor_id': 'exhibitor',
+                    'entries_subtotal_cents': 1000,
+                    'discount_cents': 0,
+                    'balance_due_cents': 1000,
+                  },
+                ],
+              };
             } else if (path.endsWith('/payment-quote-preview')) {
               previews++;
               status = previews == 1 ? 400 : 200;
