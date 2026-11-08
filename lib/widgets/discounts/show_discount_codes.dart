@@ -1,6 +1,7 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 import '../../services/entry_discount_service.dart';
+import '../../theme/app_theme.dart';
 
 /// Code changes save independently of the surrounding show-fee form.
 class ShowDiscountCodes extends StatefulWidget {
@@ -46,7 +47,10 @@ class _ShowDiscountCodesState extends State<ShowDiscountCodes> {
   Future<void> _edit([Map<String, dynamic>? rule]) async {
     final saved = await showDialog<bool>(
       context: context,
-      builder: (_) => _CodeEditor(showId: widget.showId, rule: rule),
+      builder: (dialogContext) => Theme(
+        data: AppTheme.surfaceDialogTheme(Theme.of(dialogContext)),
+        child: _CodeEditor(showId: widget.showId, rule: rule),
+      ),
     );
     if (saved == true && mounted) {
       setState(() => _busy = true);

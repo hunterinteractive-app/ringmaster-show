@@ -102,6 +102,34 @@ class AppTheme {
     );
   }
 
+  /// Form dialogs need a matching background and foreground scope. A dialog
+  /// launched from a light card must not inherit a purple dialog background
+  /// alongside dark helper text, labels, switches, and secondary actions.
+  static ThemeData surfaceDialogTheme(ThemeData base) {
+    final surface = surfaceTheme(base);
+    return surface.copyWith(
+      dialogTheme: surface.dialogTheme.copyWith(
+        backgroundColor: AppColors.surface,
+        surfaceTintColor: Colors.transparent,
+        titleTextStyle: surface.textTheme.titleLarge?.copyWith(
+          color: AppColors.text,
+          fontWeight: FontWeight.w700,
+        ),
+        contentTextStyle: surface.textTheme.bodyMedium?.copyWith(
+          color: AppColors.text,
+        ),
+      ),
+      inputDecorationTheme: surface.inputDecorationTheme.copyWith(
+        labelStyle: const TextStyle(color: AppColors.muted),
+        floatingLabelStyle: const TextStyle(color: AppColors.secondaryButton),
+        helperStyle: const TextStyle(color: AppColors.muted),
+        helperMaxLines: 3,
+        errorStyle: const TextStyle(color: AppColors.danger),
+        errorMaxLines: 3,
+      ),
+    );
+  }
+
   static ThemeData onGradientTheme(ThemeData base) {
     final brightText = AppColors.headerForeground;
     final mutedText = AppColors.headerForeground.withValues(alpha: .82);

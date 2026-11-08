@@ -60,6 +60,36 @@ void main() {
     );
   });
 
+  test(
+    'surface form dialogs keep contrast from light and gradient parents',
+    () {
+      for (final parent in [
+        AppTheme.lightTheme,
+        AppTheme.onGradientTheme(AppTheme.lightTheme),
+        AppTheme.surfaceTheme(AppTheme.lightTheme),
+      ]) {
+        final theme = AppTheme.surfaceDialogTheme(parent);
+        final background = theme.dialogTheme.backgroundColor!;
+        for (final foreground in [
+          theme.dialogTheme.titleTextStyle!.color!,
+          theme.dialogTheme.contentTextStyle!.color!,
+          theme.listTileTheme.textColor!,
+          theme.inputDecorationTheme.labelStyle!.color!,
+          theme.inputDecorationTheme.floatingLabelStyle!.color!,
+          theme.inputDecorationTheme.helperStyle!.color!,
+          theme.inputDecorationTheme.errorStyle!.color!,
+          theme.textButtonTheme.style!.foregroundColor!.resolve({})!,
+        ]) {
+          expectAaTextContrast(
+            'Dialog labels, helpers, errors and actions',
+            foreground,
+            background,
+          );
+        }
+      }
+    },
+  );
+
   test('keyboard popup-menu focus color is clearly visible', () {
     final theme = AppTheme.menuFocusTheme(ThemeData.light());
     expect(theme.focusColor, isNot(Colors.transparent));

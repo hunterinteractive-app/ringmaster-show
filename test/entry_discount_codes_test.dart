@@ -57,6 +57,22 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Add discount code'));
       await tester.pumpAndSettle();
+      final dialogTheme = Theme.of(tester.element(find.byType(AlertDialog)));
+      expect(dialogTheme.dialogTheme.backgroundColor, AppColors.surface);
+      expect(dialogTheme.dialogTheme.titleTextStyle?.color, AppColors.text);
+      expect(dialogTheme.listTileTheme.textColor, AppColors.text);
+      expect(
+        dialogTheme.inputDecorationTheme.helperStyle?.color,
+        AppColors.muted,
+      );
+      expect(
+        dialogTheme.inputDecorationTheme.floatingLabelStyle?.color,
+        AppColors.secondaryButton,
+      );
+      expect(
+        dialogTheme.textButtonTheme.style!.foregroundColor!.resolve({}),
+        AppColors.secondaryButton,
+      );
       await tester.tap(find.text('Generate Code'));
       await tester.pumpAndSettle();
       final code = tester
