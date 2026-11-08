@@ -2,6 +2,10 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path=public,extensions;
 select no_plan();
+-- Self-contained entitlement fixture, rolled back with the test.
+insert into auth.users(id) values ('3e8dddf9-3a17-4ebb-aeab-9b51d31e7871') on conflict(id) do nothing;
+insert into public.secretary_feature_access(feature_key,user_id)
+values ('best_of_best_opposite','3e8dddf9-3a17-4ebb-aeab-9b51d31e7871') on conflict do nothing;
 create temporary table wave_fixture(key text primary key,id uuid default gen_random_uuid());
 insert into wave_fixture(key) values ('show'),('other_show'),('other'),('exhibitor'),('later_exhibitor'),('section'),('youth'),('wave1'),('wave2'),('rabbit1'),('rabbit1_youth'),('rabbit2'),('cavy1'),('later_entry');
 grant select on wave_fixture to authenticated,anon,service_role;
@@ -75,7 +79,7 @@ select (select id from wave_fixture where key='cart'),(select id from wave_fixtu
 select lives_ok($$insert into public.entry_cart_items(cart_id,section_id,exhibitor_id,species,breed,sex,class_name,tattoo)
 select (select id from wave_fixture where key='cart'),(select id from wave_fixture where key='section'),(select id from wave_fixture where key='exhibitor'),'rabbit','Mini Rex','Buck','Senior','CART-UNASSIGNED'$$,
 'new breeds can be added to carts before they have been entered');
-select ok(not exists(select 1 from jsonb_array_elements(public.get_show_wave_schedule((select id from wave_fixture where key='show'))->'breeds') b where b->>'breed_name'='Mini Rex'),'cart-only and catalog-only breeds are excluded');
+select ok(exists(select 1 from jsonb_array_elements(public.get_show_wave_schedule((select id from wave_fixture where key='show'))->'breeds') b where b->>'breed_name'='Mini Rex' and not (b->>'has_entries')::boolean),'available catalog breeds can be assigned without treating carts as submitted entries');
 set local role authenticated;
 select lives_ok($$select public.save_show_wave_schedule((select id from wave_fixture where key='show'),true,waves,breeds) from wave_payload$$,'unentered saved carts do not block enabling the schedule');
 reset role;

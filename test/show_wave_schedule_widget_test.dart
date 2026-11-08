@@ -13,6 +13,7 @@ void main() {
   var canConfigure = true;
   var completeDates = true;
   var hasEntries = true;
+  var emptyCatalog = false;
   setUpAll(() async {
     SharedPreferences.setMockInitialValues({});
     await Supabase.initialize(
@@ -43,26 +44,28 @@ void main() {
                 },
               },
             ],
-            'breeds': [
-              {
-                'species': 'rabbit',
-                'breed_name': 'Himalayan',
-                'wave_id': null,
-                'has_entries': hasEntries,
-              },
-              {
-                'species': 'cavy',
-                'breed_name': 'American',
-                'wave_id': 'w1',
-                'has_entries': hasEntries,
-              },
-              {
-                'species': 'rabbit',
-                'breed_name': 'Lionhead',
-                'wave_id': 'w1',
-                'has_entries': false,
-              },
-            ],
+            'breeds': emptyCatalog
+                ? []
+                : [
+                    {
+                      'species': 'rabbit',
+                      'breed_name': 'Himalayan',
+                      'wave_id': null,
+                      'has_entries': hasEntries,
+                    },
+                    {
+                      'species': 'cavy',
+                      'breed_name': 'American',
+                      'wave_id': 'w1',
+                      'has_entries': hasEntries,
+                    },
+                    {
+                      'species': 'rabbit',
+                      'breed_name': 'Lionhead',
+                      'wave_id': 'w1',
+                      'has_entries': false,
+                    },
+                  ],
           };
         } else if (request.url.path.endsWith('save_show_wave_schedule')) {
           saved = Map<String, dynamic>.from(jsonDecode(request.body));
@@ -82,6 +85,7 @@ void main() {
     canConfigure = true;
     completeDates = true;
     hasEntries = true;
+    emptyCatalog = false;
   });
   Future<void> open(WidgetTester tester) async {
     tester.view.physicalSize = const Size(1200, 1100);
@@ -113,7 +117,7 @@ void main() {
     (tester) async {
       await open(tester);
       expect(find.text('Wave Schedule'), findsOneWidget);
-      expect(find.text('Lionhead'), findsNothing);
+      expect(find.text('Lionhead'), findsOneWidget);
       expect(
         tester.getTopLeft(find.text('American')).dy,
         lessThan(tester.getTopLeft(find.text('Himalayan')).dy),
@@ -142,19 +146,41 @@ void main() {
       expect(find.text('Wave Schedule'), findsNothing);
     },
   );
-  testWidgets('empty shows and searches explain why there are no breeds', (
+  testWidgets('breeds can be assigned and saved before entries arrive', (
     tester,
   ) async {
     hasEntries = false;
     await open(tester);
+    expect(find.text('Himalayan'), findsOneWidget);
+    expect(find.text('Lionhead'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('rabbit:Himalayan:null')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Wave 1').last);
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), '  himALayan  ');
+    await tester.pumpAndSettle();
+    expect(find.text('Himalayan'), findsOneWidget);
+    expect(find.text('American'), findsNothing);
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    expect(saved!['p_breeds'][0]['wave_id'], 'w1');
+    expect(saved!['p_breeds'][1]['wave_id'], 'w1');
+    expect(saved!['p_breeds'][2]['wave_id'], 'w1');
+  });
+  testWidgets('empty catalog and unmatched search have clear messages', (
+    tester,
+  ) async {
+    emptyCatalog = true;
+    await open(tester);
     expect(
-      find.text('No breeds have been entered in this show yet.'),
+      find.text(
+        'No breeds are available. Enable breeds in Show Breed Settings.',
+      ),
       findsOneWidget,
     );
-    expect(find.byType(DropdownButtonFormField<String>), findsNothing);
     await tester.enterText(find.byType(TextField), 'Rex');
     await tester.pumpAndSettle();
-    expect(find.text('No entered breeds match your search.'), findsOneWidget);
+    expect(find.text('No breeds match your search.'), findsOneWidget);
   });
   testWidgets('incomplete active schedule cannot save', (tester) async {
     completeDates = false;

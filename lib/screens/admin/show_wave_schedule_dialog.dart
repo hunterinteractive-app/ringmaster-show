@@ -173,11 +173,9 @@ class _ShowWaveScheduleDialogState extends State<ShowWaveScheduleDialog> {
     final breeds =
         schedule.breeds
             .where(
-              (b) =>
-                  b.hasEntries &&
-                  '${b.name} ${b.species}'.toLowerCase().contains(
-                    _search.toLowerCase(),
-                  ),
+              (b) => '${b.name} ${b.species}'.toLowerCase().contains(
+                _search.trim().toLowerCase(),
+              ),
             )
             .toList()
           ..sort(
@@ -188,8 +186,9 @@ class _ShowWaveScheduleDialogState extends State<ShowWaveScheduleDialog> {
         const Padding(
           padding: EdgeInsets.fromLTRB(12, 12, 12, 0),
           child: Text(
-            'Entered breeds from all show sections. A wave is required for '
-            'check-in and wave sheets.',
+            'Assign breeds before entries arrive. Available breeds, entered breeds, '
+            'and saved assignments are shown. A wave is required for check-in '
+            'and wave sheets.',
           ),
         ),
         Padding(
@@ -210,9 +209,9 @@ class _ShowWaveScheduleDialogState extends State<ShowWaveScheduleDialog> {
           child: breeds.isEmpty
               ? Center(
                   child: Text(
-                    _search.isEmpty
-                        ? 'No breeds have been entered in this show yet.'
-                        : 'No entered breeds match your search.',
+                    _search.trim().isEmpty
+                        ? 'No breeds are available. Enable breeds in Show Breed Settings.'
+                        : 'No breeds match your search.',
                     textAlign: TextAlign.center,
                   ),
                 )
