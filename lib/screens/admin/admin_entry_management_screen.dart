@@ -17,6 +17,7 @@ import 'package:ringmaster_show/utils/entry_class_options.dart';
 import 'package:ringmaster_show/services/entry_refund_service.dart';
 import 'entry_refund_dialog.dart';
 import 'entry_management_loader.dart';
+import 'no_email_exhibitor_option.dart';
 import 'closeout/data/report_data_reader.dart';
 import '../../services/manual_animal_lookup.dart';
 
@@ -5358,12 +5359,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                             ],
                           ),
                           const SizedBox(height: 10),
-                          CheckboxListTile(
-                            contentPadding: EdgeInsets.zero,
-                            title: const Text('No email address'),
-                            subtitle: const Text(
-                              'Reports will need to be printed and handed out or mailed. Keep each family member as a separate exhibitor.',
-                            ),
+                          NoEmailExhibitorOption(
                             value: _noEmail,
                             onChanged: _saving || AppSession.supportReadOnly
                                 ? null
