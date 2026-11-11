@@ -1,5 +1,6 @@
 // lib/screens/admin/admin_print_packs_screen.dart
 
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:ringmaster_show/theme/app_theme.dart';
 import 'package:ringmaster_show/services/ringmaster_backend.dart';
@@ -12,6 +13,10 @@ import 'print_packs/control_sheet_judging_order.dart';
 import 'print_packs/control_sheets_generator_sheet.dart';
 import 'print_packs/coop_cards_generator_sheet.dart';
 import 'print_packs/remark_cards_generator_sheet.dart';
+import 'print_packs/print_reports_menu.dart';
+import 'print_packs/print_reports_service.dart';
+import 'print_packs/print_pack_pdf_helpers.dart';
+import 'closeout/models/base/report_request.dart';
 
 SupabaseClient get supabase => ringMasterClient;
 
@@ -806,6 +811,14 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
     );
   }
 
+  ReportRequest get _printReportRequest => ReportRequest(
+    showId: widget.showId,
+    showName: widget.showName,
+    reportName: '',
+    finalizeRunId: 'operational',
+    sectionIds: _sections.map((s) => s['id'].toString()).toList(),
+  );
+
   @override
   Widget build(BuildContext context) {
     final canOpenCheckIn =
@@ -822,6 +835,24 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
       useScrollView: false,
       bodyPadding: EdgeInsets.zero,
       actions: [
+        if (!_loading)
+          PrintReportsMenu(
+            key: ValueKey(widget.showId),
+            load: () =>
+                PrintReportsService(supabase).available(_printReportRequest),
+            download: (report, mode, sort) async {
+              final file = await PrintReportsService(supabase).build(
+                report,
+                _printReportRequest,
+                labelMode: mode,
+                labelSort: sort,
+              );
+              await savePdfToUserChosenLocation(
+                bytes: Uint8List.fromList(file.bytes),
+                suggestedName: file.fileName,
+              );
+            },
+          ),
         IconButton(
           tooltip: 'Reload sections',
           onPressed: _loading ? null : _loadInitialData,

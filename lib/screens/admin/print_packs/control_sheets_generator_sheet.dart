@@ -14,6 +14,7 @@ import 'package:pdf/widgets.dart' as pw;
 import '../closeout/utils/breed_results_detail_order.dart';
 import 'print_pack_pdf_helpers.dart';
 import 'control_sheet_labels.dart';
+import 'control_sheet_footer.dart';
 import 'control_sheet_judging_order.dart';
 import '../closeout/data/report_data_reader.dart';
 
@@ -172,18 +173,20 @@ Future<String?> downloadBlankControlSheetsPdf({
               ],
             ),
             pw.Spacer(),
-            pw.Row(
-              children: [
-                pw.Text(
-                  'RingMaster One Show',
-                  style: const pw.TextStyle(fontSize: 8),
-                ),
-                pw.Spacer(),
-                pw.Text(
-                  'Blank day-of-show control sheet',
-                  style: const pw.TextStyle(fontSize: 8),
-                ),
-              ],
+            controlSheetFooter(
+              details: pw.Row(
+                children: [
+                  pw.Text(
+                    'RingMaster One Show',
+                    style: const pw.TextStyle(fontSize: 8),
+                  ),
+                  pw.Spacer(),
+                  pw.Text(
+                    'Blank day-of-show control sheet',
+                    style: const pw.TextStyle(fontSize: 8),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
@@ -1773,23 +1776,25 @@ class _ControlSheetsGeneratorSheetState
             showHeader: '${widget.showName}   $sectionTitle',
             judgeName: headerJudgeName,
           ),
-          footer: (context) => pw.Row(
-            children: [
-              pw.Text(
-                'RingMaster One Show',
-                style: pw.TextStyle(fontSize: _scaled(8)),
-              ),
-              pw.Spacer(),
-              pw.Text(
-                'Page ${context.pageNumber} of ${context.pagesCount}',
-                style: pw.TextStyle(fontSize: _scaled(8)),
-              ),
-              pw.Spacer(),
-              pw.Text(
-                '${DateTime.now().toLocal()}',
-                style: pw.TextStyle(fontSize: _scaled(8)),
-              ),
-            ],
+          footer: (context) => controlSheetFooter(
+            details: pw.Row(
+              children: [
+                pw.Text(
+                  'RingMaster One Show',
+                  style: pw.TextStyle(fontSize: _scaled(8)),
+                ),
+                pw.Spacer(),
+                pw.Text(
+                  'Page ${context.pageNumber} of ${context.pagesCount}',
+                  style: pw.TextStyle(fontSize: _scaled(8)),
+                ),
+                pw.Spacer(),
+                pw.Text(
+                  '${DateTime.now().toLocal()}',
+                  style: pw.TextStyle(fontSize: _scaled(8)),
+                ),
+              ],
+            ),
           ),
           build: (_) {
             final widgets = <pw.Widget>[];
