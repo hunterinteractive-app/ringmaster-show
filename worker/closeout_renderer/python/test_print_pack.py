@@ -99,5 +99,54 @@ class PrintPackTests(unittest.TestCase):
                 verify_sources([source], rows)
 
 
+class ManualPackWorkerTests(unittest.TestCase):
+    def test_manual_packet_uses_authorized_filtered_manifest_and_checks_it_twice(self):
+        import io
+        from print_pack import run_once
+        writer = PdfWriter()
+        writer.add_blank_page(width=612, height=792)
+        output = io.BytesIO()
+        writer.write(output)
+        source = {'id': 'artifact', 'generation': 1, 'storage_bucket': 'show-files',
+                  'storage_path': 'report.pdf', 'report_name': 'exhibitor_report',
+                  'label': 'Fixture - Report', 'artifact_status': 'generated'}
+        class FakeApi:
+            def __init__(self): self.manifest_reads=0; self.updates=[]; self.uploaded=None
+            def request(self, path, method='GET', data=None, binary=False, headers=None):
+                if path.endswith('claim_exhibitor_print_pack'):
+                    return [{'id':'pack','show_id':'show','claim_token':'claim','manual_delivery':True,
+                             'sources':[source],'storage_bucket':'exhibitor-print-packs','storage_path':'merged.pdf'}]
+                if path.endswith('manual_print_pack_current_sources'):
+                    self.manifest_reads+=1
+                    return [source]
+                if binary: return output.getvalue()
+                if path.startswith('/storage/v1/object/'):
+                    self.uploaded=data
+                    return None
+                if path.startswith('/rest/v1/exhibitor_print_packs?'):
+                    self.updates.append(data)
+                    return None
+                raise AssertionError('Unexpected endpoint '+path)
+        api=FakeApi()
+        run_once(api)
+        self.assertEqual(api.manifest_reads,2)
+        self.assertEqual(api.updates[-1]['artifact_status'],'generated')
+        self.assertEqual(len(PdfReader(io.BytesIO(api.uploaded)).pages),1)
+
+    def test_revoked_staff_access_fails_before_downloading_private_reports(self):
+        from print_pack import run_once
+        class FakeApi:
+            def request(self, path, method='GET', data=None, binary=False, headers=None):
+                if path.endswith('claim_exhibitor_print_pack'):
+                    return [{'id':'pack','show_id':'show','claim_token':'claim','manual_delivery':True,'sources':[]}]
+                if path.endswith('manual_print_pack_current_sources'):
+                    raise PermissionError('No staff access')
+                if path.startswith('/rest/v1/exhibitor_print_packs?'):
+                    self.status=data['artifact_status']; return None
+                raise AssertionError('Must not download any source')
+        api=FakeApi();run_once(api)
+        self.assertEqual(api.status,'failed')
+
+
 if __name__ == '__main__':
     unittest.main()

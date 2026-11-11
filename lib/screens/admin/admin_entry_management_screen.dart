@@ -1200,7 +1200,8 @@ class _AdminEntryManagementScreenState
                                       value: 'delete',
                                       child: Text('Remove Entry'),
                                     ),
-                                    if (_canRefund && !AppSession.supportReadOnly)
+                                    if (_canRefund &&
+                                        !AppSession.supportReadOnly)
                                       const PopupMenuItem(
                                         value: 'refund',
                                         child: Text('Refund & Remove Entries'),
@@ -2842,6 +2843,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
   final _firstName = TextEditingController();
   final _lastName = TextEditingController();
   final _email = TextEditingController();
+  bool _noEmail = false;
   final _phone = TextEditingController();
   final _arbaNumber = TextEditingController();
   final _exhibitorSearch = TextEditingController();
@@ -3515,7 +3517,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
     final showing = _showingName.text.trim();
     final first = _firstName.text.trim();
     final last = _lastName.text.trim();
-    final email = _email.text.trim().toLowerCase();
+    final email = _noEmail ? '' : _email.text.trim().toLowerCase();
     final phone = _phone.text.trim();
     final phoneDigits = _digitsOnly(phone);
     final arbaNumber = _arbaNumber.text.trim();
@@ -3636,17 +3638,53 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
         )
         .toList();
     if (sameShowMatches.isNotEmpty) {
-      return _bestExistingExhibitorCandidate(sameShowMatches);
+      return await _confirmExistingExhibitor(
+        _bestExistingExhibitorCandidate(sameShowMatches),
+      );
     }
 
     final identityMatches = candidates
         .where(_existingExhibitorMatchesEnteredIdentity)
         .toList();
     if (identityMatches.isNotEmpty) {
-      return _bestExistingExhibitorCandidate(identityMatches);
+      return await _confirmExistingExhibitor(
+        _bestExistingExhibitorCandidate(identityMatches),
+      );
     }
 
     return null;
+  }
+
+  Future<Map<String, dynamic>?> _confirmExistingExhibitor(
+    Map<String, dynamic> candidate,
+  ) async {
+    if (!mounted) return null;
+    final useExisting = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => Theme(
+        data: AppTheme.surfaceDialogTheme(Theme.of(dialogContext)),
+        child: AlertDialog(
+          title: const Text('Possible existing exhibitor'),
+          content: Text(
+            '${_exhibitorName(candidate)}\n${candidate['address_line1'] ?? ''}\n${candidate['city'] ?? ''}, ${candidate['state'] ?? ''} ${candidate['zip'] ?? ''}\nPhone: ${candidate['phone'] ?? ''}\nARBA: ${candidate['arba_number'] ?? ''}\n\nUse this exhibitor for the entry? This does not transfer account ownership.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Different exhibitor'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Use existing exhibitor'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (useExisting == null) {
+      throw Exception('Entry was not saved. Review the exhibitor details.');
+    }
+    return useExisting ? candidate : null;
   }
 
   Map<String, dynamic> _bestExistingExhibitorCandidate(
@@ -3698,15 +3736,22 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
     );
     final candidateLast = normalize((candidate['last_name'] ?? '').toString());
 
-    if (showing.isNotEmpty &&
-        (candidateShowing == showing || candidateDisplay == showing)) {
-      return true;
-    }
-
-    return first.isNotEmpty &&
-        last.isNotEmpty &&
-        candidateFirst == first &&
-        candidateLast == last;
+    final nameMatches =
+        (showing.isNotEmpty &&
+            (candidateShowing == showing || candidateDisplay == showing)) ||
+        (first.isNotEmpty &&
+            last.isNotEmpty &&
+            candidateFirst == first &&
+            candidateLast == last);
+    return manualExhibitorIdentityMatches(
+      nameMatches: nameMatches,
+      email: _noEmail ? '' : _email.text,
+      phone: _phone.text,
+      address: _addressLine1.text,
+      zip: _zip.text,
+      arbaNumber: _arbaNumber.text,
+      candidate: candidate,
+    );
   }
 
   String _digitsOnly(String value) => value.replaceAll(RegExp(r'\D'), '');
@@ -4578,7 +4623,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
     final display = showing;
     final first = _firstName.text.trim();
     final last = _lastName.text.trim();
-    final email = _email.text.trim();
+    final email = _noEmail ? '' : _email.text.trim();
     final phone = _phone.text.trim();
     final arbaNumber = _arbaNumber.text.trim();
     final addressLine1 = _addressLine1.text.trim();
@@ -4593,8 +4638,8 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
       );
     }
 
-    if (!_allowNameOnlyManualExhibitors && email.isEmpty) {
-      throw Exception('Enter email.');
+    if (!_allowNameOnlyManualExhibitors && !_noEmail && email.isEmpty) {
+      throw Exception('Enter an email or select No email address.');
     }
 
     if (!_allowNameOnlyManualExhibitors && addressLine1.isEmpty) {
@@ -4608,43 +4653,6 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
     }
     if (!_allowNameOnlyManualExhibitors && zip.isEmpty) {
       throw Exception('Enter ZIP code.');
-    }
-
-    Map<String, dynamic>? existing;
-    if (showing.isNotEmpty) {
-      existing = await supabase
-          .from('exhibitors')
-          .select(
-            'id,showing_name,display_name,first_name,last_name,email,phone,address_line1,address_line2,city,state,zip,arba_number,type,owner_user_id,is_active,is_local_only,created_for_show_id',
-          )
-          .eq('showing_name', showing)
-          .eq('created_for_show_id', widget.showId)
-          .maybeSingle();
-    }
-
-    if (existing != null) {
-      final existingType = (existing['type'] ?? '')
-          .toString()
-          .trim()
-          .toLowerCase();
-      final wantedType = _exhibitorType.trim().toLowerCase();
-
-      if (existingType == wantedType) {
-        final row = Map<String, dynamic>.from(existing);
-        final alreadyLoaded = _exhibitors.any(
-          (e) => (e['id'] ?? '').toString() == (row['id'] ?? '').toString(),
-        );
-        if (!alreadyLoaded) {
-          _exhibitors.add(row);
-        }
-        return row['id'].toString();
-      }
-
-      throw Exception(
-        'An exhibitor named "$showing" already exists for this show as '
-        '${existingType.isEmpty ? 'a different type' : existingType}. '
-        'Please use the existing exhibitor or change the showing name.',
-      );
     }
 
     final inserted = await supabase
@@ -5137,6 +5145,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
           _firstName.clear();
           _lastName.clear();
           _email.clear();
+          _noEmail = false;
           _phone.clear();
           _arbaNumber.clear();
           _addressLine1.clear();
@@ -5349,14 +5358,28 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                             ],
                           ),
                           const SizedBox(height: 10),
-                          TextField(
-                            controller: _email,
-                            enabled: !_saving && !AppSession.supportReadOnly,
-                            decoration: const InputDecoration(
-                              labelText: 'Email',
-                              border: OutlineInputBorder(),
+                          CheckboxListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: const Text('No email address'),
+                            subtitle: const Text(
+                              'Reports will need to be printed and handed out or mailed. Keep each family member as a separate exhibitor.',
                             ),
+                            value: _noEmail,
+                            onChanged: _saving || AppSession.supportReadOnly
+                                ? null
+                                : (value) =>
+                                      setState(() => _noEmail = value ?? false),
                           ),
+                          if (!_noEmail)
+                            TextField(
+                              controller: _email,
+                              enabled: !_saving && !AppSession.supportReadOnly,
+                              keyboardType: TextInputType.emailAddress,
+                              decoration: const InputDecoration(
+                                labelText: 'Email',
+                                border: OutlineInputBorder(),
+                              ),
+                            ),
                           const SizedBox(height: 10),
                           TextField(
                             controller: _phone,

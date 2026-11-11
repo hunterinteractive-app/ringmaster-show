@@ -34,10 +34,11 @@ def merge_pdfs(sources, destination):
             writer.append(reader, pages=pages, outline_item=source['label'], import_outline=False)
     if not expected_pages:
         raise ValueError('No printable report pages remain')
+    checkin_only = all(source.get('report_name') == 'checkin_sheet' for source in sources)
     writer.add_metadata({
-        '/Title': 'Exhibitor Reports & Legs Print Pack',
+        '/Title': 'Check-In Sheets Print Pack' if checkin_only else 'Exhibitor Reports & Legs Print Pack',
         '/Author': 'RingMaster Show',
-        '/Subject': 'Exhibitor reports and leg certificates in exhibitor order',
+        '/Subject': 'Check-in sheets in exhibitor order' if checkin_only else 'Exhibitor reports and leg certificates in exhibitor order',
         '/Creator': 'RingMaster Show',
     })
     compact_shared_artwork(writer)
@@ -135,12 +136,19 @@ def run_once(api):
         'artifact_status': 'eq.running', 'is_current': 'eq.true',
     })
     try:
-        account = api.request('/rest/v1/exhibitor_print_pack_accounts?' + urllib.parse.urlencode({
-            'user_id': 'eq.' + job['requested_by'], 'select': 'user_id',
-        }))
-        if not account:
-            raise PermissionError('Print pack access was revoked')
-        verify_sources(job['sources'], api.current_sources(job['show_id']))
+        def current_sources():
+            if job.get('manual_delivery'):
+                return api.request('/rest/v1/rpc/manual_print_pack_current_sources',
+                                   'POST', {'p_pack_id': job['id']})
+            return api.current_sources(job['show_id'])
+
+        if not job.get('manual_delivery'):
+            account = api.request('/rest/v1/exhibitor_print_pack_accounts?' + urllib.parse.urlencode({
+                'user_id': 'eq.' + job['requested_by'], 'select': 'user_id',
+            }))
+            if not account:
+                raise PermissionError('Print pack access was revoked')
+        verify_sources(job['sources'], current_sources())
         with tempfile.TemporaryDirectory(prefix='print-pack-') as directory:
             def download_source(item):
                 index, source = item
@@ -158,7 +166,7 @@ def run_once(api):
                 local_sources = list(executor.map(download_source, enumerate(job['sources'])))
             output = Path(directory) / 'report.pdf'
             page_count = merge_pdfs(local_sources, output)
-            verify_sources(job['sources'], api.current_sources(job['show_id']))
+            verify_sources(job['sources'], current_sources())
             content = output.read_bytes()
             api.request('/storage/v1/object/' + urllib.parse.quote(
                 job['storage_bucket'] + '/' + job['storage_path'], safe='/'),

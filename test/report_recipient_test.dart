@@ -39,4 +39,16 @@ void main() {
       isNull,
     );
   });
+
+  test('current blank contact suppresses stale generated email', () {
+    expect(
+      exhibitorReportRecipient(
+        {'exhibitor_id': 'one', 'exhibitor_email': 'old@example.test'},
+        {
+          'one': {'email': null},
+        },
+      ),
+      isNull,
+    );
+  });
 }

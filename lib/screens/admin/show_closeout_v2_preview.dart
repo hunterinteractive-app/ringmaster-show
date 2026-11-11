@@ -1,3 +1,4 @@
+import 'closeout/widgets/manual_report_delivery_panel.dart';
 import '../../services/show_addon_report_service.dart';
 import '../../widgets/show_addon_report_downloads.dart';
 import 'closeout/models/report_recipient.dart';
@@ -2662,6 +2663,23 @@ class _PublishResultsPanelState extends State<_PublishResultsPanel> {
     super.dispose();
   }
 
+  Future<List<Map<String, dynamic>>> _loadAllArtifacts() async {
+    final rows = <Map<String, dynamic>>[];
+    for (var offset = 0; ; offset += 500) {
+      final page = await ringMasterClient
+          .from('show_report_artifacts')
+          .select(
+            'id,show_id,finalize_run_id,report_name,artifact_status,file_name,storage_bucket,storage_path,generated_at,is_current,scope_key,section_ids,generation,created_at,error_count,metadata',
+          )
+          .eq('show_id', widget.showId)
+          .eq('is_current', true)
+          .order('id')
+          .range(offset, offset + 499);
+      rows.addAll(page);
+      if (page.length < 500) return rows;
+    }
+  }
+
   Future<void> _loadArtifacts() async {
     setState(() {
       _loading = true;
@@ -2669,13 +2687,7 @@ class _PublishResultsPanelState extends State<_PublishResultsPanel> {
     });
     try {
       final responses = await Future.wait<dynamic>([
-        ringMasterClient
-            .from('show_report_artifacts')
-            .select(
-              'id,show_id,finalize_run_id,report_name,artifact_status,file_name,storage_bucket,storage_path,generated_at,is_current,scope_key,section_ids,generation,created_at,error_count,metadata',
-            )
-            .eq('show_id', widget.showId)
-            .eq('is_current', true),
+        _loadAllArtifacts(),
         ringMasterClient
             .from('show_sections')
             .select('id,display_name,kind,letter,sort_order')
@@ -2704,23 +2716,38 @@ class _PublishResultsPanelState extends State<_PublishResultsPanel> {
           .toSet()
           .toList();
       if (exhibitorIds.isNotEmpty) {
-        final rows = await ringMasterClient
-            .from('exhibitors')
-            .select('id,email')
-            .inFilter('id', exhibitorIds);
+        final rows = <Map<String, dynamic>>[];
+        for (var offset = 0; offset < exhibitorIds.length; offset += 100) {
+          rows.addAll(
+            await ringMasterClient
+                .from('exhibitors')
+                .select('id,email')
+                .inFilter('id', exhibitorIds.skip(offset).take(100).toList()),
+          );
+        }
+        if (exhibitorIds.any((id) => !rows.any((row) => row['id'] == id))) {
+          throw StateError(
+            'Some exhibitor contact details could not be loaded. Refresh before sending reports.',
+          );
+        }
         final emailsByExhibitorId = <String, String>{
-          for (final raw in rows as List)
-            (raw as Map)['id']?.toString().trim() ?? '': (raw['email'] ?? '')
+          for (final raw in rows)
+            raw['id']?.toString().trim() ?? '': (raw['email'] ?? '')
                 .toString()
                 .trim(),
-        }..removeWhere((id, email) => id.isEmpty || email.isEmpty);
+        }..removeWhere((id, email) => id.isEmpty);
         final contacts = {
           for (final entry in emailsByExhibitorId.entries)
             entry.key: <String, dynamic>{'email': entry.value},
         };
         for (final artifact in artifacts) {
           final email = exhibitorReportRecipient(artifact.metadata, contacts);
-          if (email != null) artifact.metadata['exhibitor_email'] = email;
+          if (contacts.containsKey(
+            '${artifact.metadata['exhibitor_id'] ?? ''}',
+          )) {
+            artifact.metadata['exhibitor_email'] = email ?? '';
+            artifact.metadata.remove('email');
+          }
         }
       }
       if (!mounted) return;
@@ -2801,6 +2828,25 @@ class _PublishResultsPanelState extends State<_PublishResultsPanel> {
   }
 
   Future<void> _sendReports({required bool clubs}) async {
+    await _loadArtifacts();
+    if (!mounted || _error != null) return;
+    if (!clubs &&
+        _artifacts.any(
+          (a) =>
+              _inScope(a) &&
+              (a.reportName == 'exhibitor_report' || a.reportName == 'legs') &&
+              _recipientEmail(a, clubs: false) == null,
+        )) {
+      final proceed = await showManualReportDelivery(
+        context,
+        showId: widget.showId,
+        sectionId: _scopeId == 'all' ? null : _scopeId,
+        beforeEmail: true,
+      );
+      if (!proceed || !mounted) return;
+      await _loadArtifacts();
+      if (!mounted || _error != null) return;
+    }
     final additionalMessage = _additionalMessageController.text.trim();
     final eligible = _artifacts
         .where((artifact) => artifact.artifactStatus == 'generated')
@@ -2950,6 +2996,7 @@ class _PublishResultsPanelState extends State<_PublishResultsPanel> {
     final exhibitorReports = _generatedWhere(
       (artifact) =>
           _inScope(artifact) &&
+          _recipientEmail(artifact, clubs: false) != null &&
           (artifact.reportName == 'exhibitor_report' ||
               artifact.reportName == 'legs'),
     );
@@ -3029,9 +3076,20 @@ class _PublishResultsPanelState extends State<_PublishResultsPanel> {
             icon: Icons.people_outline,
             title: 'Exhibitors',
             detail:
-                '$exhibitorReports generated exhibitor or legs report files would be sent for this show.',
+                '$exhibitorReports generated report files are ready for email. Exhibitors without email are listed under Print/mail reports.',
             buttonLabel: 'Send Exhibitor Reports',
             onPressed: _sending ? null : () => _sendReports(clubs: false),
+          ),
+          OutlinedButton.icon(
+            onPressed: _sending
+                ? null
+                : () => showManualReportDelivery(
+                    context,
+                    showId: widget.showId,
+                    sectionId: _scopeId == 'all' ? null : _scopeId,
+                  ),
+            icon: const Icon(Icons.print),
+            label: const Text('Print/mail reports and delivery status'),
           ),
           _PublishTargetTile(
             icon: Icons.groups_outlined,
@@ -3130,10 +3188,7 @@ class _DeliveryStatusPanelState extends State<_DeliveryStatusPanel> {
     if (_loadInFlight) return;
     _loadInFlight = true;
     try {
-      final data = await loadDeliveryStatus(
-        ringMasterClient,
-        widget.showId,
-      );
+      final data = await loadDeliveryStatus(ringMasterClient, widget.showId);
       final allRows = data.deliveries;
       final artifactRows = data.artifacts;
       final currentExhibitors = <String, Map<String, String>>{};
@@ -3254,6 +3309,13 @@ class _DeliveryStatusPanelState extends State<_DeliveryStatusPanel> {
           ? 'Delivery is in progress and refreshes every few seconds.'
           : 'Live delivery history. Correct a recipient address, then retry the failed report package here.',
       children: [
+        OutlinedButton.icon(
+          onPressed: () =>
+              showManualReportDelivery(context, showId: widget.showId),
+          icon: const Icon(Icons.local_post_office_outlined),
+          label: const Text('Print/mail outstanding and delivery status'),
+        ),
+
         if (_loading)
           const Center(
             child: Padding(
@@ -4727,6 +4789,7 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
                 )
                 .eq('show_id', widget.showId)
                 .eq('is_current', true)
+                .eq('manual_delivery', false)
           : <Map<String, dynamic>>[];
       if (!mounted) return;
       _printPackPoller?.cancel();
