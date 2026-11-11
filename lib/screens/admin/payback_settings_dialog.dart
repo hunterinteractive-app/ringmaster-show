@@ -4,6 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:ringmaster_show/services/ringmaster_backend.dart';
 
 import '../../theme/app_theme.dart';
+import '../../services/class_payback.dart';
+import '../../services/final_award_access_service.dart';
+import '../../widgets/payback/custom_payback_dialogs.dart';
 
 class PaybackSettingsDialog extends StatefulWidget {
   final String showId;
@@ -19,14 +22,16 @@ class _PaybackSettingsDialogState extends State<PaybackSettingsDialog> {
 
   bool _loading = true;
   bool _saving = false;
+  bool _customRanges = false;
+  final _classFormKey = GlobalKey<FormState>();
 
   List<_PaybackSection> _sections = [];
   String? _selectedSectionId;
 
-  final List<_ClassPaybackRow> _classRows = [];
+  final List<ClassPaybackRow> _classRows = [];
   final List<_SpecialMoneyRow> _specialRows = [];
 
-  Map<String?, List<_ClassPaybackRow>> _classRowsBySection = {};
+  Map<String?, List<ClassPaybackRow>> _classRowsBySection = {};
   Map<String?, List<_SpecialMoneyRow>> _specialRowsBySection = {};
 
   @override
@@ -49,6 +54,9 @@ class _PaybackSettingsDialogState extends State<PaybackSettingsDialog> {
     setState(() => _loading = true);
 
     try {
+      _customRanges = await FinalAwardAccessService.canConfigureBestOpposite(
+        widget.showId,
+      );
       final result = await _supabase.rpc(
         'get_show_payback_setup',
         params: {'p_show_id': widget.showId},
@@ -93,7 +101,7 @@ class _PaybackSettingsDialogState extends State<PaybackSettingsDialog> {
         ...rpcSections,
       ];
 
-      final classMap = <String?, List<_ClassPaybackRow>>{};
+      final classMap = <String?, List<ClassPaybackRow>>{};
       final specialMap = <String?, List<_SpecialMoneyRow>>{};
 
       final schedules = json['schedules'] as List? ?? [];
@@ -101,7 +109,7 @@ class _PaybackSettingsDialogState extends State<PaybackSettingsDialog> {
         final schedule = Map<String, dynamic>.from(rawSchedule);
         final sectionId = schedule['section_id']?.toString();
 
-        final grouped = <String, _ClassPaybackRow>{};
+        final grouped = <String, ClassPaybackRow>{};
         final scheduleSpecies = _normalizedClassSpecies(
           schedule['applies_to_species']?.toString(),
         );
@@ -123,7 +131,7 @@ class _PaybackSettingsDialogState extends State<PaybackSettingsDialog> {
 
           grouped.putIfAbsent(
             key,
-            () => _ClassPaybackRow(
+            () => ClassPaybackRow(
               appliesToSpecies: appliesToSpecies,
               minShown: minShown,
               maxShown: maxShown,
@@ -201,7 +209,7 @@ class _PaybackSettingsDialogState extends State<PaybackSettingsDialog> {
     final savedClassRows = _classRowsBySection[_sectionKey];
 
     final classSource = savedClassRows == null || savedClassRows.isEmpty
-        ? _defaultClassPaybackRows()
+        ? (_customRanges ? <ClassPaybackRow>[] : _defaultClassPaybackRows())
         : savedClassRows;
 
     _classRows
@@ -229,11 +237,15 @@ class _PaybackSettingsDialogState extends State<PaybackSettingsDialog> {
         .toList();
   }
 
-  List<_ClassPaybackRow> _normalizeClassPaybackRows(
-    List<_ClassPaybackRow> source,
+  List<ClassPaybackRow> _normalizeClassPaybackRows(
+    List<ClassPaybackRow> source,
   ) {
+    if (_customRanges) {
+      return source.map((r) => r.copy()).toList()
+        ..sort(_compareClassPaybackRows);
+    }
     final defaults = _defaultClassPaybackRows();
-    final byRange = <String, _ClassPaybackRow>{};
+    final byRange = <String, ClassPaybackRow>{};
 
     for (final row in defaults) {
       final key =
@@ -267,14 +279,12 @@ class _PaybackSettingsDialogState extends State<PaybackSettingsDialog> {
     return rows;
   }
 
-  List<_ClassPaybackRow> _expandClassPaybackRowForDisplay(
-    _ClassPaybackRow row,
-  ) {
+  List<ClassPaybackRow> _expandClassPaybackRowForDisplay(ClassPaybackRow row) {
     if (row.maxShown == null || row.maxShown == row.minShown) {
       return [row.copy()];
     }
 
-    final expanded = <_ClassPaybackRow>[];
+    final expanded = <ClassPaybackRow>[];
 
     for (var shown = row.minShown; shown <= row.maxShown!; shown++) {
       final amounts = <int, int>{};
@@ -285,7 +295,7 @@ class _PaybackSettingsDialogState extends State<PaybackSettingsDialog> {
       }
 
       expanded.add(
-        _ClassPaybackRow(
+        ClassPaybackRow(
           appliesToSpecies: row.appliesToSpecies,
           minShown: shown,
           maxShown: shown,
@@ -298,13 +308,25 @@ class _PaybackSettingsDialogState extends State<PaybackSettingsDialog> {
   }
 
   Future<void> _saveCurrentSection() async {
+    if (_customRanges) {
+      if (!(_classFormKey.currentState?.validate() ?? true)) return;
+      final error = validateClassPaybackRanges(_classRows);
+      if (error != null) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error)));
+        return;
+      }
+    }
     _persistCurrentSectionRows();
 
     setState(() => _saving = true);
 
     try {
       await _supabase.rpc(
-        'save_show_payback_schedule',
+        _customRanges
+            ? 'save_show_custom_payback_schedule'
+            : 'save_show_payback_schedule',
         params: {
           'p_show_id': widget.showId,
           'p_section_id': _selectedSectionId,
@@ -406,6 +428,9 @@ class _PaybackSettingsDialogState extends State<PaybackSettingsDialog> {
 
   void _changeSection(String? sectionId) {
     if (sectionId == _selectedSectionId) return;
+    if (_customRanges && !(_classFormKey.currentState?.validate() ?? true)) {
+      return;
+    }
 
     setState(() {
       _persistCurrentSectionRows();
@@ -447,6 +472,7 @@ class _PaybackSettingsDialogState extends State<PaybackSettingsDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
       title: const Text('Payback Settings'),
       content: AppTheme.gradientTextScope(
         context,
@@ -471,6 +497,8 @@ class _PaybackSettingsDialogState extends State<PaybackSettingsDialog> {
                           child: Column(
                             children: [
                               TabBar(
+                                isScrollable: true,
+                                tabAlignment: TabAlignment.start,
                                 labelColor: AppColors.headerForeground,
                                 unselectedLabelColor: AppColors.headerForeground
                                     .withValues(alpha: .72),
@@ -503,6 +531,9 @@ class _PaybackSettingsDialogState extends State<PaybackSettingsDialog> {
       actions: [
         TextButton(
           onPressed: _saving ? null : () => Navigator.of(context).pop(),
+          style: TextButton.styleFrom(
+            foregroundColor: AppColors.headerForeground,
+          ),
           child: const Text('Close'),
         ),
         FilledButton.icon(
@@ -521,50 +552,60 @@ class _PaybackSettingsDialogState extends State<PaybackSettingsDialog> {
   }
 
   Widget _buildSectionSelector() {
-    return Row(
-      children: [
-        Expanded(
-          child: _surfaceTextScope(
-            child: DropdownButtonFormField<String>(
-              initialValue: _selectedSectionId ?? '',
-              dropdownColor: AppColors.surface,
-              style: const TextStyle(
-                color: AppColors.text,
-                fontWeight: FontWeight.w700,
-              ),
-              decoration: const InputDecoration(
-                labelText: 'Show Letter',
-                border: OutlineInputBorder(),
-              ),
-              items: _sections
-                  .map(
-                    (s) => DropdownMenuItem<String>(
-                      value: s.id,
-                      child: Text(s.label),
-                    ),
-                  )
-                  .toList(),
-              onChanged: _saving
-                  ? null
-                  : (value) => _changeSection(
-                      value == null || value.isEmpty ? null : value,
-                    ),
+    final selector = _surfaceTextScope(
+      child: DropdownButtonFormField<String>(
+        initialValue: _selectedSectionId ?? '',
+        isExpanded: true,
+        dropdownColor: AppColors.surface,
+        style: const TextStyle(
+          color: AppColors.text,
+          fontWeight: FontWeight.w700,
+        ),
+        decoration: const InputDecoration(
+          labelText: 'Show Letter',
+          floatingLabelStyle: TextStyle(color: AppColors.headerForeground),
+          border: OutlineInputBorder(),
+        ),
+        items: _sections
+            .map(
+              (s) =>
+                  DropdownMenuItem<String>(value: s.id, child: Text(s.label)),
+            )
+            .toList(),
+        onChanged: _saving
+            ? null
+            : (value) =>
+                  _changeSection(value == null || value.isEmpty ? null : value),
+      ),
+    );
+    final copy = OutlinedButton.icon(
+      onPressed: _saving || _sections.length < 2
+          ? null
+          : _copyFromAnotherSection,
+      icon: const Icon(Icons.copy),
+      label: const Text('Copy from...'),
+    );
+    return LayoutBuilder(
+      builder: (context, constraints) => constraints.maxWidth < 480
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                selector,
+                const SizedBox(height: 8),
+                Align(alignment: Alignment.centerLeft, child: copy),
+              ],
+            )
+          : Row(
+              children: [
+                Expanded(child: selector),
+                const SizedBox(width: 12),
+                copy,
+              ],
             ),
-          ),
-        ),
-        const SizedBox(width: 12),
-        OutlinedButton.icon(
-          onPressed: _saving || _sections.length < 2
-              ? null
-              : _copyFromAnotherSection,
-          icon: const Icon(Icons.copy),
-          label: const Text('Copy from...'),
-        ),
-      ],
     );
   }
 
-  void _ensureClassCounterpartRow(_ClassPaybackRow row) {
+  void _ensureClassCounterpartRow(ClassPaybackRow row) {
     final species = row.appliesToSpecies;
     if (species != 'rabbit' && species != 'cavy') return;
 
@@ -584,7 +625,7 @@ class _PaybackSettingsDialogState extends State<PaybackSettingsDialog> {
     }
 
     _classRows.add(
-      _ClassPaybackRow(
+      ClassPaybackRow(
         appliesToSpecies: counterpartSpecies,
         minShown: row.minShown,
         maxShown: row.maxShown,
@@ -595,7 +636,7 @@ class _PaybackSettingsDialogState extends State<PaybackSettingsDialog> {
     _classRows.sort(_compareClassPaybackRows);
   }
 
-  int _compareClassPaybackRows(_ClassPaybackRow a, _ClassPaybackRow b) {
+  int _compareClassPaybackRows(ClassPaybackRow a, ClassPaybackRow b) {
     final minCompare = a.minShown.compareTo(b.minShown);
     if (minCompare != 0) return minCompare;
 
@@ -620,7 +661,7 @@ class _PaybackSettingsDialogState extends State<PaybackSettingsDialog> {
     }
   }
 
-  int _classPlacementColumnCount(List<_ClassPaybackRow> rows) {
+  int _classPlacementColumnCount(List<ClassPaybackRow> rows) {
     var maxPlacement = 5;
 
     for (final row in rows) {
@@ -633,6 +674,15 @@ class _PaybackSettingsDialogState extends State<PaybackSettingsDialog> {
   }
 
   void _addClassPlacementColumn() {
+    if (_customRanges) {
+      final next = _classPlacementColumnCount(_classRows) + 1;
+      setState(() {
+        for (final row in _classRows) {
+          row.amountsByPlacement.putIfAbsent(next, () => 0);
+        }
+      });
+      return;
+    }
     final rows = _classRows.isEmpty ? _defaultClassPaybackRows() : _classRows;
     final nextPlacement = _classPlacementColumnCount(rows) + 1;
     final nextOpenEndedShown = nextPlacement + 1;
@@ -661,7 +711,7 @@ class _PaybackSettingsDialogState extends State<PaybackSettingsDialog> {
           }
 
           _classRows.add(
-            _ClassPaybackRow(
+            ClassPaybackRow(
               appliesToSpecies: species,
               minShown: nextOpenEndedShown,
               maxShown: null,
@@ -681,7 +731,7 @@ class _PaybackSettingsDialogState extends State<PaybackSettingsDialog> {
     });
   }
 
-  bool _classPlacementEnabled(_ClassPaybackRow row, int placement) {
+  bool _classPlacementEnabled(ClassPaybackRow row, int placement) {
     if (row.maxShown == null) return true;
     return placement <= row.maxShown!;
   }
@@ -705,185 +755,317 @@ class _PaybackSettingsDialogState extends State<PaybackSettingsDialog> {
     }
   }
 
+  Future<void> _editRange([ClassPaybackRow? row]) async {
+    final edited = await showClassPaybackRangeEditor(context, row: row);
+    if (edited == null || !mounted) return;
+    final candidates = [
+      for (final r in _classRows)
+        if (!identical(r, row)) r,
+      edited,
+    ];
+    final error = validateClassPaybackRanges(candidates);
+    if (error != null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error)));
+      return;
+    }
+    setState(() {
+      _classRows
+        ..clear()
+        ..addAll(candidates)
+        ..sort(_compareClassPaybackRows);
+    });
+  }
+
+  Future<void> _loadHoustonPreset() async {
+    final preset = await showHoustonPaybackPreset(
+      context,
+      sectionKind: _selectedSection?.kind,
+    );
+    if (preset == null || !mounted) return;
+    setState(() {
+      _classRows.removeWhere((r) => r.appliesToSpecies == preset.species);
+      _classRows.addAll(preset.rows());
+      _classRows.sort(_compareClassPaybackRows);
+    });
+  }
+
   Widget _buildClassScheduleTab() {
-    final rowsForDisplay = _classRows.isEmpty
+    final rowsForDisplay = _classRows.isEmpty && !_customRanges
         ? _defaultClassPaybackRows()
         : _classRows;
     final placementColumnCount = _classPlacementColumnCount(rowsForDisplay);
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Fill the payback amounts for each placement. Rabbit and cavy schedules can be different. The 6+ row applies when six or more are shown in the class.',
-          style: _onPurpleBodyStyle,
-        ),
-        const SizedBox(height: 8),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: OutlinedButton.icon(
-            onPressed: _addClassPlacementColumn,
-            icon: const Icon(Icons.add),
-            label: Text(
-              'Add ${_placementHeaderLabel(placementColumnCount + 1)} placement / shown row',
-            ),
+    return Form(
+      key: _classFormKey,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            _customRanges
+                ? 'Set class-size ranges and premiums for this show letter. Blank amounts pay nothing. A blank maximum means no upper limit.'
+                : 'Fill the payback amounts for each placement. Rabbit and cavy schedules can be different. The 6+ row applies when six or more are shown in the class.',
+            style: _onPurpleBodyStyle,
           ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'Scroll horizontally to view all table columns.',
-          style: _onPurpleBodyStyle,
-        ),
-        const SizedBox(height: 8),
-        Expanded(
-          child: SingleChildScrollView(
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: DataTable(
-                headingRowHeight: 40,
-                dataRowMinHeight: 58,
-                dataRowMaxHeight: 66,
-                columnSpacing: 8,
-                columns: [
-                  _onPurpleDataColumn('Species'),
-                  _onPurpleDataColumn('Shown'),
-                  ...List.generate(
-                    placementColumnCount,
-                    (index) =>
-                        _onPurpleDataColumn(_placementHeaderLabel(index + 1)),
-                  ),
-                ],
-                rows: rowsForDisplay.map((row) {
-                  return DataRow(
-                    cells: [
-                      DataCell(
-                        SizedBox(
-                          width: 112,
-                          child: _surfaceTextScope(
-                            child: DropdownButtonFormField<String>(
-                              initialValue: row.appliesToSpecies == 'cavy'
-                                  ? 'cavy'
-                                  : 'rabbit',
-                              dropdownColor: AppColors.surface,
-                              style: const TextStyle(
-                                color: AppColors.text,
-                                fontWeight: FontWeight.w700,
-                              ),
-                              isExpanded: true,
-                              decoration: const InputDecoration(
-                                border: OutlineInputBorder(),
-                                isDense: true,
-                                contentPadding: EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 8,
-                                ),
-                              ),
-                              items: const [
-                                DropdownMenuItem<String>(
-                                  value: 'rabbit',
-                                  child: Text(
-                                    'Rabbit',
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                DropdownMenuItem<String>(
-                                  value: 'cavy',
-                                  child: Text(
-                                    'Cavy',
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                              ],
-                              onChanged: (value) {
-                                if (value == null) return;
-                                setState(() {
-                                  if (_classRows.isEmpty) {
-                                    _classRows.addAll(
-                                      _defaultClassPaybackRows().map(
-                                        (e) => e.copy(),
-                                      ),
-                                    );
-                                  }
-                                  row.appliesToSpecies = value;
-                                  _ensureClassCounterpartRow(row);
-                                });
-                              },
-                            ),
-                          ),
-                        ),
-                      ),
-                      DataCell(
-                        SizedBox(
-                          width: 50,
-                          child: Text(
-                            row.maxShown == null
-                                ? '${row.minShown}+'
-                                : row.minShown == row.maxShown
-                                ? row.minShown.toString()
-                                : '${row.minShown}-${row.maxShown}',
-                            style: _onPurpleBodyStyle,
-                          ),
-                        ),
-                      ),
-                      ...List.generate(placementColumnCount, (i) {
-                        final placement = i + 1;
-                        final enabled = _classPlacementEnabled(row, placement);
-
-                        return DataCell(
-                          SizedBox(
-                            width: 78,
-                            child: _surfaceTextScope(
-                              child: TextFormField(
-                                key: ValueKey(
-                                  'class-${row.appliesToSpecies ?? 'both'}-${row.minShown}-${row.maxShown}-$placement-${row.amountsByPlacement[placement] ?? 0}',
-                                ),
-                                enabled: enabled,
-                                initialValue: enabled
-                                    ? _moneyFromCents(
-                                        row.amountsByPlacement[placement] ?? 0,
-                                      )
-                                    : '',
-                                style: const TextStyle(color: AppColors.text),
-                                decoration: InputDecoration(
-                                  prefixText: '\$',
-                                  hintText: enabled ? '0.00' : '—',
-                                  border: const OutlineInputBorder(),
-                                  isDense: true,
-                                  contentPadding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 10,
-                                  ),
-                                ),
-                                keyboardType:
-                                    const TextInputType.numberWithOptions(
-                                      decimal: true,
-                                    ),
-                                onChanged: (value) {
-                                  if (_classRows.isEmpty) {
-                                    setState(() {
-                                      _classRows.addAll(
-                                        _defaultClassPaybackRows().map(
-                                          (e) => e.copy(),
-                                        ),
-                                      );
-                                    });
-                                  }
-                                  row.amountsByPlacement[placement] =
-                                      _centsFromMoney(value);
-                                },
-                              ),
-                            ),
-                          ),
-                        );
-                      }),
-                    ],
-                  );
-                }).toList(),
+          const SizedBox(height: 8),
+          if (_customRanges)
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                OutlinedButton.icon(
+                  onPressed: _saving ? null : () => _editRange(),
+                  icon: const Icon(Icons.add),
+                  label: const Text('Add class-size range'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: _saving ? null : _loadHoustonPreset,
+                  icon: const Icon(Icons.table_chart_outlined),
+                  label: const Text('Houston premium tables'),
+                ),
+              ],
+            ),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: OutlinedButton.icon(
+              onPressed: _saving || (_customRanges && _classRows.isEmpty)
+                  ? null
+                  : _addClassPlacementColumn,
+              icon: const Icon(Icons.add),
+              label: Text(
+                _customRanges
+                    ? 'Add ${_placementHeaderLabel(placementColumnCount + 1)} placement'
+                    : 'Add ${_placementHeaderLabel(placementColumnCount + 1)} placement / shown row',
               ),
             ),
           ),
-        ),
-      ],
+          const SizedBox(height: 8),
+          Text(
+            'Scroll horizontally to view all table columns.',
+            style: _onPurpleBodyStyle,
+          ),
+          const SizedBox(height: 8),
+          Expanded(
+            child: SingleChildScrollView(
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: DataTable(
+                  headingRowHeight: 40,
+                  dataRowMinHeight: 58,
+                  dataRowMaxHeight: _customRanges ? double.infinity : 66,
+                  columnSpacing: 8,
+                  columns: [
+                    _onPurpleDataColumn('Species'),
+                    _onPurpleDataColumn('Shown'),
+                    if (_customRanges) _onPurpleDataColumn('Edit'),
+                    ...List.generate(
+                      placementColumnCount,
+                      (index) =>
+                          _onPurpleDataColumn(_placementHeaderLabel(index + 1)),
+                    ),
+                  ],
+                  rows: rowsForDisplay.map((row) {
+                    return DataRow(
+                      key: _customRanges ? ObjectKey(row) : null,
+                      cells: [
+                        DataCell(
+                          SizedBox(
+                            width: 112,
+                            child: _surfaceTextScope(
+                              child: DropdownButtonFormField<String>(
+                                initialValue: row.appliesToSpecies == 'cavy'
+                                    ? 'cavy'
+                                    : 'rabbit',
+                                dropdownColor: AppColors.surface,
+                                style: const TextStyle(
+                                  color: AppColors.text,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                                isExpanded: true,
+                                decoration: const InputDecoration(
+                                  border: OutlineInputBorder(),
+                                  isDense: true,
+                                  contentPadding: EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 8,
+                                  ),
+                                ),
+                                items: const [
+                                  DropdownMenuItem<String>(
+                                    value: 'rabbit',
+                                    child: Text(
+                                      'Rabbit',
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  DropdownMenuItem<String>(
+                                    value: 'cavy',
+                                    child: Text(
+                                      'Cavy',
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
+                                onChanged: _saving
+                                    ? null
+                                    : (value) {
+                                        if (value == null) return;
+                                        setState(() {
+                                          if (_classRows.isEmpty) {
+                                            _classRows.addAll(
+                                              _defaultClassPaybackRows().map(
+                                                (e) => e.copy(),
+                                              ),
+                                            );
+                                          }
+                                          row.appliesToSpecies = value;
+                                          if (!_customRanges) {
+                                            _ensureClassCounterpartRow(row);
+                                          }
+                                        });
+                                      },
+                              ),
+                            ),
+                          ),
+                        ),
+                        DataCell(
+                          SizedBox(
+                            width: 50,
+                            child: Text(
+                              row.maxShown == null
+                                  ? '${row.minShown}+'
+                                  : row.minShown == row.maxShown
+                                  ? row.minShown.toString()
+                                  : '${row.minShown}-${row.maxShown}',
+                              style: _onPurpleBodyStyle,
+                            ),
+                          ),
+                        ),
+                        if (_customRanges)
+                          DataCell(
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  tooltip: 'Edit ${row.rangeLabel}',
+                                  onPressed: _saving
+                                      ? null
+                                      : () => _editRange(row),
+                                  icon: const Icon(
+                                    Icons.edit,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                                IconButton(
+                                  tooltip: 'Remove ${row.rangeLabel}',
+                                  onPressed: _saving
+                                      ? null
+                                      : () => setState(
+                                          () => _classRows.remove(row),
+                                        ),
+                                  icon: const Icon(
+                                    Icons.delete_outline,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ...List.generate(placementColumnCount, (i) {
+                          final placement = i + 1;
+                          final enabled = _classPlacementEnabled(
+                            row,
+                            placement,
+                          );
+
+                          return DataCell(
+                            SizedBox(
+                              width: _customRanges ? 112 : 78,
+                              child: _surfaceTextScope(
+                                child: Container(
+                                  decoration: _customRanges
+                                      ? BoxDecoration(
+                                          color: AppColors.surface,
+                                          borderRadius: BorderRadius.circular(
+                                            8,
+                                          ),
+                                        )
+                                      : null,
+                                  child: TextFormField(
+                                    key: _customRanges
+                                        ? ValueKey('premium-$placement')
+                                        : ValueKey(
+                                            'class-${row.appliesToSpecies ?? 'both'}-${row.minShown}-${row.maxShown}-$placement-${row.amountsByPlacement[placement] ?? 0}',
+                                          ),
+                                    enabled: enabled && !_saving,
+                                    validator: _customRanges
+                                        ? validatePremiumAmount
+                                        : null,
+                                    initialValue: enabled
+                                        ? _moneyFromCents(
+                                            row.amountsByPlacement[placement] ??
+                                                0,
+                                          )
+                                        : '',
+                                    style: const TextStyle(
+                                      color: AppColors.text,
+                                    ),
+                                    decoration: InputDecoration(
+                                      prefixText: '\$',
+                                      errorMaxLines: 4,
+                                      hintText: enabled ? '0.00' : '—',
+                                      border: const OutlineInputBorder(),
+                                      isDense: true,
+                                      contentPadding:
+                                          const EdgeInsets.symmetric(
+                                            horizontal: 8,
+                                            vertical: 10,
+                                          ),
+                                    ),
+                                    keyboardType:
+                                        const TextInputType.numberWithOptions(
+                                          decimal: true,
+                                        ),
+                                    onChanged: (value) {
+                                      if (_classRows.isEmpty) {
+                                        setState(() {
+                                          _classRows.addAll(
+                                            _defaultClassPaybackRows().map(
+                                              (e) => e.copy(),
+                                            ),
+                                          );
+                                        });
+                                      }
+                                      final amountError = _customRanges
+                                          ? validatePremiumAmount(value)
+                                          : null;
+                                      if (amountError != null) {
+                                        row.amountErrors[placement] =
+                                            amountError;
+                                      } else {
+                                        row.amountErrors.remove(placement);
+                                      }
+                                      if (amountError == null) {
+                                        row.amountsByPlacement[placement] =
+                                            _centsFromMoney(value);
+                                      }
+                                    },
+                                  ),
+                                ),
+                              ),
+                            ),
+                          );
+                        }),
+                      ],
+                    );
+                  }).toList(),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -1137,59 +1319,6 @@ String _buildSectionLabel(String? kind, String? letter) {
   return '$kindLabel $normalizedLetter';
 }
 
-class _ClassPaybackRow {
-  String? appliesToSpecies;
-  int minShown;
-  int? maxShown;
-  Map<int, int> amountsByPlacement;
-
-  _ClassPaybackRow({
-    required this.appliesToSpecies,
-    required this.minShown,
-    required this.maxShown,
-    required this.amountsByPlacement,
-  });
-
-  bool get hasAnyAmount => amountsByPlacement.values.any((v) => v > 0);
-
-  int get maxPayingPlaces {
-    if (maxShown != null) return maxShown! < 1 ? 1 : maxShown!;
-
-    var max = 5;
-    for (final placement in amountsByPlacement.keys) {
-      if (placement > max) max = placement;
-    }
-    return max;
-  }
-
-  _ClassPaybackRow copy() {
-    return _ClassPaybackRow(
-      appliesToSpecies: appliesToSpecies,
-      minShown: minShown,
-      maxShown: maxShown,
-      amountsByPlacement: Map<int, int>.from(amountsByPlacement),
-    );
-  }
-
-  List<Map<String, dynamic>> toRpcRows() {
-    final rows = <Map<String, dynamic>>[];
-
-    for (final entry in amountsByPlacement.entries) {
-      if (entry.value <= 0) continue;
-
-      rows.add({
-        'applies_to_species': appliesToSpecies,
-        'min_shown': minShown,
-        'max_shown': maxShown,
-        'placement': entry.key,
-        'amount_cents': entry.value,
-      });
-    }
-
-    return rows;
-  }
-}
-
 class _SpecialMoneyRow {
   String awardCode;
   String awardLabel;
@@ -1269,48 +1398,48 @@ class _SpecialMoneyRow {
   }
 }
 
-List<_ClassPaybackRow> _defaultClassPaybackRows() {
+List<ClassPaybackRow> _defaultClassPaybackRows() {
   return [
     ..._defaultClassPaybackRowsForSpecies('rabbit'),
     ..._defaultClassPaybackRowsForSpecies('cavy'),
   ];
 }
 
-List<_ClassPaybackRow> _defaultClassPaybackRowsForSpecies(
+List<ClassPaybackRow> _defaultClassPaybackRowsForSpecies(
   String appliesToSpecies,
 ) {
   return [
-    _ClassPaybackRow(
+    ClassPaybackRow(
       appliesToSpecies: appliesToSpecies,
       minShown: 1,
       maxShown: 1,
       amountsByPlacement: {1: 0},
     ),
-    _ClassPaybackRow(
+    ClassPaybackRow(
       appliesToSpecies: appliesToSpecies,
       minShown: 2,
       maxShown: 2,
       amountsByPlacement: {1: 0, 2: 0},
     ),
-    _ClassPaybackRow(
+    ClassPaybackRow(
       appliesToSpecies: appliesToSpecies,
       minShown: 3,
       maxShown: 3,
       amountsByPlacement: {1: 0, 2: 0, 3: 0},
     ),
-    _ClassPaybackRow(
+    ClassPaybackRow(
       appliesToSpecies: appliesToSpecies,
       minShown: 4,
       maxShown: 4,
       amountsByPlacement: {1: 0, 2: 0, 3: 0, 4: 0},
     ),
-    _ClassPaybackRow(
+    ClassPaybackRow(
       appliesToSpecies: appliesToSpecies,
       minShown: 5,
       maxShown: 5,
       amountsByPlacement: {1: 0, 2: 0, 3: 0, 4: 0, 5: 0},
     ),
-    _ClassPaybackRow(
+    ClassPaybackRow(
       appliesToSpecies: appliesToSpecies,
       minShown: 6,
       maxShown: null,
