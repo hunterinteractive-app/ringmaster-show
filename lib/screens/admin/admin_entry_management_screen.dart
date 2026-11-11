@@ -254,13 +254,11 @@ class _AdminEntryManagementScreenState
       isScrollControlled: true,
       showDragHandle: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => _themedBottomSheetShell(
+      builder: (_) => buildAdminAddEntrySheet(
         context,
-        child: _AdminAddEntrySheet(
-          showId: widget.showId,
-          sections: _sections,
-          initialSectionId: _selectedSectionId,
-        ),
+        showId: widget.showId,
+        sections: _sections,
+        initialSectionId: _selectedSectionId,
       ),
     );
 
@@ -1281,7 +1279,18 @@ Widget _themedBottomSheetShell(BuildContext context, {required Widget child}) {
 
 Widget _surfaceTextScope(BuildContext context, {required Widget child}) {
   return Theme(
-    data: AppTheme.surfaceTheme(Theme.of(context)),
+    data: AppTheme.surfaceTheme(Theme.of(context)).copyWith(
+      disabledColor: AppColors.muted,
+      inputDecorationTheme: Theme.of(context).inputDecorationTheme.copyWith(
+        labelStyle: const TextStyle(color: AppColors.muted),
+        floatingLabelStyle: const TextStyle(
+          color: AppColors.text,
+          backgroundColor: AppColors.surface,
+        ),
+        helperStyle: const TextStyle(color: AppColors.muted),
+        errorStyle: const TextStyle(color: AppColors.danger),
+      ),
+    ),
     child: DefaultTextStyle.merge(
       style: const TextStyle(color: AppColors.text),
       child: IconTheme(
@@ -2799,6 +2808,36 @@ class _MoveEntrySheetState extends State<_MoveEntrySheet> {
   }
 }
 
+/// Shared entry point keeps the complete form testable with its real theme.
+Widget buildAdminAddEntrySheet(
+  BuildContext context, {
+  required String showId,
+  required List<Map<String, dynamic>> sections,
+  String? initialSectionId,
+}) => _themedBottomSheetShell(
+  context,
+  child: Theme(
+    data: AppTheme.onGradientTheme(Theme.of(context)).copyWith(
+      disabledColor: AppColors.headerForeground.withValues(alpha: .82),
+      inputDecorationTheme: Theme.of(context).inputDecorationTheme.copyWith(
+        labelStyle: const TextStyle(color: AppColors.muted),
+        hintStyle: const TextStyle(color: AppColors.muted),
+        floatingLabelStyle: const TextStyle(
+          color: AppColors.text,
+          backgroundColor: AppColors.surface,
+        ),
+        helperStyle: const TextStyle(color: AppColors.headerForeground),
+        errorStyle: const TextStyle(color: AppColors.headerForeground),
+      ),
+    ),
+    child: _AdminAddEntrySheet(
+      showId: showId,
+      sections: sections,
+      initialSectionId: initialSectionId,
+    ),
+  ),
+);
+
 class _AdminAddEntrySheet extends StatefulWidget {
   final String showId;
   final List<Map<String, dynamic>> sections;
@@ -3167,117 +3206,120 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
     try {
       await showDialog<void>(
         context: context,
-        builder: (dialogContext) => StatefulBuilder(
-          builder: (context, setDialogState) => AlertDialog(
-            title: const Text('Add Meat Pen'),
-            content: SizedBox(
-              width: 420,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text(
-                    'Enter the shared breed, variety, and all three tattoos.',
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: breed,
-                    style: inputTextStyle,
-                    decoration: const InputDecoration(
-                      labelText: 'Breed',
-                      labelStyle: inputLabelStyle,
-                      floatingLabelStyle: inputLabelStyle,
+        builder: (dialogContext) => Theme(
+          data: AppTheme.surfaceDialogTheme(Theme.of(dialogContext)),
+          child: StatefulBuilder(
+            builder: (context, setDialogState) => AlertDialog(
+              title: const Text('Add Meat Pen'),
+              content: SizedBox(
+                width: 420,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text(
+                      'Enter the shared breed, variety, and all three tattoos.',
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: variety,
-                    style: inputTextStyle,
-                    decoration: const InputDecoration(
-                      labelText: 'Variety',
-                      labelStyle: inputLabelStyle,
-                      floatingLabelStyle: inputLabelStyle,
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: breed,
+                      style: inputTextStyle,
+                      decoration: const InputDecoration(
+                        labelText: 'Breed',
+                        labelStyle: inputLabelStyle,
+                        floatingLabelStyle: inputLabelStyle,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: tattoo1,
-                    style: inputTextStyle,
-                    decoration: const InputDecoration(
-                      labelText: 'Tattoo 1',
-                      labelStyle: inputLabelStyle,
-                      floatingLabelStyle: inputLabelStyle,
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: variety,
+                      style: inputTextStyle,
+                      decoration: const InputDecoration(
+                        labelText: 'Variety',
+                        labelStyle: inputLabelStyle,
+                        floatingLabelStyle: inputLabelStyle,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: tattoo2,
-                    style: inputTextStyle,
-                    decoration: const InputDecoration(
-                      labelText: 'Tattoo 2',
-                      labelStyle: inputLabelStyle,
-                      floatingLabelStyle: inputLabelStyle,
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: tattoo1,
+                      style: inputTextStyle,
+                      decoration: const InputDecoration(
+                        labelText: 'Tattoo 1',
+                        labelStyle: inputLabelStyle,
+                        floatingLabelStyle: inputLabelStyle,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: tattoo3,
-                    style: inputTextStyle,
-                    decoration: const InputDecoration(
-                      labelText: 'Tattoo 3',
-                      labelStyle: inputLabelStyle,
-                      floatingLabelStyle: inputLabelStyle,
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: tattoo2,
+                      style: inputTextStyle,
+                      decoration: const InputDecoration(
+                        labelText: 'Tattoo 2',
+                        labelStyle: inputLabelStyle,
+                        floatingLabelStyle: inputLabelStyle,
+                      ),
                     ),
-                  ),
-                  if (error != null) ...[
-                    const SizedBox(height: 10),
-                    Text(
-                      error!,
-                      style: const TextStyle(color: AppColors.danger),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: tattoo3,
+                      style: inputTextStyle,
+                      decoration: const InputDecoration(
+                        labelText: 'Tattoo 3',
+                        labelStyle: inputLabelStyle,
+                        floatingLabelStyle: inputLabelStyle,
+                      ),
                     ),
+                    if (error != null) ...[
+                      const SizedBox(height: 10),
+                      Text(
+                        error!,
+                        style: const TextStyle(color: AppColors.danger),
+                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Cancel'),
-              ),
-              FilledButton(
-                onPressed: () async {
-                  final values = [
-                    breed.text,
-                    variety.text,
-                    tattoo1.text,
-                    tattoo2.text,
-                    tattoo3.text,
-                  ].map((value) => value.trim()).toList();
-                  if (values.any((value) => value.isEmpty)) {
-                    setDialogState(
-                      () => error =
-                          'Breed, variety, and all three tattoos are required.',
-                    );
-                    return;
-                  }
-                  try {
-                    await _saveSecretaryMeatPen(
-                      breed: values[0],
-                      variety: values[1],
-                      tattoos: values
-                          .sublist(2)
-                          .map((value) => value.toUpperCase())
-                          .toList(),
-                    );
-                    if (context.mounted) {
-                      Navigator.pop(context);
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: () async {
+                    final values = [
+                      breed.text,
+                      variety.text,
+                      tattoo1.text,
+                      tattoo2.text,
+                      tattoo3.text,
+                    ].map((value) => value.trim()).toList();
+                    if (values.any((value) => value.isEmpty)) {
+                      setDialogState(
+                        () => error =
+                            'Breed, variety, and all three tattoos are required.',
+                      );
+                      return;
                     }
-                  } catch (e) {
-                    setDialogState(() => error = e.toString());
-                  }
-                },
-                child: const Text('Add Meat Pen'),
-              ),
-            ],
+                    try {
+                      await _saveSecretaryMeatPen(
+                        breed: values[0],
+                        variety: values[1],
+                        tattoos: values
+                            .sublist(2)
+                            .map((value) => value.toUpperCase())
+                            .toList(),
+                      );
+                      if (context.mounted) {
+                        Navigator.pop(context);
+                      }
+                    } catch (e) {
+                      setDialogState(() => error = e.toString());
+                    }
+                  },
+                  child: const Text('Add Meat Pen'),
+                ),
+              ],
+            ),
           ),
         ),
       );
@@ -5199,8 +5241,8 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
                         color: isSuccess
-                            ? Colors.green.withValues(alpha: .08)
-                            : Colors.red.withValues(alpha: .08),
+                            ? AppColors.successBg
+                            : AppColors.dangerBg,
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
                           color: isSuccess
@@ -5277,7 +5319,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                                 padding: EdgeInsets.only(top: 6),
                                 child: Text(
                                   'Select at least one section.',
-                                  style: TextStyle(color: Colors.red),
+                                  style: TextStyle(color: AppColors.danger),
                                 ),
                               ),
                             ),
@@ -5468,6 +5510,10 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                           const SizedBox(height: 10),
                           DropdownButtonFormField<String>(
                             initialValue: _exhibitorType,
+                            style: _entrySheetDropdownTextStyle,
+                            dropdownColor: AppColors.surface,
+                            iconEnabledColor: AppColors.muted,
+                            iconDisabledColor: AppColors.muted,
                             decoration: const InputDecoration(
                               labelText: 'Exhibitor Type',
                               border: OutlineInputBorder(),
