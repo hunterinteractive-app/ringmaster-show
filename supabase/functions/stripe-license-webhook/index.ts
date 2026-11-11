@@ -10,6 +10,7 @@ import {
   sendLicensePurchaseEmail,
 } from "../_shared/license_purchase_email.ts";
 import { conventionFulfillmentParams } from "../_shared/convention_sale.ts";
+import { findLicenseUserByEmail } from "../_shared/license_user_lookup.ts";
 
 const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") ?? "", {
   apiVersion: "2023-10-16" as Stripe.LatestApiVersion,
@@ -289,18 +290,13 @@ serve(async (req) => {
   console.log("Resolved secretary name:", secretaryName);
   console.log("Custom fields:", JSON.stringify(customFields));
 
-  const { data: usersResult, error: usersError } = await supabase.auth.admin
-    .listUsers();
-
-  if (usersError) {
+  let matchedUser: Awaited<ReturnType<typeof findLicenseUserByEmail>>;
+  try {
+    matchedUser = await findLicenseUserByEmail(supabase.auth.admin, secretaryEmail);
+  } catch (usersError) {
     console.error("Error listing users:", usersError);
     return new Response("Error listing users", { status: 500 });
   }
-
-  const matchedUser = (usersResult.users ?? []).find(
-    (u) =>
-      (u.email ?? "").trim().toLowerCase() === secretaryEmail.toLowerCase(),
-  );
 
   if (!matchedUser) {
     const { error: insertPendingError } = await supabase

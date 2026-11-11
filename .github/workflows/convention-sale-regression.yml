@@ -8,6 +8,7 @@ on:
       - 'supabase/functions/stripe-license-webhook/**'
       - 'supabase/functions/_shared/convention*'
       - 'supabase/functions/_shared/license_purchase_email*'
+      - 'supabase/functions/_shared/license_user_lookup*'
       - 'supabase/migrations/*convention*'
       - 'supabase/tests/convention*'
       - 'tool/convention_sale/test_database.py'
@@ -26,7 +27,7 @@ jobs:
           node-version: '22'
       - name: Validate checkout and paid webhook behavior
         run: |
-          npx --yes deno@2.9.6 test --config supabase/functions/deno.json --allow-env --allow-net supabase/functions/convention-sale-checkout/handler_test.ts supabase/functions/_shared/convention_sale_test.ts supabase/functions/_shared/convention_locality_test.ts supabase/functions/_shared/license_purchase_email_test.ts
+          npx --yes deno@2.9.6 test --config supabase/functions/deno.json --allow-env --allow-net supabase/functions/convention-sale-checkout/handler_test.ts supabase/functions/_shared/convention_sale_test.ts supabase/functions/_shared/convention_locality_test.ts supabase/functions/_shared/license_purchase_email_test.ts supabase/functions/_shared/license_user_lookup_test.ts
           npx --yes deno@2.9.6 check --config supabase/functions/deno.json supabase/functions/stripe-license-webhook/index.ts
       - name: Start disposable payment database
         run: |
