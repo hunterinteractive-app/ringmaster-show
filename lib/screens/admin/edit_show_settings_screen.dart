@@ -175,7 +175,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
   List<Map<String, dynamic>> _showSections = [];
   bool _isLocked = false;
   bool _isFinalized = false;
-  bool _isCheckinPortalActive = false;
+  bool _isCheckinPortalEnabled = false;
 
   bool get _isReadOnly => _isLocked || _isFinalized;
 
@@ -648,10 +648,10 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
 
       final checkinSettings = await supabase
           .from('show_checkin_settings')
-          .select('is_enabled,opens_at,closes_at')
+          .select('is_enabled')
           .eq('show_id', widget.showId)
           .maybeSingle();
-      _isCheckinPortalActive = _isActiveCheckinPortal(checkinSettings);
+      _isCheckinPortalEnabled = checkinSettings?['is_enabled'] == true;
 
       final finalizedAt = (show['finalized_at'] ?? '').toString().trim();
       _isFinalized = finalizedAt.isNotEmpty;
@@ -679,21 +679,6 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
         _msg = 'Load failed: $e';
       });
     }
-  }
-
-  bool _isActiveCheckinPortal(Map<String, dynamic>? settings) {
-    if (settings?['is_enabled'] != true) return false;
-
-    final now = DateTime.now().toUtc();
-    final opensAt = DateTime.tryParse(
-      '${settings?['opens_at'] ?? ''}',
-    )?.toUtc();
-    final closesAt = DateTime.tryParse(
-      '${settings?['closes_at'] ?? ''}',
-    )?.toUtc();
-
-    return (opensAt == null || !now.isBefore(opensAt)) &&
-        (closesAt == null || !now.isAfter(closesAt));
   }
 
   Future<void> _loadStripeStatus({bool showErrorInBanner = true}) async {
@@ -2079,7 +2064,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                                     'Check-In Sheets, Control Sheets, Coop Tags, Comment Cards',
                                 onTap: _saving ? null : _openPrintPacks,
                               ),
-                            if (_isCheckinPortalActive &&
+                            if (_isCheckinPortalEnabled &&
                                 (canManageEntries || canManageShowSettings))
                               _buildSettingsActionTile(
                                 icon: Icons.fact_check_outlined,

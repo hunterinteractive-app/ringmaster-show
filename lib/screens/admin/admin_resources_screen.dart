@@ -198,98 +198,122 @@ class _AdminResourcesScreenState extends State<AdminResourcesScreen> {
   }) {
     showDialog(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Row(
-          children: [
-            Icon(icon, color: AppColors.navy),
-            const SizedBox(width: AppSpacing.sm),
-            Expanded(child: Text(title)),
-          ],
-        ),
-        content: SizedBox(
-          width: 720,
-          height: MediaQuery.of(context).size.height * .62,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+      builder: (dialogContext) => Theme(
+        data: AppTheme.surfaceDialogTheme(Theme.of(dialogContext)),
+        child: AlertDialog(
+          title: Row(
             children: [
-              Text(
-                subtitle,
-                style: Theme.of(
-                  context,
-                ).textTheme.bodyMedium?.copyWith(color: AppColors.muted),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              Expanded(
-                child: ListView.separated(
-                  itemCount: items.length,
-                  separatorBuilder: (context, index) =>
-                      const SizedBox(height: AppSpacing.sm),
-                  itemBuilder: (context, index) {
-                    final item = items[index];
-                    final itemTitle = (item['title'] ?? '').toString();
-                    final itemDesc = (item['description'] ?? '').toString();
-                    final itemCategory = (item['category'] ?? '').toString();
-                    final url = (item['file_url'] ?? '').toString();
-                    final resourceType = (item['resource_type'] ?? 'file')
-                        .toString();
-                    final isScribe = resourceType == 'scribe';
+              Icon(icon, color: AppColors.navy),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(child: Text(title)),
+            ],
+          ),
+          content: SizedBox(
+            width: 720,
+            height: MediaQuery.of(context).size.height * .62,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  subtitle,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium?.copyWith(color: AppColors.muted),
+                ),
+                const SizedBox(height: AppSpacing.md),
+                Expanded(
+                  child: ListView.separated(
+                    itemCount: items.length,
+                    separatorBuilder: (context, index) =>
+                        const SizedBox(height: AppSpacing.sm),
+                    itemBuilder: (context, index) {
+                      final item = items[index];
+                      final itemTitle = (item['title'] ?? '').toString();
+                      final itemDesc = (item['description'] ?? '').toString();
+                      final itemCategory = (item['category'] ?? '').toString();
+                      final url = (item['file_url'] ?? '').toString();
+                      final resourceType = (item['resource_type'] ?? 'file')
+                          .toString();
+                      final isScribe = resourceType == 'scribe';
+                      final isPdf =
+                          item['mime_type'] == 'application/pdf' ||
+                          (item['file_name'] ?? '')
+                              .toString()
+                              .toLowerCase()
+                              .endsWith('.pdf');
 
-                    return Container(
-                      padding: const EdgeInsets.all(AppSpacing.md),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF7F8FC),
-                        borderRadius: BorderRadius.circular(AppRadius.md),
-                        border: Border.all(color: const Color(0xFFE5E9F2)),
-                      ),
-                      child: LayoutBuilder(
-                        builder: (context, constraints) {
-                          final compact = constraints.maxWidth < 520;
+                      return Container(
+                        padding: const EdgeInsets.all(AppSpacing.md),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF7F8FC),
+                          borderRadius: BorderRadius.circular(AppRadius.md),
+                          border: Border.all(color: const Color(0xFFE5E9F2)),
+                        ),
+                        child: LayoutBuilder(
+                          builder: (context, constraints) {
+                            final compact = constraints.maxWidth < 520;
 
-                          final leadingIcon = Container(
-                            width: 42,
-                            height: 42,
-                            decoration: BoxDecoration(
-                              color: AppColors.navy.withOpacity(.08),
-                              borderRadius: BorderRadius.circular(AppRadius.md),
-                            ),
-                            child: Icon(
-                              isScribe
-                                  ? Icons.menu_book_outlined
-                                  : Icons.image_outlined,
-                              color: AppColors.navy,
-                            ),
-                          );
-
-                          final details = Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                itemTitle,
-                                style: Theme.of(context).textTheme.titleSmall
-                                    ?.copyWith(fontWeight: FontWeight.w700),
+                            final leadingIcon = Container(
+                              width: 42,
+                              height: 42,
+                              decoration: BoxDecoration(
+                                color: AppColors.navy.withOpacity(.08),
+                                borderRadius: BorderRadius.circular(
+                                  AppRadius.md,
+                                ),
                               ),
-                              if (itemDesc.isNotEmpty) ...[
-                                const SizedBox(height: 4),
+                              child: Icon(
+                                isScribe
+                                    ? Icons.menu_book_outlined
+                                    : isPdf
+                                    ? Icons.picture_as_pdf_outlined
+                                    : Icons.image_outlined,
+                                color: AppColors.navy,
+                              ),
+                            );
+
+                            final details = Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
                                 Text(
-                                  itemDesc,
-                                  style: Theme.of(context).textTheme.bodySmall
-                                      ?.copyWith(color: AppColors.muted),
+                                  itemTitle,
+                                  style: Theme.of(context).textTheme.titleSmall
+                                      ?.copyWith(fontWeight: FontWeight.w700),
+                                ),
+                                if (itemDesc.isNotEmpty) ...[
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    itemDesc,
+                                    style: Theme.of(context).textTheme.bodySmall
+                                        ?.copyWith(color: AppColors.muted),
+                                  ),
+                                ],
+                                const SizedBox(height: AppSpacing.sm),
+                                Text(
+                                  itemCategory,
+                                  style: const TextStyle(
+                                    color: AppColors.muted,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                  ),
                                 ),
                               ],
-                              const SizedBox(height: AppSpacing.sm),
-                              RMBadge(
-                                text: itemCategory,
-                                icon: isScribe
-                                    ? Icons.menu_book_outlined
-                                    : Icons.folder_open,
-                              ),
-                            ],
-                          );
+                            );
 
-                          final actions = Wrap(
-                            spacing: AppSpacing.xs,
-                            children: [
-                              if (!isScribe && url.isNotEmpty)
+                            final actions = Wrap(
+                              spacing: AppSpacing.xs,
+                              children: [
+                                if (!isScribe && !isPdf && url.isNotEmpty)
+                                  IconButton(
+                                    style: IconButton.styleFrom(
+                                      foregroundColor: AppColors.navy,
+                                      backgroundColor: AppColors.navy
+                                          .withOpacity(.08),
+                                    ),
+                                    tooltip: 'Preview',
+                                    icon: const Icon(Icons.visibility_outlined),
+                                    onPressed: () => _previewImage(url),
+                                  ),
                                 IconButton(
                                   style: IconButton.styleFrom(
                                     foregroundColor: AppColors.navy,
@@ -297,77 +321,74 @@ class _AdminResourcesScreenState extends State<AdminResourcesScreen> {
                                       .08,
                                     ),
                                   ),
-                                  tooltip: 'Preview',
-                                  icon: const Icon(Icons.visibility_outlined),
-                                  onPressed: () => _previewImage(url),
-                                ),
-                              IconButton(
-                                style: IconButton.styleFrom(
-                                  foregroundColor: AppColors.navy,
-                                  backgroundColor: AppColors.navy.withOpacity(
-                                    .08,
+                                  tooltip: isScribe ? 'Open Guide' : 'Download',
+                                  icon: Icon(
+                                    isScribe
+                                        ? Icons.open_in_new
+                                        : Icons.download,
                                   ),
-                                ),
-                                tooltip: isScribe ? 'Open Guide' : 'Download',
-                                icon: Icon(
-                                  isScribe ? Icons.open_in_new : Icons.download,
-                                ),
-                                onPressed: url.isEmpty
-                                    ? null
-                                    : () => _openResource(url),
-                              ),
-                            ],
-                          );
-
-                          if (compact) {
-                            return Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    leadingIcon,
-                                    const SizedBox(width: AppSpacing.md),
-                                    Expanded(child: details),
-                                  ],
-                                ),
-                                const SizedBox(height: AppSpacing.sm),
-                                Align(
-                                  alignment: Alignment.centerRight,
-                                  child: actions,
+                                  onPressed: url.isEmpty
+                                      ? null
+                                      : () => _openResource(url),
                                 ),
                               ],
                             );
-                          }
 
-                          return Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              leadingIcon,
-                              const SizedBox(width: AppSpacing.md),
-                              Expanded(child: details),
-                              const SizedBox(width: AppSpacing.sm),
-                              actions,
-                            ],
-                          );
-                        },
-                      ),
-                    );
-                  },
+                            if (compact) {
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      leadingIcon,
+                                      const SizedBox(width: AppSpacing.md),
+                                      Expanded(child: details),
+                                    ],
+                                  ),
+                                  const SizedBox(height: AppSpacing.sm),
+                                  Align(
+                                    alignment: Alignment.centerRight,
+                                    child: actions,
+                                  ),
+                                ],
+                              );
+                            }
+
+                            return Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                leadingIcon,
+                                const SizedBox(width: AppSpacing.md),
+                                Expanded(child: details),
+                                const SizedBox(width: AppSpacing.sm),
+                                actions,
+                              ],
+                            );
+                          },
+                        ),
+                      );
+                    },
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Close'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('Close'),
-          ),
-        ],
       ),
     );
   }
+
+  bool _isHelpGuide(Map<String, dynamic> item) =>
+      item['resource_type'] == 'scribe' ||
+      (item['category'] ?? '').toString().toLowerCase() == 'help guides';
 
   Widget _resourceCollectionCard({
     required String title,
@@ -476,16 +497,8 @@ class _AdminResourcesScreenState extends State<AdminResourcesScreen> {
           }
 
           final items = snap.data ?? [];
-          final guideItems = items
-              .where(
-                (item) => (item['resource_type'] ?? '').toString() == 'scribe',
-              )
-              .toList();
-          final fileItems = items
-              .where(
-                (item) => (item['resource_type'] ?? '').toString() != 'scribe',
-              )
-              .toList();
+          final guideItems = items.where(_isHelpGuide).toList();
+          final fileItems = items.where((item) => !_isHelpGuide(item)).toList();
           final logoItems = fileItems.where((item) {
             final category = (item['category'] ?? '').toString().toLowerCase();
             final title = (item['title'] ?? '').toString().toLowerCase();
@@ -536,7 +549,7 @@ class _AdminResourcesScreenState extends State<AdminResourcesScreen> {
                         _resourceCollectionCard(
                           title: 'RingMaster Show Help Guides',
                           subtitle:
-                              'Step-by-step Scribe guides for exhibitors, show secretaries, pre-show work, and after-show closeout.',
+                              'Step-by-step guides and printable PDFs for exhibitors, show secretaries, pre-show work, and after-show closeout.',
                           badge: 'Guides',
                           icon: Icons.menu_book_outlined,
                           items: guideItems,

@@ -1352,34 +1352,38 @@ class _ExhibitorCheckinPortalScreenState
                             ),
                           ),
                         ],
-                      ],
-                    ),
-                    trailing: SizedBox(
-                      width: 142,
-                      child: _openingChangeEntryId == _text(entry, 'id')
-                          ? const Center(
-                              child: SizedBox(
-                                height: 22,
-                                width: 22,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
+                        const SizedBox(height: 8),
+                        SizedBox(
+                          width: double.infinity,
+                          child: _openingChangeEntryId == _text(entry, 'id')
+                              ? const Center(
+                                  child: SizedBox(
+                                    height: 22,
+                                    width: 22,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  ),
+                                )
+                              : OutlinedButton(
+                                  onPressed: _openingChangeEntryId == null
+                                      ? () => _openRequestChange(entry)
+                                      : null,
+                                  child: Text(
+                                    _text(entry, 'scratched_at').isNotEmpty ||
+                                            _text(
+                                                  entry,
+                                                  'status',
+                                                ).toLowerCase() ==
+                                                'scratched'
+                                        ? 'Scratched'
+                                        : isPending
+                                        ? 'View / change'
+                                        : 'Request change',
+                                  ),
                                 ),
-                              ),
-                            )
-                          : OutlinedButton(
-                              onPressed: _openingChangeEntryId == null
-                                  ? () => _openRequestChange(entry)
-                                  : null,
-                              child: Text(
-                                _text(entry, 'scratched_at').isNotEmpty ||
-                                        _text(entry, 'status').toLowerCase() ==
-                                            'scratched'
-                                    ? 'Scratched'
-                                    : isPending
-                                    ? 'View / change'
-                                    : 'Request change',
-                              ),
-                            ),
+                        ),
+                      ],
                     ),
                   ),
                 );
@@ -1479,6 +1483,9 @@ class _ExhibitorCheckinPortalScreenState
                           textCapitalization: TextCapitalization.characters,
                           decoration: const InputDecoration(
                             labelText: 'Your initials',
+                            floatingLabelStyle: TextStyle(
+                              color: AppColors.secondaryButton,
+                            ),
                             border: OutlineInputBorder(),
                           ),
                         ),
@@ -1490,8 +1497,12 @@ class _ExhibitorCheckinPortalScreenState
                           enabled: !_completing,
                           textCapitalization: TextCapitalization.words,
                           decoration: const InputDecoration(
-                            labelText:
-                                'Digital signature (type your full name)',
+                            labelText: 'Typed signature',
+                            helperText: 'Type your full name.',
+                            floatingLabelStyle: TextStyle(
+                              color: AppColors.secondaryButton,
+                            ),
+                            helperStyle: TextStyle(color: AppColors.muted),
                             border: OutlineInputBorder(),
                           ),
                         ),
@@ -1499,14 +1510,21 @@ class _ExhibitorCheckinPortalScreenState
                       const SizedBox(height: 12),
                       DropdownButtonFormField<String>(
                         initialValue: _receiptPreference,
+                        isExpanded: true,
                         decoration: const InputDecoration(
                           labelText: 'Receipt preference',
+                          floatingLabelStyle: TextStyle(
+                            color: AppColors.secondaryButton,
+                          ),
                           border: OutlineInputBorder(),
                         ),
                         items: const [
                           DropdownMenuItem(
                             value: 'email_receipt',
-                            child: Text('Email receipt confirmation'),
+                            child: Text(
+                              'Email receipt confirmation',
+                              maxLines: 2,
+                            ),
                           ),
                           DropdownMenuItem(
                             value: 'no_receipt',

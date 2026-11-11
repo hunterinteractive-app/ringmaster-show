@@ -13,8 +13,10 @@ class ShowCheckinSettingsDialog {
     return showDialog<void>(
       context: context,
       barrierDismissible: false,
-      builder: (_) =>
-          _ShowCheckinSettingsDialog(showId: showId, showName: showName),
+      builder: (context) => Theme(
+        data: AppTheme.surfaceDialogTheme(Theme.of(context)),
+        child: _ShowCheckinSettingsDialog(showId: showId, showName: showName),
+      ),
     );
   }
 }
@@ -53,6 +55,7 @@ class _ShowCheckinSettingsDialogState
   };
 
   bool _loading = true;
+  bool _loadFailed = false;
   bool _saving = false;
   bool _isReadOnly = false;
   bool _isEnabled = false;
@@ -85,6 +88,11 @@ class _ShowCheckinSettingsDialogState
   }
 
   Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _loadFailed = false;
+      _message = null;
+    });
     try {
       final show = await _supabase
           .from('shows')
@@ -141,14 +149,15 @@ class _ShowCheckinSettingsDialogState
       if (!mounted) return;
       setState(() {
         _loading = false;
+        _loadFailed = true;
         _message =
-            'Check-In Settings are not installed in this database yet. '
-            'Apply the Check-In Portal database update, then reopen this screen.';
+            'Could not load Check-In Settings. Retry before making changes.';
       });
     }
   }
 
   Future<void> _save() async {
+    if (_loading || _loadFailed || _saving || _isReadOnly) return;
     if (_opensAt != null &&
         _closesAt != null &&
         !_closesAt!.isAfter(_opensAt!)) {
@@ -210,11 +219,12 @@ class _ShowCheckinSettingsDialogState
 
   int? _parseCents(String value) {
     final amount = double.tryParse(value.trim());
-    if (amount == null || amount < 0) return null;
+    if (amount == null || !amount.isFinite || amount < 0) return null;
     return (amount * 100).round();
   }
 
   Future<void> _generatePortalLink() async {
+    if (_loading || _loadFailed || _saving || _isReadOnly) return;
     setState(() {
       _saving = true;
       _message = null;
@@ -281,23 +291,23 @@ class _ShowCheckinSettingsDialogState
 
   @override
   Widget build(BuildContext context) {
-    final disabled = _loading || _saving || _isReadOnly;
-    final foreground = AppColors.headerForeground;
-    final mutedForeground = foreground.withValues(alpha: 0.82);
+    final disabled = _loading || _loadFailed || _saving || _isReadOnly;
+    final foreground = AppColors.text;
+    const mutedForeground = AppColors.muted;
     final sectionStyle = Theme.of(context).textTheme.titleMedium?.copyWith(
       color: foreground,
       fontWeight: FontWeight.w700,
     );
     return AlertDialog(
-      backgroundColor: AppColors.pageBackground,
+      backgroundColor: AppColors.surface,
       surfaceTintColor: Colors.transparent,
       titleTextStyle: Theme.of(context).textTheme.titleLarge?.copyWith(
-        color: AppColors.headerForeground,
+        color: AppColors.text,
         fontWeight: FontWeight.w800,
       ),
       contentTextStyle: Theme.of(
         context,
-      ).textTheme.bodyMedium?.copyWith(color: AppColors.headerForeground),
+      ).textTheme.bodyMedium?.copyWith(color: AppColors.text),
       title: Text('Check-In Settings — ${widget.showName}'),
       content: SizedBox(
         width: 680,
@@ -334,6 +344,9 @@ class _ShowCheckinSettingsDialogState
                     ),
                     Divider(color: foreground.withValues(alpha: 0.22)),
                     Text('Availability', style: sectionStyle),
+                    const Text(
+                      'Times use your device’s current time zone. Leave a time blank for no opening or closing limit.',
+                    ),
                     _timeRow('Opens', _opensAt, true, disabled),
                     _timeRow('Closes', _closesAt, false, disabled),
                     Divider(color: foreground.withValues(alpha: 0.22)),
@@ -341,11 +354,11 @@ class _ShowCheckinSettingsDialogState
                     CheckboxListTile(
                       contentPadding: EdgeInsets.zero,
                       fillColor: const WidgetStatePropertyAll(
-                        AppColors.headerForeground,
+                        AppColors.secondaryButton,
                       ),
-                      checkColor: AppColors.pageBackground,
+                      checkColor: Colors.white,
                       side: const BorderSide(
-                        color: AppColors.headerForeground,
+                        color: AppColors.secondaryButton,
                         width: 2,
                       ),
                       title: Text(
@@ -362,15 +375,15 @@ class _ShowCheckinSettingsDialogState
                     CheckboxListTile(
                       contentPadding: EdgeInsets.zero,
                       fillColor: const WidgetStatePropertyAll(
-                        AppColors.headerForeground,
+                        AppColors.secondaryButton,
                       ),
-                      checkColor: AppColors.pageBackground,
+                      checkColor: Colors.white,
                       side: const BorderSide(
-                        color: AppColors.headerForeground,
+                        color: AppColors.secondaryButton,
                         width: 2,
                       ),
                       title: Text(
-                        'Require signature capture',
+                        'Require typed signature',
                         style: TextStyle(color: foreground),
                       ),
                       value: _requireSignature,
@@ -393,12 +406,14 @@ class _ShowCheckinSettingsDialogState
                               entry.value,
                               style: TextStyle(
                                 fontWeight: FontWeight.w600,
-                                color: AppColors.headerForeground,
+                                color: AppColors.text,
                               ),
                             ),
                             const SizedBox(height: 6),
                             DropdownButtonFormField<String>(
                               initialValue: _editPermissions[entry.key],
+                              isExpanded: true,
+                              dropdownColor: AppColors.surface,
                               decoration: const InputDecoration(
                                 border: OutlineInputBorder(),
                               ),
@@ -408,6 +423,7 @@ class _ShowCheckinSettingsDialogState
                                       value: option.key,
                                       child: Text(
                                         option.value,
+                                        maxLines: 2,
                                         style: const TextStyle(
                                           color: AppColors.text,
                                         ),
@@ -441,11 +457,11 @@ class _ShowCheckinSettingsDialogState
                         CheckboxListTile(
                           contentPadding: EdgeInsets.zero,
                           fillColor: const WidgetStatePropertyAll(
-                            AppColors.headerForeground,
+                            AppColors.secondaryButton,
                           ),
-                          checkColor: AppColors.pageBackground,
+                          checkColor: Colors.white,
                           side: const BorderSide(
-                            color: AppColors.headerForeground,
+                            color: AppColors.secondaryButton,
                             width: 2,
                           ),
                           value: _useNormalAddEntryFee,
@@ -512,8 +528,10 @@ class _ShowCheckinSettingsDialogState
                     OutlinedButton.icon(
                       onPressed: disabled ? null : _generatePortalLink,
                       style: OutlinedButton.styleFrom(
-                        foregroundColor: AppColors.header,
-                        side: const BorderSide(color: AppColors.header),
+                        foregroundColor: AppColors.secondaryButton,
+                        side: const BorderSide(
+                          color: AppColors.secondaryButton,
+                        ),
                       ),
                       icon: const Icon(Icons.qr_code_2),
                       label: const Text('Generate New QR Code'),
@@ -521,11 +539,15 @@ class _ShowCheckinSettingsDialogState
                     if (_portalUrl != null) ...[
                       const SizedBox(height: 12),
                       Center(
-                        child: BarcodeWidget(
-                          barcode: Barcode.qrCode(),
-                          data: _portalUrl!,
-                          width: 210,
-                          height: 210,
+                        child: Container(
+                          padding: const EdgeInsets.all(16),
+                          color: Colors.white,
+                          child: BarcodeWidget(
+                            barcode: Barcode.qrCode(),
+                            data: _portalUrl!,
+                            width: 210,
+                            height: 210,
+                          ),
                         ),
                       ),
                       const SizedBox(height: 8),
@@ -557,8 +579,8 @@ class _ShowCheckinSettingsDialogState
                           color:
                               _message!.contains('failed') ||
                                   _message!.contains('Could not')
-                              ? Colors.red
-                              : Colors.green,
+                              ? AppColors.danger
+                              : AppColors.text,
                         ),
                       ),
                     ],
@@ -567,6 +589,8 @@ class _ShowCheckinSettingsDialogState
               ),
       ),
       actions: [
+        if (_loadFailed)
+          TextButton(onPressed: _load, child: const Text('Retry')),
         TextButton(
           onPressed: _saving ? null : () => Navigator.pop(context),
           child: const Text('Close'),
@@ -585,7 +609,7 @@ class _ShowCheckinSettingsDialogState
         Expanded(
           child: Text(
             '$label: ${_formatDateTime(value)}',
-            style: const TextStyle(color: AppColors.headerForeground),
+            style: const TextStyle(color: AppColors.text),
           ),
         ),
         TextButton(
