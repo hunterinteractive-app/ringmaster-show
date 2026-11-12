@@ -22,6 +22,17 @@ import '../services/show_addon_service.dart';
 
 SupabaseClient get supabase => ringMasterClient;
 
+Future<MeatPenInput?> showMeatPenDialog(
+  BuildContext context, {
+  required String showId,
+}) => showDialog<MeatPenInput>(
+  context: context,
+  builder: (dialogContext) => Theme(
+    data: AppTheme.surfaceDialogTheme(Theme.of(dialogContext)),
+    child: _MeatPenDialog(showId: showId),
+  ),
+);
+
 class EnterShowScreen extends StatefulWidget {
   final String showId;
   final String showName;
@@ -2221,12 +2232,8 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
     return result;
   }
 
-  Future<_MeatPenInput?> _openMeatPenDialog() {
-    return showDialog<_MeatPenInput>(
-      context: context,
-      builder: (_) => _MeatPenDialog(showId: widget.showId),
-    );
-  }
+  Future<MeatPenInput?> _openMeatPenDialog() =>
+      showMeatPenDialog(context, showId: widget.showId);
 
   Future<void> _addCommercialSingleAnimalToCart({
     required Map<String, dynamic> animal,
@@ -2982,12 +2989,12 @@ class _CommercialSingleEntryInput {
   });
 }
 
-class _MeatPenInput {
+class MeatPenInput {
   final String breed;
   final String variety;
   final List<String> tattoos;
 
-  const _MeatPenInput({
+  const MeatPenInput({
     required this.breed,
     required this.variety,
     required this.tattoos,
@@ -3114,8 +3121,11 @@ class _MeatPenDialogState extends State<_MeatPenDialog> {
 
     final res = await supabase
         .from('breeds')
-        .select('id,name,species')
+        .select('id,name,species,class_system')
         .eq('species', 'rabbit')
+        .eq('class_system', 'six')
+        .eq('is_active', true)
+        .isFilter('local_show_id', null)
         .order('name');
 
     if (!mounted) return;
@@ -3232,7 +3242,19 @@ class _MeatPenDialogState extends State<_MeatPenDialog> {
 
     Navigator.pop(
       context,
-      _MeatPenInput(breed: breed, variety: variety, tattoos: [t1, t2, t3]),
+      MeatPenInput(
+        breed: _breedOptions
+            .firstWhere((b) => b['id'] == _breedId)['name']
+            .toString(),
+        variety: _varietyOptions
+            .firstWhere(
+              (v) =>
+                  v['name'].toString().trim().toLowerCase() ==
+                  variety.toLowerCase(),
+            )['name']
+            .toString(),
+        tattoos: [t1, t2, t3],
+      ),
     );
   }
 
@@ -3248,7 +3270,7 @@ class _MeatPenDialogState extends State<_MeatPenDialog> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'All 3 rabbits must be the same breed and variety. Weight verified at show.',
+                'Choose a six-class rabbit breed from the master catalog. All 3 rabbits must be the same breed and variety. Weight verified at show.',
                 style: Theme.of(context).textTheme.bodySmall,
               ),
               const SizedBox(height: 12),

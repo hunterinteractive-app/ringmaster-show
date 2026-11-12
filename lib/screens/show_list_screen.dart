@@ -39,6 +39,7 @@ import '../services/app_session.dart';
 import '../services/show_addon_service.dart';
 import '../services/show_payment_configuration_service.dart';
 import '../utils/date_time_utils.dart';
+import '../utils/upcoming_show_visibility.dart';
 import '../theme/app_theme.dart';
 import '../widgets/rm_widgets.dart';
 import '../widgets/show_list_header.dart';
@@ -713,7 +714,7 @@ class _ShowListScreenState extends State<ShowListScreen> {
     final query = supabase
         .from('shows')
         .select(
-          'id,name,start_date,location_name,entry_close_at,is_demo,demo_resets_at',
+          'id,name,start_date,location_name,is_published,entry_open_at,entry_close_at,is_demo,demo_resets_at',
         );
 
     if (widget.demoMode) {
@@ -724,24 +725,20 @@ class _ShowListScreenState extends State<ShowListScreen> {
       return (res as List).cast<Map<String, dynamic>>();
     }
 
-    final now = DateTime.now().toUtc().toIso8601String();
+    final now = DateTime.now().toUtc();
+    final timestamp = now.toIso8601String();
 
     final res = await query
         .eq('is_published', true)
-        .or('entry_close_at.is.null,entry_close_at.gte.$now')
+        .or(
+          'and(or(entry_open_at.is.null,entry_open_at.lte.$timestamp),'
+          'or(entry_close_at.is.null,entry_close_at.gte.$timestamp))',
+        )
         .order('start_date');
 
     final rows = (res as List).cast<Map<String, dynamic>>();
     final contestShows = await ShowAddonService().openContestShows();
-    final byId = {for (final show in rows) show['id'].toString(): show};
-    for (final show in contestShows) {
-      byId[show['id'].toString()] = show;
-    }
-    return byId.values.toList()..sort(
-      (a, b) => (a['start_date'] ?? '').toString().compareTo(
-        (b['start_date'] ?? '').toString(),
-      ),
-    );
+    return visibleUpcomingShows(rows, now: now, contestShows: contestShows);
   }
 
   Future<Set<String>> _loadAdminShowIds() async {
