@@ -17,6 +17,7 @@ import '../services/app_session.dart';
 import '../theme/app_theme.dart';
 import '../utils/date_time_utils.dart';
 import '../utils/entry_class_name.dart';
+import '../widgets/edit_entry_dialog.dart';
 import '../utils/species_sex.dart';
 import '../widgets/rm_widgets.dart';
 import '../widgets/stripe_payment_confirmation_dialog.dart';
@@ -481,8 +482,45 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
     }
 
     final currentAnimalId = (entry['animal_id'] ?? '').toString();
-    final animals = await _loadMyAnimals(currentAnimalId: currentAnimalId);
+    var animals = await _loadMyAnimals(currentAnimalId: currentAnimalId);
     final exhibitors = await _loadMyExhibitors();
+
+    List<Map<String, dynamic>> breeds;
+    try {
+      final rows = await supabase
+          .from('breeds')
+          .select('id,name,species,class_system,has_prejunior,local_show_id')
+          .or('local_show_id.is.null,local_show_id.eq.$showId');
+      final overrides = await supabase
+          .from('show_breeds')
+          .select('breed_id,class_system_override')
+          .eq('show_id', showId);
+      breeds = rows.map((row) => Map<String, dynamic>.from(row)).toList();
+      for (final breed in breeds) {
+        for (final override in overrides) {
+          if (override['breed_id'] == breed['id'] &&
+              (override['class_system_override'] ?? '')
+                  .toString()
+                  .trim()
+                  .isNotEmpty) {
+            breed['class_system'] = override['class_system_override'];
+          }
+        }
+      }
+      // Prefer this show's local catalog record over a global name match.
+      breeds.sort(
+        (a, b) => (b['local_show_id'] == showId ? 1 : 0).compareTo(
+          a['local_show_id'] == showId ? 1 : 0,
+        ),
+      );
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => _msg = 'Unable to load breed classes. Please try again.',
+        );
+      }
+      return;
+    }
 
     if (!mounted) return;
     final showSections =
@@ -516,9 +554,10 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
             );
           });
 
-    final result = await showDialog<_EditEntryResult>(
+    final result = await showDialog<EditEntryResult>(
       context: context,
-      builder: (_) => _EditEntryDialogV2(
+      builder: (_) => EditEntryDialog(
+        breeds: breeds,
         initialClassName: (entry['class_name'] ?? '').toString(),
         initialAnimalId: (entry['animal_id'] ?? '').toString(),
         initialSectionId: (entry['section_id'] ?? '').toString(),
@@ -533,7 +572,10 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
             MaterialPageRoute(builder: (_) => const MyAnimalsScreen()),
           );
         },
-        reloadAnimals: () => _loadMyAnimals(currentAnimalId: currentAnimalId),
+        reloadAnimals: () async {
+          animals = await _loadMyAnimals(currentAnimalId: currentAnimalId);
+          return animals;
+        },
       ),
     );
 
@@ -1708,315 +1750,6 @@ class _ShowExpansionCard extends StatelessWidget {
   }
 }
 
-class _EditEntryResult {
-  final String animalId;
-  final String className;
-  final String sectionId;
-  final String exhibitorId;
-
-  _EditEntryResult({
-    required this.animalId,
-    required this.className,
-    required this.sectionId,
-    required this.exhibitorId,
-  });
-}
-
-class _EditEntryDialogV2 extends StatefulWidget {
-  final String initialAnimalId;
-  final String initialClassName;
-  final String initialSectionId;
-  final String initialExhibitorId;
-  final List<Map<String, dynamic>> animals;
-  final List<Map<String, dynamic>> exhibitors;
-  final List<Map<String, dynamic>> sections;
-  final String Function(String? sectionId) sectionLabel;
-  final Future<void> Function() onAddNewAnimal;
-  final Future<List<Map<String, dynamic>>> Function() reloadAnimals;
-
-  const _EditEntryDialogV2({
-    required this.initialAnimalId,
-    required this.initialClassName,
-    required this.initialSectionId,
-    required this.initialExhibitorId,
-    required this.animals,
-    required this.exhibitors,
-    required this.sections,
-    required this.sectionLabel,
-    required this.onAddNewAnimal,
-    required this.reloadAnimals,
-  });
-
-  @override
-  State<_EditEntryDialogV2> createState() => _EditEntryDialogV2State();
-}
-
-class _EditEntryDialogV2State extends State<_EditEntryDialogV2> {
-  late List<Map<String, dynamic>> _animals;
-  late String _animalId;
-  late String _sectionId;
-  late String _exhibitorId;
-  late TextEditingController _classCtrl;
-  String? _dialogError;
-  bool _busy = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _animals = widget.animals;
-    _animalId = widget.initialAnimalId;
-    _sectionId = widget.initialSectionId;
-    _exhibitorId = widget.initialExhibitorId;
-    _classCtrl = TextEditingController(text: widget.initialClassName);
-  }
-
-  @override
-  void dispose() {
-    _classCtrl.dispose();
-    super.dispose();
-  }
-
-  String _animalLabel(Map<String, dynamic> a) {
-    final tattoo = (a['tattoo'] ?? '').toString().trim();
-    final name = (a['name'] ?? '').toString().trim();
-    final breed = (a['breed'] ?? '').toString().trim();
-    final variety = (a['variety'] ?? '').toString().trim();
-    final sex = displaySexForSpecies(species: a['species'], sex: a['sex']);
-    final top = tattoo.isNotEmpty
-        ? tattoo
-        : (name.isNotEmpty ? name : (a['id'] ?? '').toString());
-
-    final details = [
-      breed,
-      variety,
-      sex,
-    ].where((part) => part.trim().isNotEmpty).join(' • ');
-
-    return details.isEmpty ? top : '$top — $details';
-  }
-
-  String _exhibitorLabel(Map<String, dynamic> e) {
-    final showingName = (e['showing_name'] ?? '').toString().trim();
-    if (showingName.isNotEmpty) return showingName;
-
-    final displayName = (e['display_name'] ?? '').toString().trim();
-    if (displayName.isNotEmpty) return displayName;
-
-    return (e['id'] ?? '').toString();
-  }
-
-  Future<void> _addNewAnimal() async {
-    setState(() => _busy = true);
-    try {
-      await widget.onAddNewAnimal();
-      final refreshed = await widget.reloadAnimals();
-      if (!mounted) return;
-
-      setState(() {
-        _animals = refreshed;
-        final exists = _animals.any(
-          (a) => (a['id'] ?? '').toString() == _animalId,
-        );
-        if (!exists && _animals.isNotEmpty) {
-          _animalId = (_animals.first['id'] ?? '').toString();
-        }
-      });
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final hasSelected = _animals.any(
-      (a) => (a['id'] ?? '').toString() == _animalId,
-    );
-    final hasSelectedSection = widget.sections.any(
-      (s) => (s['id'] ?? '').toString() == _sectionId,
-    );
-    final hasSelectedExhibitor = widget.exhibitors.any(
-      (e) => (e['id'] ?? '').toString() == _exhibitorId,
-    );
-
-    return AlertDialog(
-      title: const Text('Edit Entry'),
-      content: SizedBox(
-        width: 520,
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (_dialogError != null) ...[
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: AppColors.danger.withValues(alpha: 0.08),
-                    borderRadius: BorderRadius.circular(AppRadius.sm),
-                    border: Border.all(
-                      color: AppColors.danger.withValues(alpha: 0.35),
-                    ),
-                  ),
-                  child: Text(
-                    _dialogError!,
-                    style: const TextStyle(
-                      color: AppColors.danger,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 10),
-              ],
-              DropdownButtonFormField<String>(
-                initialValue: hasSelectedSection ? _sectionId : null,
-                items: widget.sections.map((s) {
-                  final id = (s['id'] ?? '').toString();
-                  return DropdownMenuItem<String>(
-                    value: id,
-                    child: Text(widget.sectionLabel(id)),
-                  );
-                }).toList(),
-                onChanged: _busy
-                    ? null
-                    : (v) {
-                        if (v == null) return;
-                        setState(() {
-                          _sectionId = v;
-                        });
-                      },
-                decoration: const InputDecoration(
-                  labelText: 'Show / Section',
-                  helperText:
-                      'Move this entry to another open/youth show section.',
-                ),
-              ),
-              const SizedBox(height: 10),
-              DropdownButtonFormField<String>(
-                initialValue: hasSelectedExhibitor ? _exhibitorId : null,
-                items: widget.exhibitors.map((e) {
-                  final id = (e['id'] ?? '').toString();
-                  final label = _exhibitorLabel(e);
-
-                  return DropdownMenuItem<String>(
-                    value: id,
-                    child: Text(label),
-                  );
-                }).toList(),
-                onChanged: _busy
-                    ? null
-                    : (v) {
-                        if (v == null) return;
-                        setState(() => _exhibitorId = v);
-                      },
-                decoration: const InputDecoration(
-                  labelText: 'Exhibitor',
-                  helperText:
-                      'Move this entry to another exhibitor on your account.',
-                ),
-              ),
-              const SizedBox(height: 10),
-              DropdownButtonFormField<String>(
-                initialValue: hasSelected ? _animalId : null,
-                isExpanded: true,
-                items: _animals.map((a) {
-                  final id = (a['id'] ?? '').toString();
-                  return DropdownMenuItem<String>(
-                    value: id,
-                    child: Text(
-                      _animalLabel(a),
-                      overflow: TextOverflow.ellipsis,
-                      maxLines: 1,
-                    ),
-                  );
-                }).toList(),
-                onChanged: _busy
-                    ? null
-                    : (v) => setState(() {
-                        _animalId = v ?? _animalId;
-                        _dialogError = null;
-                      }),
-                decoration: const InputDecoration(
-                  labelText: 'Animal',
-                  helperText: 'Swap to an existing animal from My Animals.',
-                ),
-              ),
-              const SizedBox(height: 10),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: TextButton.icon(
-                  onPressed: _busy ? null : _addNewAnimal,
-                  icon: const Icon(Icons.add),
-                  label: const Text('Add new animal'),
-                ),
-              ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: _classCtrl,
-                enabled: !_busy,
-                decoration: const InputDecoration(
-                  labelText: 'Class (required)',
-                  hintText: 'Example: Junior, Senior, or Intermediate',
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: _busy ? null : () => Navigator.pop(context),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          onPressed: _busy
-              ? null
-              : () {
-                  final hasValidAnimal = _animals.any(
-                    (a) => (a['id'] ?? '').toString() == _animalId,
-                  );
-                  final hasValidSection = widget.sections.any(
-                    (s) => (s['id'] ?? '').toString() == _sectionId,
-                  );
-                  final hasValidExhibitor = widget.exhibitors.any(
-                    (e) => (e['id'] ?? '').toString() == _exhibitorId,
-                  );
-
-                  if (!hasValidSection) {
-                    setState(() => _dialogError = 'Select a show / section.');
-                    return;
-                  }
-
-                  if (!hasValidExhibitor) {
-                    setState(() => _dialogError = 'Select an exhibitor.');
-                    return;
-                  }
-
-                  if (!hasValidAnimal) {
-                    setState(() => _dialogError = 'Select an animal.');
-                    return;
-                  }
-
-                  if (_classCtrl.text.trim().isEmpty) {
-                    setState(() => _dialogError = 'Class is required.');
-                    return;
-                  }
-
-                  Navigator.pop(
-                    context,
-                    _EditEntryResult(
-                      animalId: _animalId,
-                      className: _classCtrl.text,
-                      sectionId: _sectionId,
-                      exhibitorId: _exhibitorId,
-                    ),
-                  );
-                },
-          child: Text(_busy ? 'Working…' : 'Save'),
-        ),
-      ],
-    );
-  }
-}
 // --- Judge Order Dialog and supporting classes ---
 
 class _JudgeOrderDialog extends StatefulWidget {
