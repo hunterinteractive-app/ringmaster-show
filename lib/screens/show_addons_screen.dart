@@ -99,7 +99,11 @@ class _ShowAddonsScreenState extends State<ShowAddonsScreen> {
         _error = null;
       });
       try {
-        animals = await _service.animals(widget.cartId, exhibitorId);
+        animals = await _service.animals(
+          widget.cartId,
+          exhibitorId,
+          offeringId: item.id,
+        );
       } catch (e) {
         if (mounted) setState(() => _error = e.toString());
         return;
@@ -308,6 +312,10 @@ class _ShowAddonsScreenState extends State<ShowAddonsScreen> {
                                     const Text(
                                       'Requires an animal entry for this exhibitor.',
                                     ),
+                                  if (item.hostShowName != null)
+                                    Text(
+                                      'Youth rabbit and cavy entries join the same contest. Registration and results are managed under ${item.hostShowName}.',
+                                    ),
                                   if (item.isContest) ...[
                                     if (item.effectiveOpenAt != null)
                                       Text(
@@ -443,7 +451,8 @@ class _ShowAddonsScreenState extends State<ShowAddonsScreen> {
                                           _selection(item) != null)
                                         TextButton(
                                           onPressed:
-                                              _busy || AppSession.supportReadOnly
+                                              _busy ||
+                                                  AppSession.supportReadOnly
                                               ? null
                                               : () =>
                                                     _remove(_selection(item)!),

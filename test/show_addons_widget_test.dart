@@ -101,7 +101,8 @@ void main() {
               },
             ];
           }
-          if (path.endsWith('/get_contest_animals')) {
+          if (path.endsWith('/get_contest_animals') ||
+              path.endsWith('/get_offering_contest_animals')) {
             animalExhibitor = jsonDecode(request.body)['p_exhibitor_id'];
             response = [
               {

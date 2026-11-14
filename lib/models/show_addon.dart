@@ -118,6 +118,7 @@ class ShowAddon {
     this.effectiveOpenAt,
     this.effectiveCloseAt,
     this.registrationStatus = 'open',
+    this.hostShowName,
     List<String>? divisions,
     this.maxPerExhibitor = 1,
     List<ContestField>? fields,
@@ -138,6 +139,7 @@ class ShowAddon {
   DateTime? registrationOpenAt, registrationCloseAt;
   final DateTime? effectiveOpenAt, effectiveCloseAt;
   final String registrationStatus;
+  final String? hostShowName;
   bool get registrationIsOpen => registrationStatus == 'open';
   String? validateRegistrationWindow() {
     if (useShowEntryDates) return null;
@@ -174,6 +176,7 @@ class ShowAddon {
     effectiveOpenAt: DateTime.tryParse('${row['effective_open_at'] ?? ''}'),
     effectiveCloseAt: DateTime.tryParse('${row['effective_close_at'] ?? ''}'),
     registrationStatus: (row['registration_status'] ?? 'open').toString(),
+    hostShowName: row['host_show_name'] as String?,
     divisions: (row['divisions'] as List? ?? []).cast<String>(),
     maxPerExhibitor: (row['max_per_exhibitor'] as num).toInt(),
     contestSettings: ContestSettings(

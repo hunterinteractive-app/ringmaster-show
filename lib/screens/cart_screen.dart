@@ -19,6 +19,7 @@ import '../services/square_checkout_service.dart';
 import '../services/payment_quote_preview_service.dart';
 import '../services/entry_discount_service.dart';
 import '../widgets/discounts/cart_discount_codes.dart';
+import '../widgets/cart_registration_requirements_dialog.dart';
 import '../services/exhibitor_fee_service.dart';
 import '../services/show_addon_service.dart';
 import '../models/show_addon.dart';
@@ -1038,6 +1039,10 @@ class _CartScreenState extends State<CartScreen> {
     });
 
     try {
+      if (!await completeCartRegistrationRequirements(context, widget.cartId) ||
+          !mounted) {
+        return;
+      }
       if (_selectedOnlineProvider == 'square') {
         await _payWithSquare();
         return;
@@ -1142,6 +1147,10 @@ class _CartScreenState extends State<CartScreen> {
           _exhibitorFees.isEmpty &&
           _addons.isNotEmpty &&
           _addonsTotalCents == 0;
+      if (!await completeCartRegistrationRequirements(context, widget.cartId) ||
+          !mounted) {
+        return;
+      }
       final res = _freeCart
           ? await supabase.rpc(
               'commit_free_entry_cart',

@@ -113,11 +113,18 @@ class ShowAddonService {
 
   Future<List<Map<String, dynamic>>> animals(
     String cartId,
-    String exhibitorId,
-  ) async => _rows(
+    String exhibitorId, {
+    String? offeringId,
+  }) async => _rows(
     await _client.rpc(
-      'get_contest_animals',
-      params: {'p_cart_id': cartId, 'p_exhibitor_id': exhibitorId},
+      offeringId == null
+          ? 'get_contest_animals'
+          : 'get_offering_contest_animals',
+      params: {
+        'p_cart_id': cartId,
+        'p_exhibitor_id': exhibitorId,
+        if (offeringId != null) 'p_offering_id': offeringId,
+      },
     ),
   );
 
