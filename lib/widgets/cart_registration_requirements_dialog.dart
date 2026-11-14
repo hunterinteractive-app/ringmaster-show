@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../services/ringmaster_backend.dart';
 import '../theme/app_theme.dart';
+import 'state_dropdown_field.dart';
 
 Future<bool> completeCartRegistrationRequirements(
   BuildContext context,
@@ -113,25 +113,16 @@ class _CartRegistrationRequirementsDialogState
     padding: const EdgeInsets.only(top: 12),
     child: TextFormField(
       key: ValueKey('${school['exhibitor_id']}-$key'),
-      initialValue: school[key]?.toString() ?? (key == 'state' ? 'TX' : ''),
+      initialValue: school[key]?.toString() ?? '',
       enabled: !_saving,
       maxLength: max,
-      textCapitalization: key == 'state'
-          ? TextCapitalization.characters
-          : TextCapitalization.words,
-      inputFormatters: key == 'state'
-          ? [FilteringTextInputFormatter.allow(RegExp('[a-zA-Z]'))]
-          : null,
+      textCapitalization: TextCapitalization.words,
       decoration: InputDecoration(labelText: '$label *', counterText: ''),
       validator: (v) {
         if ((v ?? '').trim().isEmpty) return '$label is required.';
-        if (key == 'state' && !RegExp(r'^[A-Za-z]{2}$').hasMatch(v!.trim())) {
-          return 'Enter the two-letter state.';
-        }
         return null;
       },
-      onSaved: (v) =>
-          school[key] = key == 'state' ? v!.trim().toUpperCase() : v!.trim(),
+      onSaved: (v) => school[key] = v!.trim(),
     ),
   );
 
@@ -161,7 +152,16 @@ class _CartRegistrationRequirementsDialogState
                   ),
                   _field(school, 'school_name', 'School name', 200),
                   _field(school, 'city', 'School city', 120),
-                  _field(school, 'state', 'School state', 2),
+                  Padding(
+                    padding: const EdgeInsets.only(top: 12),
+                    child: StateDropdownField(
+                      key: ValueKey('${school['exhibitor_id']}-state'),
+                      label: 'School state *',
+                      initialValue: school['state']?.toString() ?? 'TX',
+                      enabled: !_saving,
+                      onSaved: (value) => school['state'] = value,
+                    ),
+                  ),
                 ],
                 const SizedBox(height: 18),
                 Wrap(

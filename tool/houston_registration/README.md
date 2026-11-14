@@ -29,6 +29,13 @@ age date, capacity, fees, and publication state.
 
 ## Validation
 
+Release 1.00.31 replaces the school-state text box with a searchable dropdown
+of US states and DC. Typing a state name or abbreviation filters the options;
+TX remains the default and existing selections are preserved. The form saves
+two-letter codes and rejects partial or unrecognized values. Browser tests
+cover filtering, each child's selection, retained values, invalid input, and
+menu contrast; the actual checkout dialog was inspected at 390px width.
+
 Release 1.00.30 displays School Information in Entry Management → View Exhibitor.
 The read-only section includes school name, city, and state. Its RPC requires
 the existing entry-management permission for the requested show and returns

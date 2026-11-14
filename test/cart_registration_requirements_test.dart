@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ringmaster_show/theme/app_theme.dart';
 import 'package:ringmaster_show/widgets/cart_registration_requirements_dialog.dart';
+import 'package:ringmaster_show/widgets/state_dropdown_field.dart';
 
 void main() {
   Future<void> open(
     WidgetTester tester, {
     required Future<void> Function(List<Map<String, dynamic>>) save,
     int children = 2,
+    String initialState = 'TX',
   }) async {
     tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1;
@@ -36,7 +38,7 @@ void main() {
                             'exhibitor_id': 'kid$i',
                             'name': 'Youth $i',
                             'number': i,
-                            'state': 'TX',
+                            'state': initialState,
                             'school_name': '',
                             'city': '',
                           },
@@ -85,7 +87,9 @@ void main() {
       );
       expect(
         tester
-            .widget<TextFormField>(find.byKey(const ValueKey('kid1-state')))
+            .widget<StateDropdownField>(
+              find.byKey(const ValueKey('kid1-state')),
+            )
             .initialValue,
         'TX',
       );
@@ -122,6 +126,87 @@ void main() {
         },
       ]);
       expect(find.byType(AlertDialog), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'school states filter by name and abbreviation and save per child',
+    (tester) async {
+      List<Map<String, dynamic>>? saved;
+      await open(tester, save: (schools) async => saved = schools);
+      for (var i = 1; i <= 2; i++) {
+        await fill(tester, 'kid$i', 'school_name', 'School $i');
+        await fill(tester, 'kid$i', 'city', 'City $i');
+      }
+      Future<void> choose(String child, String query, String label) async {
+        final input = find.descendant(
+          of: find.byKey(ValueKey('$child-state')),
+          matching: find.byType(TextField),
+        );
+        await tester.ensureVisible(input);
+        await tester.tap(input);
+        await tester.pumpAndSettle();
+        await tester.enterText(input, query);
+        await tester.pumpAndSettle();
+        final choice = find.widgetWithText(MenuItemButton, label);
+        await tester.ensureVisible(choice);
+        await tester.pumpAndSettle();
+        expect(choice, findsOneWidget);
+        final button = tester.widget<MenuItemButton>(choice);
+        final color = button.style!.foregroundColor!.resolve({})!;
+        expect(
+          (AppColors.surface.computeLuminance() + .05) /
+              (color.computeLuminance() + .05),
+          greaterThanOrEqualTo(4.5),
+        );
+        await tester.tap(choice);
+        await tester.pumpAndSettle();
+      }
+
+      await choose('kid1', 'okla', 'Oklahoma (OK)');
+      await choose('kid2', 'nm', 'New Mexico (NM)');
+      await agree(tester);
+      await tester.tap(find.text('Continue to checkout'));
+      await tester.pumpAndSettle();
+      expect(saved!.map((row) => row['state']), ['OK', 'NM']);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'saved state is retained and an unrecognized state cannot be submitted',
+    (tester) async {
+      List<Map<String, dynamic>>? saved;
+      await open(
+        tester,
+        children: 1,
+        initialState: 'LA',
+        save: (schools) async => saved = schools,
+      );
+      final input = find.descendant(
+        of: find.byKey(const ValueKey('kid1-state')),
+        matching: find.byType(TextField),
+      );
+      expect(
+        tester.widget<TextField>(input).controller!.text,
+        'Louisiana (LA)',
+      );
+      await fill(tester, 'kid1', 'school_name', 'School');
+      await fill(tester, 'kid1', 'city', 'City');
+      await tester.ensureVisible(input);
+      await tester.enterText(input, 'ZZ');
+      await tester.pumpAndSettle();
+      await agree(tester);
+      await tester.tap(find.text('Continue to checkout'));
+      await tester.pumpAndSettle();
+      expect(saved, isNull);
+      expect(find.text('Choose a state from the list.'), findsOneWidget);
+      await tester.ensureVisible(input);
+      await tester.enterText(input, 'Louisiana');
+      await tester.tap(find.text('Continue to checkout'));
+      await tester.pumpAndSettle();
+      expect(saved!.single['state'], 'LA');
       expect(tester.takeException(), isNull);
     },
   );
