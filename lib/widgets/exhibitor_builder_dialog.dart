@@ -1057,7 +1057,8 @@ class _ExhibitorBuilderDialogState extends State<ExhibitorBuilderDialog> {
                                     decoration: const InputDecoration(
                                       labelText: 'Showing name',
                                       helperText:
-                                          'Auto-generated unless you change it.',
+                                          'Use exhibitor or group member names only. Do not enter a rabbitry name; ARBA rules do not permit it.',
+                                      helperMaxLines: 6,
                                       border: OutlineInputBorder(),
                                     ),
                                   ),

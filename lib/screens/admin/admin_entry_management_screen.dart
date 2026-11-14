@@ -2524,6 +2524,9 @@ class _EditExhibitorSheetState extends State<_EditExhibitorSheet> {
                     textCapitalization: TextCapitalization.words,
                     decoration: const InputDecoration(
                       labelText: 'Showing Name',
+                      helperText:
+                          'Use exhibitor or group member names only. Do not enter a rabbitry name; ARBA rules do not permit it.',
+                      helperMaxLines: 6,
                       border: OutlineInputBorder(),
                     ),
                   ),
@@ -5384,6 +5387,9 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
                             controller: _showingName,
                             decoration: const InputDecoration(
                               labelText: 'Showing Name',
+                              helperText:
+                                  'Use exhibitor or group member names only. Do not enter a rabbitry name; ARBA rules do not permit it.',
+                              helperMaxLines: 6,
                               border: OutlineInputBorder(),
                             ),
                             onChanged: (value) {

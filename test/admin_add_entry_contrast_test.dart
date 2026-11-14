@@ -125,6 +125,15 @@ void main() {
         greaterThanOrEqualTo(4.5),
         reason: 'Focused field label',
       );
+      final showingNameGuidance = find.textContaining(
+        'Do not enter a rabbitry name',
+      );
+      expect(showingNameGuidance, findsOneWidget);
+      expect(
+        ratio(color(tester, showingNameGuidance), AppColors.surface),
+        greaterThanOrEqualTo(4.5),
+        reason: 'Showing name guidance remains readable at phone width',
+      );
       FocusManager.instance.primaryFocus?.unfocus();
       await tester.pumpAndSettle();
       final type = find.byWidgetPredicate(
