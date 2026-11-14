@@ -2,6 +2,13 @@
 /// No record queries or AI calls are needed to display these.
 List<String> assistantSuggestions(String title) {
   final page = title.toLowerCase();
+  if (page.contains('show finances') || page.contains('entry mgmt')) {
+    return const [
+      'How do I record a PayPal, Venmo or Zelle payment?',
+      'How do I correct a balance without recording a payment?',
+      'Where can I review an exhibitor’s payment history?',
+    ];
+  }
   if (page.contains('entry cart') ||
       page.contains('checkout') ||
       page.contains('square payment')) {
@@ -86,6 +93,12 @@ List<String> assistantSuggestions(String title) {
 
 /// Static guidance only: never implies that a user's live records were checked.
 const assistantPreparedAnswers = <String, String>{
+  'How do I record a PayPal, Venmo or Zelle payment?':
+      'Open the show’s Manage / Show Settings page, then Show Finances under Admin Operations. Search for the exhibitor and choose Record payment. Enter the amount already received, select PayPal, Venmo, Zelle, cash, check or Other, set the receipt date, and add a reference if available. This records money the club already received; it does not charge the exhibitor. Check-In does not need to be enabled.',
+  'How do I correct a balance without recording a payment?':
+      'In Show Settings → Show Finances, find the exhibitor and review Payment history first. For a waived charge, choose Apply credit, enter the amount and a reason. A credit reduces the charge; it is not a payment or refund. If an existing payment should cover a moved entry, contact support to review the allocation rather than recording the same payment twice.',
+  'Where can I review an exhibitor’s payment history?':
+      'Open Show Settings → Show Finances, search for the exhibitor, and choose Payment history. Original receipts can cover multiple exhibitors; the allocated portion is shown separately. The finance screen and its report menu also show paid, partial and unpaid balances.',
   'How do I review my cart before submitting?':
       'Review the animals, exhibitors, show sections and fees in your Entry Cart before completing checkout. Items in the cart are not submitted entries. After checkout, open My Entries to verify what was saved.',
   'How do I know my entries were submitted?':
@@ -160,6 +173,13 @@ String? assistantPreparedAnswer(String question) {
       .toLowerCase()
       .replaceAll('’', "'")
       .replaceAll(RegExp(r'[?!.]+$'), '');
+  if (RegExp(r'\b(record|mark|enter|log)\b').hasMatch(normalized) &&
+      RegExp(
+        r'\b(payment|payments|paid|paypal|venmo|zelle)\b',
+      ).hasMatch(normalized) &&
+      RegExp(r'\b(how|where)\b').hasMatch(normalized)) {
+    return assistantPreparedAnswers['How do I record a PayPal, Venmo or Zelle payment?'];
+  }
   for (final entry in assistantPreparedAnswers.entries) {
     if (entry.key
             .toLowerCase()

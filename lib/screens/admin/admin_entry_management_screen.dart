@@ -629,7 +629,7 @@ class _AdminEntryManagementScreenState
       builder: (dialogContext) => AlertDialog(
         title: const Text('Remove Entry?'),
         content: Text(
-          'Remove $label from this show? This does not delete the saved animal profile.',
+          'Remove $label from this show? This does not delete the saved animal profile. To switch Open/Youth, cancel and use Move to another section so the entry keeps its payment history.',
         ),
         actions: [
           TextButton(

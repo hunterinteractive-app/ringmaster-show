@@ -1,0 +1,2 @@
+create index events_exhibitor_id_idx on show_finances_private.events(exhibitor_id);
+create index legacy_receipts_exhibitor_id_idx on show_finances_private.legacy_receipts(exhibitor_id);

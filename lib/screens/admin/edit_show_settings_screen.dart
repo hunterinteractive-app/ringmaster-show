@@ -24,6 +24,7 @@ import 'show_judges_dialog.dart';
 import 'show_checkin_settings_dialog.dart';
 import 'show_wave_schedule_dialog.dart';
 import 'show_checkin_dashboard_screen.dart';
+import 'show_finances_screen.dart';
 import '../../widgets/rm_timezone_notice_banner.dart';
 import '../../services/show_permissions_service.dart';
 import '../../services/stripe_connect_service.dart';
@@ -2033,6 +2034,22 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                                       }
                                     },
                             ),
+                            if (canManageEntries || canManageShowSettings)
+                              _buildSettingsActionTile(
+                                icon: Icons.account_balance_wallet_outlined,
+                                title: 'Show Finances',
+                                subtitle:
+                                    'Balances, payment history, external payments and credits',
+                                onTap: _saving
+                                    ? null
+                                    : () => Navigator.of(context).push(
+                                        MaterialPageRoute(
+                                          builder: (_) => ShowFinancesScreen(
+                                            showId: widget.showId,
+                                          ),
+                                        ),
+                                      ),
+                              ),
                             if (canManageEntries)
                               _buildSettingsActionTile(
                                 icon: Icons.edit_note,
