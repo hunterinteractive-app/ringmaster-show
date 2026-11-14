@@ -121,5 +121,47 @@ select is(jsonb_array_length(get_show_addon_registrations(pg_temp.fx('cavy'))),0
 reset role;
 select ok(position('show_registration_private.validate_cart' in pg_get_functiondef('public.create_payment_quote_attempt(uuid,uuid,text,numeric,numeric,integer)'::regprocedure))>0,'online checkout guard installed');
 select ok(position('show_registration_private.validate_cart' in pg_get_functiondef('public.commit_free_entry_cart(uuid)'::regprocedure))>0,'free checkout guard installed');
+-- Entry Management reads only submitted, show-scoped school information.
+select pg_temp.actor('secretary');
+set local role authenticated;
+select is(get_exhibitor_school_for_show(pg_temp.fx('cavy'),pg_temp.fx('kid'))#>>'{school,school_name}','Example School','secretary sees school from completed youth checkout');
+select is(get_exhibitor_school_for_show(pg_temp.fx('cavy'),pg_temp.fx('kid'))#>>'{school,city}','Houston','staff sees school city');
+select is(get_exhibitor_school_for_show(pg_temp.fx('cavy'),pg_temp.fx('kid'))#>>'{school,state}','TX','staff sees school state');
+select is(get_exhibitor_school_for_show(pg_temp.fx('host'),pg_temp.fx('kid'))#>>'{school,school_name}','Example School','shared contest host sees the registered cavy child school');
+select is(get_exhibitor_school_for_show(pg_temp.fx('host'),pg_temp.fx('kid2'))->>'applicable','false','shared contest does not expose other cavy children');
+select is(get_exhibitor_school_for_show(pg_temp.fx('cavy'),pg_temp.fx('adult'))->>'applicable','false','Open-only exhibitor has no school section');
+select is(get_exhibitor_school_for_show(pg_temp.fx('ordinary'),pg_temp.fx('kid'))->>'applicable','false','ordinary shows unchanged');
+select pg_temp.actor('buyer');
+select throws_ok($$select get_exhibitor_school_for_show(pg_temp.fx('cavy'),pg_temp.fx('kid'))$$,'42501','Entry management permission is required to view school information.','exhibitor cannot use staff school reader');
+select pg_temp.actor('other');
+select throws_ok($$select get_exhibitor_school_for_show(pg_temp.fx('cavy'),pg_temp.fx('kid'))$$,'42501','Entry management permission is required to view school information.','unrelated user denied');
+reset role;
+select ok(not has_function_privilege('anon','public.get_exhibitor_school_for_show(uuid,uuid)','execute'),'anonymous cannot call school reader');
+insert into role_assignments(show_id,user_id,role) values(pg_temp.fx('cavy'),pg_temp.fx('other'),'reporting_clerk');
+set local role authenticated;
+select is(get_exhibitor_school_for_show(pg_temp.fx('cavy'),pg_temp.fx('kid'))#>>'{school,school_name}','Example School','assigned entry-management staff can read');
+select throws_ok($$select get_exhibitor_school_for_show(pg_temp.fx('host'),pg_temp.fx('kid'))$$,'42501','Entry management permission is required to view school information.','staff permission does not extend to another show');
+reset role;
+select pg_temp.actor('secretary');
+insert into entry_cart_items(cart_id,section_id,exhibitor_id,species,tattoo,breed,variety,sex,class_name)
+values(pg_temp.fx('open_cart'),pg_temp.fx('youth_section'),pg_temp.fx('kid'),'cavy','DRAFT','American','Black','Boar','Senior'),
+ (pg_temp.fx('host_cart'),pg_temp.fx('host_section'),pg_temp.fx('kid'),'rabbit','OTHER','Dutch','Black','Buck','Senior');
+insert into show_registration_private.schools(cart_id,exhibitor_id,school_name,city,state,updated_at) values
+ (pg_temp.fx('open_cart'),pg_temp.fx('kid'),'Draft School','Draft City','TX',now()+interval '1 hour'),
+ (pg_temp.fx('host_cart'),pg_temp.fx('kid'),'Other Show School','Other City','OK',now()+interval '2 hours');
+update entry_carts set status='submitted' where id=pg_temp.fx('host_cart');
+set local role authenticated;
+select is(get_exhibitor_school_for_show(pg_temp.fx('cavy'),pg_temp.fx('kid'))#>>'{school,school_name}','Example School','draft and unrelated-show records cannot replace submitted school');
+reset role;
+update entry_carts set status='submitted' where id=pg_temp.fx('open_cart');
+set local role authenticated;
+select is(get_exhibitor_school_for_show(pg_temp.fx('cavy'),pg_temp.fx('kid'))#>>'{school,school_name}','Draft School','latest submitted school for this show is displayed');
+reset role;
+update show_registration_private.schools set exhibitor_id=pg_temp.fx('stranger') where cart_id=pg_temp.fx('open_cart');
+update entries set exhibitor_id=pg_temp.fx('stranger') where id=pg_temp.fx('existing');
+set local role authenticated;
+select is(get_exhibitor_school_for_show(pg_temp.fx('cavy'),pg_temp.fx('stranger'))->>'applicable','true','youth entry with no valid school has a missing-information state');
+select is(get_exhibitor_school_for_show(pg_temp.fx('cavy'),pg_temp.fx('stranger'))->'school','null'::jsonb,'foreign-household school record is never disclosed');
+reset role;
 select * from finish();
 rollback;

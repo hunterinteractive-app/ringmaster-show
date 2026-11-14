@@ -20,6 +20,7 @@ import 'entry_management_loader.dart';
 import 'no_email_exhibitor_option.dart';
 import 'closeout/data/report_data_reader.dart';
 import '../../services/manual_animal_lookup.dart';
+import '../../widgets/exhibitor_school_information.dart';
 
 SupabaseClient get supabase => ringMasterClient;
 
@@ -312,13 +313,11 @@ class _AdminEntryManagementScreenState
       isScrollControlled: true,
       showDragHandle: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => _themedBottomSheetShell(
+      builder: (_) => buildAdminExhibitorSheet(
         context,
-        child: _EditExhibitorSheet(
-          exhibitor: exhibitor,
-          showId: widget.showId,
-          readOnly: readOnly,
-        ),
+        exhibitor: exhibitor,
+        showId: widget.showId,
+        readOnly: readOnly,
       ),
     );
 
@@ -2251,15 +2250,34 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
   }
 }
 
+/// Uses the same sheet and theme for entry management and visual review.
+Widget buildAdminExhibitorSheet(
+  BuildContext context, {
+  required Map<String, dynamic> exhibitor,
+  required String showId,
+  bool readOnly = true,
+  Future<Map<String, dynamic>> Function()? schoolInformationLoader,
+}) => _themedBottomSheetShell(
+  context,
+  child: _EditExhibitorSheet(
+    exhibitor: exhibitor,
+    showId: showId,
+    readOnly: readOnly,
+    schoolInformationLoader: schoolInformationLoader,
+  ),
+);
+
 class _EditExhibitorSheet extends StatefulWidget {
   final Map<String, dynamic> exhibitor;
   final String showId;
   final bool readOnly;
+  final Future<Map<String, dynamic>> Function()? schoolInformationLoader;
 
   const _EditExhibitorSheet({
     required this.exhibitor,
     required this.showId,
     this.readOnly = false,
+    this.schoolInformationLoader,
   });
 
   @override
@@ -2538,6 +2556,12 @@ class _EditExhibitorSheetState extends State<_EditExhibitorSheet> {
                     ],
                   ),
                   const SizedBox(height: 10),
+                  if ((widget.exhibitor['id'] ?? '').toString().isNotEmpty)
+                    ExhibitorSchoolInformation(
+                      showId: widget.showId,
+                      exhibitorId: widget.exhibitor['id'].toString(),
+                      loader: widget.schoolInformationLoader,
+                    ),
                   TextField(
                     controller: _email,
                     enabled: !_saving && !widget.readOnly,

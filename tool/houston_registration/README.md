@@ -29,6 +29,22 @@ age date, capacity, fees, and publication state.
 
 ## Validation
 
+Release 1.00.30 displays School Information in Entry Management → View Exhibitor.
+The read-only section includes school name, city, and state. Its RPC requires
+the existing entry-management permission for the requested show and returns
+only submitted checkout records belonging to that exhibitor's household.
+An abandoned draft or another show's record cannot replace the school's details.
+The Rabbit host can also read a registered Cavy contestant's school from that
+contest's original submitted cart; other Cavy children remain outside its scope.
+Open-only exhibitors and shows without school collection do not show the section.
+Missing data and failed loads have distinct messages; failed loads offer Retry.
+
+The staff-reader additions pass 16 authorization/data-isolation checks in the
+disposable SQL suite (218 checks total, plus add-on deletion integration).
+Run `flutter test --platform chrome test/exhibitor_school_information_test.dart`
+for the actual View Exhibitor sheet at phone width, including contrast and errors.
+The synthetic visual preview is `tool/houston_registration/preview_school.dart`.
+
 ```sh
 python3 tool/houston_registration/test.py supabase_db_ringmaster-show-full-e2e-convention
 flutter test --platform chrome test/cart_registration_requirements_test.dart test/show_addons_widget_test.dart test/cart_payment_preview_test.dart
@@ -61,3 +77,8 @@ contests appear in the Cavy catalog with the Rabbit host, and zero real consent
 records were created by verification. The entry opening remains November 15 at
 00:01 America/Chicago. Security advisor findings for the new private tables were
 informational notices about intentionally absent client RLS policies.
+
+Migration `20261114092521_staff_exhibitor_school_information` adds the staff
+reader. Hosted read checks confirmed the owner can call it and anonymous users
+cannot; private tables remain inaccessible directly. No production records were
+created or changed during school-display verification.
