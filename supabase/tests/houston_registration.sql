@@ -5,7 +5,7 @@ select no_plan();
 create temporary table fx(k text primary key,id uuid default gen_random_uuid());
 insert into fx(k) values('secretary'),('buyer'),('other'),('club'),('host'),('cavy'),('ordinary'),
  ('host_section'),('youth_section'),('open_section'),('ordinary_section'),('kid'),('kid2'),('adult'),('stranger'),
- ('cart'),('host_cart'),('ordinary_cart'),('open_cart'),('other_cart'),('contest'),('not_linked'),('youth_item'),('kid2_item'),('open_item'),('existing');
+ ('cart'),('host_cart'),('ordinary_cart'),('open_cart'),('other_cart'),('bad_cart'),('contest'),('not_linked'),('youth_item'),('kid2_item'),('open_item'),('existing');
 grant select on fx to authenticated;
 create function pg_temp.fx(text) returns uuid language sql as $$select id from fx where k=$1$$;
 create function pg_temp.actor(text) returns void language plpgsql as $$begin
@@ -39,7 +39,7 @@ select id,10,0,0 from fx where k like '%section' on conflict(section_id) do upda
 insert into entry_carts(id,user_id,show_id) select id,
  case when k='other_cart' then pg_temp.fx('other') else pg_temp.fx('buyer') end,
  case when k='host_cart' then pg_temp.fx('host') when k='ordinary_cart' then pg_temp.fx('ordinary') else pg_temp.fx('cavy') end
-from fx where k in('cart','host_cart','ordinary_cart','open_cart','other_cart');
+from fx where k in('cart','host_cart','ordinary_cart','open_cart','other_cart','bad_cart');
 insert into entry_cart_items(id,cart_id,section_id,exhibitor_id,species,tattoo,breed,variety,sex,class_name) values
  (pg_temp.fx('youth_item'),pg_temp.fx('cart'),pg_temp.fx('youth_section'),pg_temp.fx('kid'),'cavy','CV1','American','Black','Boar','Senior'),
  (pg_temp.fx('kid2_item'),pg_temp.fx('cart'),pg_temp.fx('youth_section'),pg_temp.fx('kid2'),'cavy','CV2','American','Black','Sow','Senior'),
@@ -49,6 +49,8 @@ values(pg_temp.fx('existing'),pg_temp.fx('cavy'),pg_temp.fx('youth_section'),pg_
 insert into show_addons_private.offerings(id,show_id,kind,name,price_cents,enabled,requires_animal_entry,animal_selection)
 select id,pg_temp.fx('host'),'contest',k,500,true,true,'required' from fx where k in('contest','not_linked');
 insert into show_addons_private.contest_show_links values(pg_temp.fx('contest'),pg_temp.fx('cavy'));
+insert into entry_cart_items(cart_id,section_id,exhibitor_id,species,tattoo,breed,variety,sex,class_name)
+values(pg_temp.fx('bad_cart'),pg_temp.fx('youth_section'),pg_temp.fx('stranger'),'cavy','BAD','American','Black','Boar','Senior');
 
 select pg_temp.actor('buyer');
 set local role authenticated;
@@ -57,6 +59,9 @@ select is(get_cart_registration_requirements(pg_temp.fx('cart'))#>>'{exhibitors,
 select is(get_cart_registration_requirements(pg_temp.fx('open_cart'))->>'required','true','Houston Open cart still needs agreement');
 select is(jsonb_array_length(get_cart_registration_requirements(pg_temp.fx('open_cart'))->'exhibitors'),0,'Open cart needs no school fields');
 select is(get_cart_registration_requirements(pg_temp.fx('ordinary_cart'))->>'required','false','unrelated show unaffected');
+select throws_ok($$select get_cart_registration_requirements(pg_temp.fx('bad_cart'))$$,'42501','Youth exhibitors must belong to this cart household.','malformed cart cannot expose another household exhibitor');
+select throws_ok($$select save_cart_registration_requirements(pg_temp.fx('bad_cart'),'hlsr-2027-handbook-v2',true,'[]')$$,'42501','Youth exhibitors must belong to this cart household.','malformed cart cannot save another household school');
+select throws_ok($$select commit_free_entry_cart(pg_temp.fx('bad_cart'))$$,'42501','Youth exhibitors must belong to this cart household.','malformed cart cannot bypass household guard at checkout');
 select throws_ok($$select save_cart_registration_requirements(pg_temp.fx('cart'),'hlsr-2027-handbook-v2',false,'[]')$$,'P0001','Agree to the Houston Livestock Show and Rodeo rules and terms before checkout.','unchecked agreement rejected');
 select throws_ok($$select save_cart_registration_requirements(pg_temp.fx('cart'),'old',true,'[]')$$,'P0001','Agree to the Houston Livestock Show and Rodeo rules and terms before checkout.','stale agreement version rejected');
 select throws_ok($$select save_cart_registration_requirements(pg_temp.fx('cart'),'hlsr-2027-handbook-v2',true,'[]')$$,'P0001','Enter school name, city, and state for every youth exhibitor.','missing school rejected');

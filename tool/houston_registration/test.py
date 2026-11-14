@@ -46,7 +46,8 @@ try:
         values(gen_random_uuid(),'authenticated','authenticated',
         'local-deletion-fixture@example.invalid','{}','{}');""")
     for name in ['20261114074227_houston_checkout_requirements.sql',
-                 '20261114074237_linked_youth_contest_registration.sql']:
+                 '20261114074237_linked_youth_contest_registration.sql',
+                 '20261114074909_guard_houston_school_household.sql']:
         sql((root / 'supabase/migrations' / name).read_text())
     for name in ['houston_registration.sql', 'show_contests_and_extras.sql',
                  'contest_expansion.sql', 'contest_registration_windows.sql',

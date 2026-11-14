@@ -15,6 +15,8 @@ signature. A changed cart requires another acceptance. Pending payment retries
 can record consent without editing the payment or its charges. No historical
 acceptance is fabricated. Private tables intentionally have RLS enabled and no
 client table grants/policies; household-authorized RPCs provide the form access.
+Malformed carts referencing another household’s youth exhibitor are rejected
+before names or school details are read, saved, or accepted for checkout.
 
 The existing Rabbit/Cavy Costume and Showmanship offerings accept Youth Cavy
 animals. They appear in the Cavy entry flow, use the same offering IDs and
@@ -38,7 +40,7 @@ flutter build web --no-pub --release --pwa-strategy=none
 The SQL runner clones only the local rehearsal schema into a disposable DB,
 creates synthetic fixtures, and drops the DB afterward. It never uses a hosted
 connection, invokes a payment provider, or sends email. On November 14, 2026,
-199 database checks plus the add-on deletion integration checks passed, as did
+202 database checks plus the add-on deletion integration checks passed, as did
 17 browser widget tests and four contrast checks. Full analysis and the release
 build passed. The isolated preview was visually inspected with the production
 gradient/dialog themes at narrow width, including missing-field errors.
@@ -52,7 +54,8 @@ The preview's Save callback is local only and never records a real agreement.
 ## Deployment
 
 Hosted migrations `20261114074227_houston_checkout_requirements` and
-`20261114074237_linked_youth_contest_registration` were applied on November 14.
+`20261114074237_linked_youth_contest_registration`, and
+`20261114074909_guard_houston_school_household` were applied on November 14.
 Read checks confirmed all four Kyle-owned Houston shows are covered, both shared
 contests appear in the Cavy catalog with the Rabbit host, and zero real consent
 records were created by verification. The entry opening remains November 15 at
