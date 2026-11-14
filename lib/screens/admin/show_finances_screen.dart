@@ -28,7 +28,7 @@ class _ShowFinancesScreenState extends State<ShowFinancesScreen> {
   List<ShowFinanceRow> get _rows => [
     for (final row in (_data?['exhibitors'] as List? ?? []))
       ShowFinanceRow(Map<String, dynamic>.from(row as Map)),
-  ];
+  ]..sort(ShowFinanceRow.compare);
   @override
   void initState() {
     super.initState();
@@ -148,7 +148,7 @@ class _ShowFinancesScreenState extends State<ShowFinancesScreen> {
               r.matches(_search) && (_filter == 'All' || r.status == _filter),
         )
         .toList();
-    final currencies = rows.map((r) => r.currency).toSet().toList()..sort();
+    final summaries = showFinanceSummaries(_data);
     return RingMasterPageShell(
       title: 'Show Finances',
       showId: widget.showId,
@@ -224,13 +224,13 @@ class _ShowFinancesScreenState extends State<ShowFinancesScreen> {
           : ListView(
               padding: const EdgeInsets.only(bottom: 90),
               children: [
-                for (final currency in currencies)
+                for (final summary in summaries)
                   _card(
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Show totals · ${currency.toUpperCase()}',
+                          'Show totals · ${summary['currency'].toString().toUpperCase()}',
                           style: const TextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.bold,
@@ -243,12 +243,11 @@ class _ShowFinancesScreenState extends State<ShowFinancesScreen> {
                             runSpacing: 12,
                             children: [
                               for (final metric in {
-                                'Charges after credits': 'charges_cents',
-                                'Online receipts': 'online_cents',
-                                'External receipts': 'manual_cents',
-                                'Refunds': 'refunded_cents',
-                                'Credits': 'credit_cents',
-                                'Outstanding': 'due_cents',
+                                'Charged for show': 'charges_cents',
+                                'Online fees charged': 'online_fee_cents',
+                                'Refunded': 'refunded_cents',
+                                'Waiting for payment': 'due_cents',
+                                'Club earned (estimate)': 'club_earned_cents',
                               }.entries)
                                 SizedBox(
                                   width: constraints.maxWidth < 500
@@ -265,18 +264,14 @@ class _ShowFinancesScreenState extends State<ShowFinancesScreen> {
                                         ),
                                       ),
                                       Text(
-                                        financeMoney(
-                                          rows
-                                              .where(
-                                                (r) => r.currency == currency,
-                                              )
-                                              .fold<int>(
-                                                0,
-                                                (sum, r) =>
-                                                    sum + r.cents(metric.value),
+                                        summary[metric.value] == null
+                                            ? 'Unavailable'
+                                            : financeMoney(
+                                                financeCents(
+                                                  summary[metric.value],
+                                                ),
+                                                summary['currency'] as String,
                                               ),
-                                          currency,
-                                        ),
                                         style: const TextStyle(
                                           fontSize: 20,
                                           fontWeight: FontWeight.bold,
@@ -287,6 +282,16 @@ class _ShowFinancesScreenState extends State<ShowFinancesScreen> {
                                 ),
                             ],
                           ),
+                        ),
+                        const SizedBox(height: 12),
+                        const Text(
+                          'Show charges are after discounts and credits, excluding online payment fees. Refunded includes refunded online fees.',
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          summary['club_earned_cents'] == null
+                              ? 'Club earnings are unavailable because some payment or fee details are missing.'
+                              : 'Club earned estimates money collected online and externally, less refunds and payment fees. It excludes unpaid balances and is before paybacks, show expenses, and any fees on external payments.',
                         ),
                       ],
                     ),

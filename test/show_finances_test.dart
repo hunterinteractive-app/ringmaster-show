@@ -11,6 +11,7 @@ import 'package:ringmaster_show/theme/app_theme.dart';
 class FakeFinance extends ShowFinanceGateway {
   bool failLoad = false, failHistory = false, failSave = false;
   int loads = 0;
+  List<Map<String, dynamic>>? summaries;
   final saved = <Map<String, dynamic>>[];
   final rows = <Map<String, dynamic>>[
     {
@@ -44,6 +45,7 @@ class FakeFinance extends ShowFinanceGateway {
       'show_name': 'Finance Test Show',
       'exhibitors': rows,
       'section_ids': [],
+      if (summaries != null) 'summaries': summaries,
     };
   }
 
@@ -144,6 +146,119 @@ void main() {
       expect(assistantPreparedAnswer(q), contains('Show Finances'));
       expect(assistantQuestionNeedsRecords(q), isFalse);
     }
+  });
+  test('surname ordering keeps showing names and handles missing surnames', () {
+    final rows = [
+      ShowFinanceRow({
+        'exhibitor_id': '1',
+        'name': 'AAA Rabbitry',
+        'first_name': 'Ada',
+        'last_name': 'Miller',
+      }),
+      ShowFinanceRow({
+        'exhibitor_id': '2',
+        'name': 'ZZZ Rabbitry',
+        'first_name': 'Zoe',
+        'last_name': 'adams',
+      }),
+      ShowFinanceRow({
+        'exhibitor_id': '3',
+        'name': 'Bea Adams',
+        'first_name': 'Bea',
+        'last_name': ' Adams ',
+      }),
+      ShowFinanceRow({
+        'exhibitor_id': '4',
+        'name': 'Cedar Rabbitry',
+        'last_name': ' ',
+      }),
+    ]..sort(ShowFinanceRow.compare);
+    expect(rows.map((r) => r.name), [
+      'Bea Adams',
+      'ZZZ Rabbitry',
+      'Cedar Rabbitry',
+      'AAA Rabbitry',
+    ]);
+  });
+  test('old backend does not fabricate fee or earnings totals', () {
+    final data = {'exhibitors': FakeFinance().rows};
+    final summary = showFinanceSummaries(data).single;
+    expect(summary['charges_cents'], 9000);
+    expect(summary['due_cents'], 1000);
+    expect(summary['club_earned_cents'], isNull);
+    expect(summary['online_fee_cents'], isNull);
+  });
+  testWidgets('five summary totals fit phone and stay fixed while filtering', (
+    tester,
+  ) async {
+    final gateway = FakeFinance()
+      ..summaries = [
+        {
+          'currency': 'usd',
+          'charges_cents': 9000,
+          'online_fee_cents': 444,
+          'refunded_cents': 123,
+          'due_cents': 1000,
+          'club_earned_cents': 7878,
+        },
+      ];
+    // Deliberately reverse the visible-name order; surname must win.
+    gateway.rows[0].addAll({'first_name': 'Demo', 'last_name': 'Zebra'});
+    gateway.rows[1].addAll({'first_name': 'Paid', 'last_name': 'Adams'});
+    await start(tester, gateway);
+    for (final label in [
+      'Charged for show',
+      'Online fees charged',
+      'Refunded',
+      'Waiting for payment',
+      'Club earned (estimate)',
+    ]) {
+      expect(find.text(label), findsOneWidget);
+    }
+    expect(find.text('USD 4.44'), findsOneWidget);
+    expect(find.text('USD 78.78'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await reveal(tester, find.text('Paid Exhibitor'));
+    expect(
+      tester.getTopLeft(find.text('Paid Exhibitor')).dy,
+      lessThan(tester.getTopLeft(find.text('Demo Exhibitor')).dy),
+    );
+    await tester.scrollUntilVisible(
+      find.byType(TextField),
+      -300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.enterText(find.byType(TextField), 'demo');
+    await tester.pumpAndSettle();
+    expect(find.text('Paid Exhibitor'), findsNothing);
+    await tester.scrollUntilVisible(
+      find.text('Charged for show'),
+      -300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('USD 78.78'), findsOneWidget);
+    expect(find.text('USD 90.00'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+  testWidgets('missing earnings show a readable explanation', (tester) async {
+    final gateway = FakeFinance()
+      ..summaries = [
+        {
+          'currency': 'usd',
+          'charges_cents': 9000,
+          'online_fee_cents': 444,
+          'refunded_cents': 0,
+          'due_cents': 1000,
+          'club_earned_cents': null,
+        },
+      ];
+    await start(tester, gateway);
+    expect(find.text('Unavailable'), findsOneWidget);
+    expect(
+      find.textContaining('some payment or fee details are missing'),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
   });
   testWidgets(
     'phone payment form validates and retry reuses the exact request',

@@ -58,7 +58,9 @@ class PreviewFinance extends ShowFinanceGateway {
   final rows = <Map<String, dynamic>>[
     {
       'exhibitor_id': 'one',
-      'name': 'Demo Exhibitor',
+      'name': 'Ada Miller',
+      'first_name': 'Ada',
+      'last_name': 'Miller',
       'currency': 'usd',
       'charges_cents': 1000,
       'manual_cents': 0,
@@ -70,7 +72,9 @@ class PreviewFinance extends ShowFinanceGateway {
     },
     {
       'exhibitor_id': 'two',
-      'name': 'Paid Exhibitor',
+      'name': 'Zoe Adams',
+      'first_name': 'Zoe',
+      'last_name': 'Adams',
       'currency': 'usd',
       'charges_cents': 8000,
       'manual_cents': 0,
@@ -87,6 +91,27 @@ class PreviewFinance extends ShowFinanceGateway {
       'show_name': 'Finance Test Show',
       'exhibitors': rows,
       'section_ids': [],
+      'summaries': [
+        {
+          'currency': 'usd',
+          'charges_cents': rows.fold<int>(
+            0,
+            (sum, row) => sum + financeCents(row['charges_cents']),
+          ),
+          'online_fee_cents': 444,
+          'refunded_cents': 0,
+          'due_cents': rows.fold<int>(
+            0,
+            (sum, row) => sum + financeCents(row['due_cents']),
+          ),
+          'club_earned_cents':
+              8000 +
+              rows.fold<int>(
+                0,
+                (sum, row) => sum + financeCents(row['manual_cents']),
+              ),
+        },
+      ],
     };
   }
 
