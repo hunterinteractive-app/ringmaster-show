@@ -37,3 +37,17 @@ The final save suite ran separately using Chromium; combined runs intermittently
 closed before loading a suite. No test assertions or app behavior were bypassed.
 
 Production release: 1.00.32. Apply the QR migration before deploying the web build.
+
+## Deferred recognition follow-up
+
+The initial rollback-only database tests did not flush deferred constraints while
+still acting as the QR writer. That missed an end-of-transaction RLS failure:
+recognition checks could not see the saved entry after the save RPC returned.
+Migration `20261114173602` moves the retired-award validator into the private
+schema and runs the retired/COD trigger-only validators with owner access. It
+does not expose recognition tables or change recognition rules.
+
+The runner now flushes deferred constraints before every role reset. Additional
+fixtures cover anonymous recognized BOV/BOB, signed-in nonstaff BOV, allowed COD
+BOV, forbidden COD BOB, and forbidden retired BOV. All pass. This database-only
+repair works with web release 1.00.32.
