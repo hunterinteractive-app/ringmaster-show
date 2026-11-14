@@ -18,6 +18,23 @@ select is(public.get_show_finances(pg_temp.id('summary show'))->'exhibitors'->1-
 select is(public.get_show_finances(pg_temp.id('summary show'))->'exhibitors'->2->>'name','Cedar Rabbitry','blank surname falls back to showing name');
 select is(public.get_show_finances(pg_temp.id('summary show'))->'exhibitors'->3->>'last_name','Miller','RPC returns saved surname');
 
+-- Discounts use the same authoritative rows as charges and never include credits.
+update show_exhibitor_balances set discount_cents=250,fee_snapshot='{"finance_credit_cents":100}'
+ where show_id=pg_temp.id('summary show') and source='entries';
+insert into entry_carts(id,show_id,status) values
+ (pg_temp.id('duplicate cart'),pg_temp.id('summary show'),'submitted'),
+ (pg_temp.id('draft cart'),pg_temp.id('summary show'),'draft');
+-- Seed legacy/draft balance snapshots without invoking allocation refresh.
+alter table show_exhibitor_balances disable trigger user;
+insert into show_exhibitor_balances(id,show_id,exhibitor_id,source,currency,cart_id,discount_cents)
+ values(gen_random_uuid(),pg_temp.id('summary show'),pg_temp.id('Ada'),'cart','usd',pg_temp.id('duplicate cart'),9000),
+ (gen_random_uuid(),pg_temp.id('summary show'),pg_temp.id('Zoe'),'cart','usd',pg_temp.id('draft cart'),8000);
+alter table show_exhibitor_balances enable trigger user;
+select is((public.get_show_finances(pg_temp.id('summary show'))->'summaries'->0->>'discount_cents')::int,1000,
+ 'discount total excludes duplicate cart, draft cart, and manual credits');
+select is((public.get_show_finances(pg_temp.id('summary show'))->'exhibitors'->0->>'discount_cents')::int,250,
+ 'RPC returns applied discount for each exhibitor');
+
 create temporary table summary_rows(data jsonb);
 insert into summary_rows values('[{"currency":"usd","charges_cents":14000,"online_cents":10000,"manual_cents":2000,"refunded_cents":0,"due_cents":2000}]');
 create function pg_temp.summary() returns jsonb language sql as $$

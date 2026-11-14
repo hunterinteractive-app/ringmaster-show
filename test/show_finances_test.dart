@@ -7,11 +7,17 @@ import 'package:ringmaster_show/services/show_finances_service.dart';
 import 'package:ringmaster_show/services/assistant_suggestions.dart';
 import 'package:ringmaster_show/services/assistant_context.dart';
 import 'package:ringmaster_show/theme/app_theme.dart';
+import 'package:ringmaster_show/utils/date_time_utils.dart';
 
 class FakeFinance extends ShowFinanceGateway {
   bool failLoad = false, failHistory = false, failSave = false;
   int loads = 0;
   List<Map<String, dynamic>>? summaries;
+  Map<String, dynamic> historyData = {
+    'payments': [],
+    'events': [],
+    'allocations': [],
+  };
   final saved = <Map<String, dynamic>>[];
   final rows = <Map<String, dynamic>>[
     {
@@ -52,7 +58,7 @@ class FakeFinance extends ShowFinanceGateway {
   @override
   Future<Map<String, dynamic>> history(String show, String exhibitor) async {
     if (failHistory) throw Exception('offline');
-    return {'payments': [], 'events': [], 'allocations': []};
+    return historyData;
   }
 
   @override
@@ -122,6 +128,12 @@ void main() {
     );
   });
   tearDown(() => Supabase.instance.dispose());
+  test('money uses grouping separators and preserves cents and sign', () {
+    expect(financeMoney(1407400, 'usd'), 'USD 14,074.00');
+    expect(financeMoney(123456789, 'cad'), 'CAD 1,234,567.89');
+    expect(financeMoney(-123456, 'usd'), 'USD -1,234.56');
+    expect(financeMoney(0, 'usd'), 'USD 0.00');
+  });
   test('amount parser preserves cents and rejects invalid financial input', () {
     expect(parseFinanceAmount('12.01'), 1201);
     expect(parseFinanceAmount(' 0.10 '), 10);
@@ -188,7 +200,7 @@ void main() {
     expect(summary['club_earned_cents'], isNull);
     expect(summary['online_fee_cents'], isNull);
   });
-  testWidgets('five summary totals fit phone and stay fixed while filtering', (
+  testWidgets('six summary totals fit phone and stay fixed while filtering', (
     tester,
   ) async {
     final gateway = FakeFinance()
@@ -197,6 +209,7 @@ void main() {
           'currency': 'usd',
           'charges_cents': 9000,
           'online_fee_cents': 444,
+          'discount_cents': 150000,
           'refunded_cents': 123,
           'due_cents': 1000,
           'club_earned_cents': 7878,
@@ -210,12 +223,14 @@ void main() {
       'Charged for show',
       'Online fees charged',
       'Refunded',
-      'Waiting for payment',
+      'Outstanding',
+      'Discounts',
       'Club earned (estimate)',
     ]) {
       expect(find.text(label), findsOneWidget);
     }
     expect(find.text('USD 4.44'), findsOneWidget);
+    expect(find.text('USD 1,500.00'), findsOneWidget);
     expect(find.text('USD 78.78'), findsOneWidget);
     expect(tester.takeException(), isNull);
     await reveal(tester, find.text('Paid Exhibitor'));
@@ -247,6 +262,7 @@ void main() {
           'currency': 'usd',
           'charges_cents': 9000,
           'online_fee_cents': 444,
+          'discount_cents': 150000,
           'refunded_cents': 0,
           'due_cents': 1000,
           'club_earned_cents': null,
@@ -359,6 +375,64 @@ void main() {
     await tester.tap(find.text('Try again'));
     await tester.pumpAndSettle();
     expect(find.text('No recorded payments or adjustments.'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+  testWidgets('history formats receipts and adjustments in local time', (
+    tester,
+  ) async {
+    const paid = '2026-11-12T01:59:29.412151+00:00';
+    const created = '2026-11-13T02:15:00+00:00';
+    final gateway = FakeFinance()
+      ..historyData = {
+        'payments': [
+          {
+            'amount_cents': 3000,
+            'method': 'stripe',
+            'status': 'paid',
+            'paid_at': paid,
+          },
+          {
+            'amount_cents': 500,
+            'method': 'cash',
+            'status': 'paid',
+            'created_at': created,
+          },
+        ],
+        'events': [
+          {
+            'kind': 'credit',
+            'amount_cents': 100,
+            'reason': 'Correction',
+            'created_at': created,
+          },
+        ],
+      };
+    await start(tester, gateway);
+    await reveal(tester, find.byType(TextField));
+    await tester.enterText(find.byType(TextField), 'demo exhibitor');
+    await tester.pumpAndSettle();
+    await reveal(tester, find.text('Payment history'));
+    await tester.tap(find.text('Payment history'));
+    await tester.pumpAndSettle();
+    expect(
+      find.text('Times are shown in your local time zone.'),
+      findsOneWidget,
+    );
+    expect(find.textContaining(formatLocalDateTime(paid)), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('Credit: USD 1.00'),
+      150,
+      scrollable: find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.byType(Scrollable),
+      ),
+    );
+    expect(
+      find.textContaining('Correction\n${formatLocalDateTime(created)}'),
+      findsOneWidget,
+    );
+    expect(find.textContaining(paid), findsNothing);
+    expect(find.textContaining(created), findsNothing);
     expect(tester.takeException(), isNull);
   });
 }

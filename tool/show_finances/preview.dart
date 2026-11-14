@@ -99,6 +99,7 @@ class PreviewFinance extends ShowFinanceGateway {
             (sum, row) => sum + financeCents(row['charges_cents']),
           ),
           'online_fee_cents': 444,
+          'discount_cents': 1500,
           'refunded_cents': 0,
           'due_cents': rows.fold<int>(
             0,

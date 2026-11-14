@@ -6,6 +6,7 @@ import 'package:uuid/uuid.dart';
 import '../../services/ringmaster_backend.dart';
 import '../../services/show_finances_service.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/date_time_utils.dart';
 import '../../widgets/ringmaster_page_shell.dart';
 import 'closeout/models/base/report_request.dart';
 import 'print_packs/print_reports_service.dart';
@@ -246,7 +247,8 @@ class _ShowFinancesScreenState extends State<ShowFinancesScreen> {
                                 'Charged for show': 'charges_cents',
                                 'Online fees charged': 'online_fee_cents',
                                 'Refunded': 'refunded_cents',
-                                'Waiting for payment': 'due_cents',
+                                'Outstanding': 'due_cents',
+                                'Discounts': 'discount_cents',
                                 'Club earned (estimate)': 'club_earned_cents',
                               }.entries)
                                 SizedBox(
@@ -285,7 +287,7 @@ class _ShowFinancesScreenState extends State<ShowFinancesScreen> {
                         ),
                         const SizedBox(height: 12),
                         const Text(
-                          'Show charges are after discounts and credits, excluding online payment fees. Refunded includes refunded online fees.',
+                          'Show charges are after discounts and credits, excluding online payment fees. Discounts shows applied entry discounts, excluding manual credits. Refunded includes refunded online fees.',
                         ),
                         const SizedBox(height: 8),
                         Text(
@@ -662,6 +664,7 @@ class _FinanceHistoryDialogState extends State<_FinanceHistoryDialog> {
               const Text(
                 'Original receipts may cover more than one exhibitor. Only the allocated portion counts toward this exhibitor’s balance.',
               ),
+              const Text('Times are shown in your local time zone.'),
               for (final a in allocations)
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 8),
@@ -676,7 +679,7 @@ class _FinanceHistoryDialogState extends State<_FinanceHistoryDialog> {
                     'Original receipt: ${financeMoney(financeCents(p['amount_cents']), p['currency'] as String? ?? widget.row.currency)}',
                   ),
                   subtitle: Text(
-                    '${p['payer_name'] ?? ''}\n${p['method'] ?? ''} · ${p['status']}\n${p['paid_at'] ?? p['created_at'] ?? ''}\n${p['reference'] ?? ''}',
+                    '${p['payer_name'] ?? ''}\n${p['method'] ?? ''} · ${p['status']}\n${formatLocalDateTime((p['paid_at'] ?? p['created_at'])?.toString())}\n${p['reference'] ?? ''}',
                   ),
                 ),
               for (final e in events)
@@ -690,7 +693,7 @@ class _FinanceHistoryDialogState extends State<_FinanceHistoryDialog> {
                         : 'External payment recorded',
                   ),
                   subtitle: Text(
-                    '${e['reason'] ?? ''}\n${e['created_at'] ?? ''}',
+                    '${e['reason'] ?? ''}\n${formatLocalDateTime(e['created_at']?.toString())}',
                   ),
                 ),
               if (payments.isEmpty && events.isEmpty && allocations.isEmpty)

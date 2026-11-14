@@ -29,6 +29,7 @@ try:
  sql((root/'supabase/migrations/20261114051532_filter_zero_payment_history_allocations.sql').read_text())
  sql((root/'supabase/migrations/20261114051711_index_show_finance_exhibitors.sql').read_text())
  sql((root/'supabase/migrations/20261114054901_show_finance_summary_and_name_sort.sql').read_text())
+ sql((root/'supabase/migrations/20261114061750_show_finance_discount_total.sql').read_text())
  report=(root/'supabase/migrations/20260910213930_attribute_checkin_fees_to_report_sections.sql').read_text()
  marker='create or replace function public.report_show_exhibitor_balances_scoped('
  start=report.index(marker,report.index(marker)+len(marker));end=report.index('\n$$;',start)+len('\n$$;')

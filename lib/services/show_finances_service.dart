@@ -1,8 +1,10 @@
 import 'package:supabase/supabase.dart';
+import 'package:intl/intl.dart';
 
 int financeCents(Object? value) => int.tryParse('$value') ?? 0;
+final _financeNumberFormat = NumberFormat('#,##0.00', 'en_US');
 String financeMoney(int cents, String currency) =>
-    '${currency.toUpperCase()} ${(cents / 100).toStringAsFixed(2)}';
+    '${currency.toUpperCase()} ${_financeNumberFormat.format(cents / 100)}';
 int? parseFinanceAmount(String text) {
   final value = text.trim();
   if (!RegExp(r'^\d+(\.\d{1,2})?$').hasMatch(value)) return null;
