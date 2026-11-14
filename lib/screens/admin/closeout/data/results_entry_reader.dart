@@ -36,3 +36,22 @@ Future<ReportRows> loadResultsEntryRows(
   final ordered = rows.keys.toList()..sort();
   return [for (final id in ordered) rows[id]!];
 }
+
+/// The printed QR link scopes public judging access to one show/section/breed.
+/// Staff report RPCs intentionally cannot serve this account-free workflow.
+Future<ReportRows> loadQrResultsEntryRows(
+  SupabaseClient client, {
+  required String showId,
+  required String sectionId,
+  required String breed,
+}) => loadReportCursorRows(
+  client,
+  'get_qr_results_entry_rows',
+  params: {
+    'p_show_id': showId,
+    'p_section_id': sectionId,
+    'p_breed': breed.trim(),
+  },
+  cursorParameter: 'p_after_entry_id',
+  idColumn: 'entry_id',
+);

@@ -40,8 +40,6 @@ class _QrResultsEntryScreenState extends State<QrResultsEntryScreen> {
 
   String _showName = 'Show';
   String _sectionLabel = 'Section';
-  String _sectionKind = 'open';
-  String _coopNumberingMode = 'separate';
 
   List<Map<String, dynamic>> _entries = [];
   List<Map<String, dynamic>> _judges = [];
@@ -58,6 +56,7 @@ class _QrResultsEntryScreenState extends State<QrResultsEntryScreen> {
   String? _writerName;
   String? _writerPhone;
   bool _qrLocked = false;
+  Map<String, dynamic> _qrContext = {};
 
   @override
   void initState() {
@@ -92,39 +91,13 @@ class _QrResultsEntryScreenState extends State<QrResultsEntryScreen> {
     _showsByVariety = false;
     _showName = 'Show';
     _sectionLabel = 'Section';
-    _sectionKind = 'open';
-    _coopNumberingMode = 'separate';
     _finalAwardMode = kDefaultFinalAwardMode;
 
     _loadAll();
   }
 
   Future<void> _loadQrLockStatus() async {
-    final rows = await supabase
-        .from('show_result_entry_locks')
-        .select('lock_starts_at')
-        .eq('show_id', widget.showId)
-        .eq('section_id', widget.sectionId)
-        .eq('breed_id', widget.breedId)
-        .limit(1);
-
-    if ((rows as List).isEmpty) {
-      _qrLocked = false;
-      return;
-    }
-
-    final row = Map<String, dynamic>.from(rows.first as Map);
-    final raw = (row['lock_starts_at'] ?? '').toString().trim();
-
-    if (raw.isEmpty) {
-      _qrLocked = false;
-      return;
-    }
-
-    final startsAt = DateTime.tryParse(raw)?.toUtc();
-    final now = DateTime.now().toUtc();
-
-    _qrLocked = startsAt != null && now.isAfter(startsAt);
+    _qrLocked = _qrContext['locked'] == true;
   }
 
   Future<void> _loadAll() async {
@@ -134,6 +107,17 @@ class _QrResultsEntryScreenState extends State<QrResultsEntryScreen> {
     });
 
     try {
+      _qrContext = Map<String, dynamic>.from(
+        await supabase.rpc(
+              'get_qr_results_context',
+              params: {
+                'p_show_id': widget.showId,
+                'p_section_id': widget.sectionId,
+                'p_breed': widget.breedId.trim(),
+              },
+            )
+            as Map,
+      );
       await _loadShowAndSection();
       await _loadJudges();
       await _loadBreedClassSystems();
@@ -160,11 +144,7 @@ class _QrResultsEntryScreenState extends State<QrResultsEntryScreen> {
   }
 
   Future<void> _loadShowAndSection() async {
-    final show = await supabase
-        .from('shows')
-        .select('name')
-        .eq('id', widget.showId)
-        .maybeSingle();
+    final show = _qrContext['show'] as Map?;
 
     if (show == null) {
       throw Exception(
@@ -174,11 +154,7 @@ class _QrResultsEntryScreenState extends State<QrResultsEntryScreen> {
 
     _showName = (show['name'] ?? 'Show').toString();
 
-    final section = await supabase
-        .from('show_sections')
-        .select('letter, display_name, kind')
-        .eq('id', widget.sectionId)
-        .maybeSingle();
+    final section = _qrContext['section'] as Map?;
 
     if (section == null) {
       throw Exception(
@@ -188,7 +164,6 @@ class _QrResultsEntryScreenState extends State<QrResultsEntryScreen> {
 
     final displayName = (section['display_name'] ?? '').toString().trim();
     final letter = (section['letter'] ?? '').toString().trim();
-    _sectionKind = (section['kind'] ?? 'open').toString().trim().toLowerCase();
 
     _sectionLabel = displayName.isNotEmpty
         ? displayName
@@ -198,17 +173,11 @@ class _QrResultsEntryScreenState extends State<QrResultsEntryScreen> {
   }
 
   Future<void> _loadJudges() async {
-    final rows = await supabase
-        .from('judge_assignments')
-        .select(
-          'id,judge_id,assignment_label,'
-          'judges(id,display_name,name,first_name,last_name,judge_type,is_active,arba_judge_number)',
-        )
-        .eq('show_id', widget.showId);
+    final rows = _qrContext['judges'] as List? ?? [];
 
     final result = <Map<String, dynamic>>[];
 
-    for (final raw in (rows as List)) {
+    for (final raw in rows) {
       final map = Map<String, dynamic>.from(raw as Map);
       final judge = map['judges'];
 
@@ -265,15 +234,11 @@ class _QrResultsEntryScreenState extends State<QrResultsEntryScreen> {
   }
 
   Future<void> _loadBreedClassSystems() async {
-    final rows = await supabase
-        .from('breeds')
-        .select('name,class_system')
-        .eq('is_active', true)
-        .or('local_show_id.is.null,local_show_id.eq.${widget.showId}');
+    final rows = _qrContext['breed_class_systems'] as List? ?? [];
 
     _breedClassSystems.clear();
 
-    for (final row in (rows as List).cast<Map<String, dynamic>>()) {
+    for (final row in rows.cast<Map<String, dynamic>>()) {
       final name = (row['name'] ?? '').toString().trim().toLowerCase();
       final classSystem = (row['class_system'] ?? 'four')
           .toString()
@@ -287,28 +252,18 @@ class _QrResultsEntryScreenState extends State<QrResultsEntryScreen> {
   }
 
   Future<void> _loadShowSettings() async {
-    final row = await supabase
-        .from('shows')
-        .select('final_award_mode, coop_numbering_mode')
-        .eq('id', widget.showId)
-        .single();
+    final row = _qrContext['show'] as Map;
 
     _finalAwardMode = (row['final_award_mode'] ?? kDefaultFinalAwardMode)
         .toString();
-    _coopNumberingMode = (row['coop_numbering_mode'] ?? 'separate')
-        .toString()
-        .trim()
-        .toLowerCase();
   }
 
   Future<void> _loadEntries() async {
-    final rows = await loadResultsEntryRows(
+    final rows = await loadQrResultsEntryRows(
       supabase,
-      params: {
-        'p_show_id': widget.showId,
-        'p_section_id': widget.sectionId,
-        'p_breed': widget.breedId.trim(),
-      },
+      showId: widget.showId,
+      sectionId: widget.sectionId,
+      breed: widget.breedId,
     );
 
     var entries = (rows as List)
@@ -348,71 +303,8 @@ class _QrResultsEntryScreenState extends State<QrResultsEntryScreen> {
       }).toList();
     }
 
-    final entryIds = entries
-        .map((e) => (e['entry_id'] ?? '').toString().trim())
-        .where((x) => x.isNotEmpty)
-        .toSet()
-        .toList();
-
-    final animalIdByEntryId = <String, String>{};
-    final speciesByEntryId = <String, String>{};
-    for (var i = 0; i < entryIds.length; i += 100) {
-      final chunk = entryIds.skip(i).take(100).toList();
-      if (chunk.isEmpty) continue;
-
-      final sourceRows = await supabase
-          .from('entries')
-          .select('id, animal_id, species')
-          .inFilter('id', chunk);
-
-      for (final raw in sourceRows as List) {
-        final row = Map<String, dynamic>.from(raw as Map);
-        final entryId = (row['id'] ?? '').toString().trim();
-        final animalId = (row['animal_id'] ?? '').toString().trim();
-        if (entryId.isNotEmpty) {
-          speciesByEntryId[entryId] = (row['species'] ?? '').toString().trim();
-        }
-        if (entryId.isNotEmpty && animalId.isNotEmpty) {
-          animalIdByEntryId[entryId] = animalId;
-        }
-      }
-    }
-
-    final animalIds = animalIdByEntryId.values.toSet().toList();
-    final coopNumberByAnimalAndScope = <String, String>{};
-
-    for (var i = 0; i < animalIds.length; i += 100) {
-      final chunk = animalIds.skip(i).take(100).toList();
-      if (chunk.isEmpty) continue;
-
-      final coopRows = await supabase
-          .from('show_animal_coop_numbers')
-          .select('animal_id, scope, coop_number')
-          .eq('show_id', widget.showId)
-          .inFilter('animal_id', chunk);
-
-      for (final raw in coopRows as List) {
-        final row = Map<String, dynamic>.from(raw as Map);
-        final animalId = (row['animal_id'] ?? '').toString().trim();
-        final scope = (row['scope'] ?? '').toString().trim().toLowerCase();
-        final coopNumber = (row['coop_number'] ?? '').toString().trim();
-        if (animalId.isEmpty || scope.isEmpty) continue;
-        coopNumberByAnimalAndScope['$animalId|$scope'] = coopNumber;
-      }
-    }
-
-    final coopScope = _coopNumberingMode == 'combined' ? 'all' : _sectionKind;
-
     for (final entry in entries) {
-      final entryId = (entry['entry_id'] ?? '').toString().trim();
-      final animalId = animalIdByEntryId[entryId] ?? '';
-      entry['animal_id'] = animalId;
-      // The report projection omits species; use the authoritative entry row.
-      entry['species'] = speciesByEntryId[entryId] ?? entry['species'];
       normalizeSpeciesSexPresentation(entry);
-      entry['coop_number'] = animalId.isEmpty
-          ? ''
-          : (coopNumberByAnimalAndScope['$animalId|$coopScope'] ?? '');
     }
 
     final classSexLabel = (widget.classSexLabel ?? '').trim();
@@ -423,38 +315,12 @@ class _QrResultsEntryScreenState extends State<QrResultsEntryScreen> {
       }).toList();
     }
 
-    final awardsByEntryId = <String, List<String>>{};
-
-    if (entryIds.isNotEmpty) {
-      for (var i = 0; i < entryIds.length; i += 100) {
-        final chunk = entryIds.skip(i).take(100).toList();
-
-        final awardRows = await supabase
-            .from('entry_awards')
-            .select('entry_id,award_code')
-            .eq('show_id', widget.showId)
-            .inFilter('entry_id', chunk);
-
-        for (final row in (awardRows as List).cast<Map<String, dynamic>>()) {
-          final entryId = (row['entry_id'] ?? '').toString().trim();
-          final award = (row['award_code'] ?? '').toString().trim();
-
-          if (entryId.isEmpty || award.isEmpty) continue;
-
-          awardsByEntryId.putIfAbsent(entryId, () => <String>[]);
-          awardsByEntryId[entryId]!.add(award);
-        }
-      }
-    }
-
     for (final e in entries) {
-      final id = (e['entry_id'] ?? '').toString();
-
       e['id'] ??= e['entry_id'];
       e['breed'] ??= e['breed_name'];
       e['variety'] ??= e['variety_name'];
       e['animal_name'] ??= '';
-      e['_awards'] = awardsByEntryId[id] ?? <String>[];
+      e['_awards'] ??= <String>[];
 
       final normalizedGroup =
           (e['group_name'] ??
@@ -539,7 +405,7 @@ class _QrResultsEntryScreenState extends State<QrResultsEntryScreen> {
   ) async {
     if (_qrLocked) {
       throw Exception(
-        'This QR results link is locked because breed results have already been submitted.',
+        'This QR results link is locked. The 20-minute correction window after BOB has ended. Contact show staff for changes.',
       );
     }
 
@@ -558,13 +424,18 @@ class _QrResultsEntryScreenState extends State<QrResultsEntryScreen> {
     for (var i = 0; i < ids.length; i += 100) {
       final chunk = ids.skip(i).take(100).toList();
 
-      await supabase
-          .from('entries')
-          .update({
-            'judged_by_show_judge_id': normalizedJudgeId,
-            'updated_at': DateTime.now().toUtc().toIso8601String(),
-          })
-          .inFilter('id', chunk);
+      await supabase.rpc(
+        'set_qr_results_judge',
+        params: {
+          'p_show_id': widget.showId,
+          'p_section_id': widget.sectionId,
+          'p_breed': widget.breedId.trim(),
+          'p_entry_ids': chunk,
+          'p_judge_id': normalizedJudgeId,
+          'p_writer_name': _writerName,
+          'p_writer_phone': _writerPhone,
+        },
+      );
     }
 
     for (final e in _entries) {
@@ -646,7 +517,7 @@ class _QrResultsEntryScreenState extends State<QrResultsEntryScreen> {
               child: Padding(
                 padding: EdgeInsets.all(18),
                 child: Text(
-                  'This QR results link is locked because breed results have already been submitted.',
+                  'This QR results link is locked. The 20-minute correction window after BOB has ended. Contact show staff for changes.',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: Colors.red,
@@ -1024,7 +895,7 @@ class _QrBreedDrilldownScreenState extends State<_QrBreedDrilldownScreen> {
     }
 
     await supabase.rpc(
-      'apply_entry_correction',
+      'apply_qr_entry_correction',
       params: {
         'p_show_id': widget.showId,
         'p_entry_id': cleanEntryId,

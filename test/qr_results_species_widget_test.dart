@@ -10,10 +10,13 @@ import 'package:ringmaster_show/screens/admin/judging/mobile/qr_results_entry_sc
 import 'package:ringmaster_show/screens/admin/results/admin_results_entry_screen.dart';
 
 void main() {
+  var locked = false;
   final projection = [
     for (var i = 1; i <= 3; i++)
       <String, dynamic>{
         'entry_id': 'entry-$i',
+        'species': 'cavy',
+        '_awards': <String>[],
         'section_id': 'open',
         'breed': 'American',
         'variety': 'Black',
@@ -43,28 +46,28 @@ void main() {
       httpClient: MockClient((request) async {
         final path = request.url.path.split('/').last;
         Object response = [];
-        if (path == 'shows') {
+        if (path == 'get_qr_results_context') {
           response = {
-            'name': 'Synthetic Cavy Show',
-            'final_award_mode': 'bis_ris',
-            'coop_numbering_mode': 'separate',
+            'show': {
+              'name': 'Synthetic Cavy Show',
+              'final_award_mode': 'bis_ris',
+            },
+            'section': {
+              'kind': 'open',
+              'display_name': 'Cavy Open A',
+              'letter': 'A',
+            },
+            'judges': [],
+            'breed_class_systems': [],
+            'locked': locked,
           };
-        } else if (path == 'show_sections') {
-          response = {
-            'id': 'open',
-            'kind': 'open',
-            'display_name': 'Cavy Open A',
-            'letter': 'A',
-          };
-        } else if (path == 'report_results_entry_rows_dated_page') {
+        } else if (path == 'get_qr_results_entry_rows') {
           final params = jsonDecode(request.body) as Map;
+          expect(params['p_section_id'], 'open');
+          expect(params['p_breed'], 'American');
           response = params['p_after_entry_id'] == null ? projection : [];
-        } else if (path == 'entries') {
-          expect(request.url.queryParameters['select'], contains('species'));
-          response = [
-            for (var i = 1; i <= 3; i++)
-              {'id': 'entry-$i', 'animal_id': 'animal-$i', 'species': 'cavy'},
-          ];
+        } else {
+          fail('QR must not query staff reports or private tables: $path');
         }
         return http.Response(
           jsonEncode(response),
@@ -97,6 +100,10 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(find.textContaining('No matching entries'), findsNothing);
+      expect(Supabase.instance.client.auth.currentSession, isNull);
+      await tester.tap(find.text('Continue to Results'));
+      await tester.pumpAndSettle();
+      expect(find.byType(ResultsAnimalsScreen), findsNothing);
       await tester.enterText(
         find.byType(TextFormField).at(0),
         'Synthetic Clerk',
@@ -121,4 +128,25 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets('expired QR shows lock instead of writer form', (tester) async {
+    locked = true;
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: QrResultsEntryScreen(
+          showId: 'show',
+          sectionId: 'open',
+          breedId: 'American',
+          token: '',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.textContaining('This QR results link is locked'),
+      findsOneWidget,
+    );
+    expect(find.text('Continue to Results'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
 }

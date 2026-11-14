@@ -5780,15 +5780,22 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
     if (currentIds.isEmpty) return;
 
     try {
-      final rows = await loadResultsEntryRows(
-        supabase,
-        params: {
-          'p_show_id': widget.showId,
-          'p_section_id': null,
-          'p_show_letter': null,
-        },
-        entryIds: currentIds,
-      );
+      final rows = widget.isQrEntryMode
+          ? await loadQrResultsEntryRows(
+              supabase,
+              showId: widget.showId,
+              sectionId: (_entries.first['section_id'] ?? '').toString(),
+              breed: widget.breed,
+            )
+          : await loadResultsEntryRows(
+              supabase,
+              params: {
+                'p_show_id': widget.showId,
+                'p_section_id': null,
+                'p_show_letter': null,
+              },
+              entryIds: currentIds,
+            );
 
       final allRows = (rows as List)
           .map((e) => Map<String, dynamic>.from(e as Map))
@@ -5836,7 +5843,11 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
 
       final awardsByEntryId = <String, List<String>>{};
 
-      for (var i = 0; i < refreshedIds.length; i += 100) {
+      for (
+        var i = 0;
+        !widget.isQrEntryMode && i < refreshedIds.length;
+        i += 100
+      ) {
         final chunk = refreshedIds.skip(i).take(100).toList();
 
         final awardRows = await supabase
@@ -5861,7 +5872,10 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
 
       for (final e in refreshed) {
         final id = (e['entry_id'] ?? e['id'] ?? '').toString().trim();
-        e['_awards'] = awardsByEntryId[id] ?? <String>[];
+        if (!widget.isQrEntryMode) {
+          e['_awards'] = awardsByEntryId[id] ?? <String>[];
+        }
+        normalizeSpeciesSexPresentation(e);
       }
 
       _entries = _mergeRefreshedEntriesWithoutDroppingCurrentRows(
@@ -6428,10 +6442,15 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
     setState(() => _checkingFurEligibility = true);
     try {
       final rows = await supabase.rpc(
-        'report_fur_breed_eligibility',
+        widget.isQrEntryMode
+            ? 'get_qr_fur_eligibility'
+            : 'report_fur_breed_eligibility',
         params: {
           'p_show_id': widget.showId,
-          'p_entry_ids': [_entryUuid],
+          if (widget.isQrEntryMode)
+            'p_entry_id': _entryUuid
+          else
+            'p_entry_ids': [_entryUuid],
         },
       );
       if (!mounted) return;
@@ -7131,7 +7150,9 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
   }
 
   String _awardDisabledReason(String award) {
-    if (recognitionAwardsDisallowed(widget.entry, [_canonicalAwardCode(award)])) {
+    if (recognitionAwardsDisallowed(widget.entry, [
+      _canonicalAwardCode(award),
+    ])) {
       return recognitionIneligibilityReason(widget.entry);
     }
     if (!_placedFirst(widget.entry)) {
@@ -7562,6 +7583,7 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
                 ),
               const SizedBox(height: 14),
               DropdownButtonFormField<String>(
+                isExpanded: true,
                 initialValue: _judgeId,
                 decoration: const InputDecoration(labelText: 'Judge'),
                 items: [
@@ -7586,6 +7608,7 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
               ),
               const SizedBox(height: 8),
               DropdownButtonFormField<String>(
+                isExpanded: true,
                 initialValue: _resultStatus,
                 decoration: const InputDecoration(labelText: 'Result Status'),
                 items: kResultStatuses
@@ -7616,6 +7639,7 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
               const SizedBox(height: 10),
               if (canPlace)
                 DropdownButtonFormField<String>(
+                  isExpanded: true,
                   initialValue:
                       (_placement != null &&
                           placementOptions.contains(_placement))
