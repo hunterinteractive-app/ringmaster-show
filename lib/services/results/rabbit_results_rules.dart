@@ -204,7 +204,8 @@ class RabbitResultsRules implements ResultsRules {
   }
 
   Set<String> _breedSources(Map<String, dynamic> entry, String breedAward) {
-    if (usesGroupLayer(entry)) {
+    // COD breed winners do not need an ineligible group award first.
+    if (usesGroupLayer(entry) && !isCodEntry(entry)) {
       return breedAward == 'BOB' ? const {'BOG'} : const {'BOG', 'BOSG'};
     }
     if (usesVarietyLayer(entry)) {

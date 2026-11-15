@@ -7036,7 +7036,7 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
       final bosb = _winnerForAwardInScope(award: 'BOSB', sameScope: sameBreed);
       if (!_isOppositeSexOf(bosb)) return 'BOB and BOSB must be opposite sex.';
 
-      if (_breedUsesGroups()) {
+      if (_breedUsesGroups() && !isCodEntry(widget.entry)) {
         if (!(_hasAward('BOG') || _hasAward('BOSG'))) {
           return 'BOB can only be selected from BOG/BOSG winners for group breeds.';
         }
@@ -7056,7 +7056,7 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
       final bob = _winnerForAwardInScope(award: 'BOB', sameScope: sameBreed);
       if (!_isOppositeSexOf(bob)) return 'BOB and BOSB must be opposite sex.';
 
-      if (_breedUsesGroups()) {
+      if (_breedUsesGroups() && !isCodEntry(widget.entry)) {
         if (!(_hasAward('BOG') || _hasAward('BOSG'))) {
           return 'BOSB can only be selected from BOG/BOSG winners for group breeds.';
         }

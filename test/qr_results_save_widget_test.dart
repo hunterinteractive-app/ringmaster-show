@@ -69,7 +69,12 @@ void main() {
     furChecks = 0;
   });
 
-  Future<void> openSheet(WidgetTester tester, {bool fur = false}) async {
+  Future<void> openSheet(
+    WidgetTester tester, {
+    bool fur = false,
+    bool cod = false,
+    bool group = false,
+  }) async {
     tester.view.physicalSize = const Size(430, 1000);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -78,7 +83,10 @@ void main() {
       'entry_id': 'entry',
       'section_id': 'section',
       'species': 'rabbit',
-      'breed': 'Standard Chinchilla',
+      'breed': cod ? 'Velveteen Lop (COD)' : 'Standard Chinchilla',
+      'recognition_status': cod ? 'cod' : 'recognized',
+      'uses_variety_awards': cod,
+      'uses_group_awards': group,
       'variety': 'Standard',
       'class_name': fur ? 'Fur / Wool' : 'Senior',
       'sex': 'Buck',
@@ -87,7 +95,7 @@ void main() {
       'is_shown': true,
       'is_fur': fur,
       'tattoo': '67',
-      '_awards': <String>[],
+      '_awards': <String>[if (cod) 'BOV'],
     };
     await tester.pumpWidget(
       MaterialApp(
@@ -111,8 +119,8 @@ void main() {
                       totalCount: 1,
                       breedClassSystems: const {'standard chinchilla': 'four'},
                       finalAwardMode: 'bis_ris',
-                      showsByGroup: false,
-                      showsByVariety: false,
+                      showsByGroup: group,
+                      showsByVariety: cod,
                       isFurOrWoolClass: fur,
                       writerName: 'Test Writer',
                       writerPhone: '3175550100',
@@ -129,6 +137,39 @@ void main() {
     );
     await tester.tap(find.text('Open'));
     await tester.pumpAndSettle();
+  }
+
+  for (final group in [false, true]) {
+    for (final award in ['Best of Breed', 'Best Opposite Sex of Breed']) {
+      testWidgets(
+        'COD $award (group=$group) is selectable and saves without finals',
+        (tester) async {
+          await openSheet(tester, cod: true, group: group);
+          expect(
+            find.widgetWithText(CheckboxListTile, 'Best In Show'),
+            findsNothing,
+          );
+          expect(
+            find.widgetWithText(CheckboxListTile, 'Reserve In Show'),
+            findsNothing,
+          );
+          await tester.ensureVisible(
+            find.widgetWithText(CheckboxListTile, award),
+          );
+          await tester.tap(find.widgetWithText(CheckboxListTile, award));
+          await tester.pumpAndSettle();
+          await tester.ensureVisible(find.text('Save'));
+          await tester.tap(find.text('Save'));
+          await tester.pumpAndSettle();
+          expect(
+            saves.last['p_awards'],
+            contains(award == 'Best of Breed' ? 'BOB' : 'BOSB'),
+          );
+          expect(find.byType(ResultsEntrySheet), findsNothing);
+          expect(tester.takeException(), isNull);
+        },
+      );
+    }
   }
 
   testWidgets('anonymous writer saves attribution and BOB', (tester) async {

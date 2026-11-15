@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ringmaster_show/services/results/cod_eligibility.dart';
 import 'package:ringmaster_show/services/results/rabbit_results_rules.dart';
+import 'package:ringmaster_show/services/results/cavy_results_rules.dart';
 import 'package:ringmaster_show/services/results/rabbit_results_validation.dart';
 
 Map<String, dynamic> rabbit(
@@ -54,13 +55,103 @@ void main() {
     expect(isCodEntry({'breed': 'Codsworth'}), isFalse);
     expect(isCodEntry({'notes': 'COD', 'tattoo': 'COD'}), isFalse);
   });
+  for (final entry in [
+    rabbit('breed', 'Solid (COD)', 'Doe', breed: 'Velveteen Lop (COD)'),
+    rabbit('variety', 'Blue (COD)', 'Doe'),
+    {...rabbit('status', 'Blue', 'Doe'), 'recognition_status': 'cod'},
+    {...rabbit('group', 'Blue (COD)', 'Doe'), 'uses_group_awards': true},
+  ]) {
+    for (final award in ['BOB', 'BOSB']) {
+      test('COD ${entry['id']} allows $award from a variety winner', () {
+        final awards = {'BOV', award};
+        expect(
+          rules
+              .validateAwardSelection(entry: entry, selectedAwards: awards)
+              .valid,
+          isTrue,
+        );
+        expect(
+          rules.canUseAward(
+            entry: entry,
+            award: award,
+            selectedAwards: {'BOV'},
+            effectiveStatus: 'Shown',
+            effectivePlacement: '1',
+            classSystem: 'four',
+            finalAwardMode: 'four_six_bis',
+          ),
+          isTrue,
+        );
+        for (final status in ['No Show', 'Disqualified', 'Unworthy of Award']) {
+          expect(
+            rules.canUseAward(
+              entry: entry,
+              award: award,
+              selectedAwards: {'BOV'},
+              effectiveStatus: status,
+              effectivePlacement: '1',
+              classSystem: 'four',
+              finalAwardMode: 'four_six_bis',
+            ),
+            isFalse,
+          );
+        }
+        expect(
+          rules.canUseAward(
+            entry: entry,
+            award: award,
+            selectedAwards: {'BOV'},
+            effectiveStatus: 'Shown',
+            effectivePlacement: '2',
+            classSystem: 'four',
+            finalAwardMode: 'four_six_bis',
+          ),
+          isFalse,
+        );
+        expect(
+          isRecognitionRestricted(entry),
+          isTrue,
+          reason: 'Breed awards do not unlock legs',
+        );
+      });
+    }
+  }
+  test('COD cavy variety winners can receive breed awards, never finals', () {
+    const cavyRules = CavyResultsRules();
+    final entry = {
+      'species': 'cavy',
+      'breed': 'American',
+      'variety': 'Black',
+      'recognition_status': 'cod',
+      'class_name': 'Senior',
+      'sex': 'Boar',
+    };
+    for (final award in [
+      'BOB',
+      'BOSB',
+      'Best In Show',
+      'Reserve In Show',
+      'BBOS',
+    ]) {
+      expect(
+        cavyRules.canUseAward(
+          entry: entry,
+          award: award,
+          selectedAwards: {'BOV', 'BOB', 'BOSB'},
+          effectiveStatus: 'Shown',
+          effectivePlacement: '1',
+          classSystem: 'six',
+          finalAwardMode: 'bis_ris',
+        ),
+        ['BOB', 'BOSB'].contains(award),
+      );
+    }
+  });
   test('COD cannot receive any higher award even when first place', () {
     final entry = rabbit('cod', 'Blue (COD)', 'Doe');
     for (final award in [
       'BOG',
       'BOSG',
-      'BOB',
-      'BOSB',
       'Best 4-Class',
       'Best 6-Class',
       'Best In Show',
@@ -187,7 +278,7 @@ void main() {
   test('existing incorrect COD awards are flagged for correction', () {
     expect(
       validate([
-        rabbit('cod', 'Blue (COD)', 'Doe', awards: ['BOSB']),
+        rabbit('cod', 'Blue (COD)', 'Doe', awards: ['Best In Show']),
       ]).map((issue) => issue.code),
       contains('cod_special_award'),
     );

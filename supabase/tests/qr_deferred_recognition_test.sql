@@ -43,7 +43,9 @@ update show_sections set judging_date='2026-11-14' where id=(select id from qr_r
 select set_config('request.jwt.claims','{"role":"anon"}',true);
 set local role anon;
 select pg_temp.check_qr(pg_temp.qr_recognition_save(array['BOV'])='saved','COD BOV remains permitted');
-select pg_temp.check_qr(position('COD entries may receive' in pg_temp.qr_recognition_save(array['BOB']))>0,'COD BOB still rejected by deferred check');
+select pg_temp.check_qr(pg_temp.qr_recognition_save(array['BOV','BOB'])='saved','COD BOB passes anonymous deferred check');
+select pg_temp.check_qr(pg_temp.qr_recognition_save(array['BOSV','BOSB'])='saved','COD BOSB passes anonymous deferred check');
+select pg_temp.check_qr(position('COD entries may receive' in pg_temp.qr_recognition_save(array['BOV','BOB','BIS']))>0,'COD BIS still rejected by deferred check');
 reset role;
 update show_sections set judging_date='2028-01-01' where id=(select id from qr_recognition_fixture where k='section');
 set local role anon;

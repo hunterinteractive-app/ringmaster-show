@@ -49,5 +49,5 @@ does not expose recognition tables or change recognition rules.
 
 The runner now flushes deferred constraints before every role reset. Additional
 fixtures cover anonymous recognized BOV/BOB, signed-in nonstaff BOV, allowed COD
-BOV, forbidden COD BOB, and forbidden retired BOV. All pass. This database-only
+BOV/BOB/BOSB, forbidden COD BIS, and forbidden retired BOV. All pass. This database-only
 repair works with web release 1.00.32.

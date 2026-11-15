@@ -1,4 +1,5 @@
-/// COD breeds/varieties may receive class placements, BOV, and BOSV, but no higher awards or legs. Match a whole
+/// COD breeds/varieties may receive variety and breed awards, but no final
+/// awards or legs. Match a whole
 /// marker, not arbitrary names containing the letters "cod".
 final _codMarker = RegExp(r'\bCOD\b', caseSensitive: false);
 
@@ -12,10 +13,15 @@ bool _hasCodMarker(Map<String, dynamic> entry) => const [
 ].any((key) => _codMarker.hasMatch((entry[key] ?? '').toString()));
 
 const codAwardIneligibilityReason =
-    'COD entries may receive class placements, BOV, and BOSV only, and cannot earn legs.';
+    'COD entries may receive class placements, BOV, BOSV, BOB, and BOSB, but cannot earn legs or final awards.';
 
 bool codAwardsDisallowed(Iterable<String> awards) => awards.any(
-  (award) => !const {'BOV', 'BOSV'}.contains(award.trim().toUpperCase()),
+  (award) => !const {
+    'BOV',
+    'BOSV',
+    'BOB',
+    'BOSB',
+  }.contains(award.trim().toUpperCase()),
 );
 
 // Server-resolved status is authoritative even when legacy names retain COD.

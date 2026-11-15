@@ -30,7 +30,7 @@ It does not deploy, send email, or modify production.
 - Add a future Retired transition with a reason. Reopen the screen, and preview
   the day before/on its date. Future changes can be cancelled; effective history
   cannot be deleted. Changes overlapping judged results require separate review.
-- COD permits class placements, BOV, and BOSV, but no higher awards or legs.
+- COD permits class placements, BOV, BOSV, BOB, and BOSB, but no final awards or legs.
 - Existing reports resolve status by section judging date (show-start fallback),
   rather than today's date. Retired subjects cannot be newly entered for a
   retired judging date. Existing saved animals and historical results remain.

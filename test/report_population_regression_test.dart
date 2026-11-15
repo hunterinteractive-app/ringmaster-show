@@ -162,7 +162,7 @@ void main() {
       },
     );
   }
-  for (final award in ['FIRST', 'BOV', 'BOSV', 'BOB']) {
+  for (final award in ['FIRST', 'BOV', 'BOSV', 'BOB', 'BOSB']) {
     for (final markerField in ['breed_name', 'variety_name']) {
       test(
         'COD $markerField never earns a $award leg or exhibitor leg credit',

@@ -53,6 +53,39 @@ void main() {
       );
     },
   );
+  test(
+    'breed awards stay available across December recognition; finals unlock on the judging date',
+    () {
+      for (final date in [DateTime(2026, 11, 30), DateTime(2026, 12, 1)]) {
+        final status = resolve(date);
+        final entry = {
+          'breed': 'Mini Rex',
+          'variety': 'Brindle (COD)',
+          'recognition_status': status.name,
+          'uses_variety_awards': true,
+        };
+        for (final award in ['BOB', 'BOSB', 'Best 4-Class', 'Best In Show']) {
+          expect(
+            const RabbitResultsRules().canUseAward(
+              entry: entry,
+              award: award,
+              selectedAwards: {'BOV', 'BOB', 'Best 4-Class'},
+              effectiveStatus: 'Shown',
+              effectivePlacement: '1',
+              classSystem: 'four',
+              finalAwardMode: 'four_six_bis',
+            ),
+            ['BOB', 'BOSB'].contains(award) ||
+                status == RecognitionStatus.recognized,
+          );
+        }
+        expect(
+          isRecognitionRestricted(entry),
+          status != RecognitionStatus.recognized,
+        );
+      }
+    },
+  );
   test('unrelated variety retains recognized status', () {
     expect(
       resolve(DateTime(2026, 11, 30), variety: 'Black'),
@@ -99,7 +132,8 @@ void main() {
     };
     expect(isCodEntry(row), true);
     expect(recognitionAwardsDisallowed(row, ['BOV', 'BOSV']), false);
-    expect(recognitionAwardsDisallowed(row, ['BOB']), true);
+    expect(recognitionAwardsDisallowed(row, ['BOB', 'BOSB']), false);
+    expect(recognitionAwardsDisallowed(row, ['Best In Show']), true);
     expect(isRecognitionRestricted(row), true);
   });
   test('retirement blocks even variety awards', () {

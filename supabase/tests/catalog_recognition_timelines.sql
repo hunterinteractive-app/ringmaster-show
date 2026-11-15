@@ -33,10 +33,12 @@ insert into public.entries(id,show_id,section_id,species,breed,variety,sex,class
 set constraints all immediate;
 select is(public.entry_recognition_status((select id from recognition_fixture where key='early')),'cod','November section stays COD');
 select is(public.entry_recognition_status((select id from recognition_fixture where key='late')),'recognized','December section uses recognition not show start');
-select throws_ok($$insert into public.entry_awards(show_id,entry_id,award_code) values ((select id from recognition_fixture where key='show'),(select id from recognition_fixture where key='early'),'BOB')$$,
- '23514','COD entries may receive class placements, BOV, and BOSV only, and cannot earn legs.','COD BOB blocked at database boundary');
+select lives_ok($$insert into public.entry_awards(show_id,entry_id,award_code) values ((select id from recognition_fixture where key='show'),(select id from recognition_fixture where key='early'),'BOB')$$,'COD BOB allowed before recognition');
+select throws_ok($$insert into public.entry_awards(show_id,entry_id,award_code) values ((select id from recognition_fixture where key='show'),(select id from recognition_fixture where key='early'),'BIS')$$,
+ '23514','COD entries may receive class placements, BOV, BOSV, BOB, and BOSB, but cannot earn legs or final awards.','COD BIS remains blocked before recognition');
 select lives_ok($$insert into public.entry_awards(show_id,entry_id,award_code) values ((select id from recognition_fixture where key='show'),(select id from recognition_fixture where key='early'),'BOSV')$$,'COD BOSV remains allowed');
 select lives_ok($$insert into public.entry_awards(show_id,entry_id,award_code) values ((select id from recognition_fixture where key='show'),(select id from recognition_fixture where key='late'),'BOB')$$,'recognized BOB saves despite COD label');
+select lives_ok($$insert into public.entry_awards(show_id,entry_id,award_code) values ((select id from recognition_fixture where key='show'),(select id from recognition_fixture where key='late'),'BIS')$$,'December recognition allows finals despite old COD label');
 select throws_ok($$insert into public.catalog_recognition_history(species,breed_name,variety_name,status,effective_date) values ('rabbit','Recognition Fixture','Blue','retired','2026-11-15')$$,
  '23514','This effective date overlaps judged entries. Historical results require a separate review.','backdating across judged results blocked');
 select throws_ok($$delete from public.catalog_recognition_history where breed_name='Recognition Fixture' and effective_date='2026-01-01'$$,
