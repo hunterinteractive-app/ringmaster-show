@@ -97,6 +97,10 @@ class _CartScreenState extends State<CartScreen> {
 
   bool _confirming = false;
   bool _payingOnline = false;
+  bool _cancellingCheckout = false;
+  bool _cartLocked = false;
+  String? _activePaymentSessionId;
+  String? _cartPaymentProvider;
   bool _handledStripeReturn = false;
   String? _msg;
   String? _checkoutUrl;
@@ -152,6 +156,13 @@ class _CartScreenState extends State<CartScreen> {
     });
 
     try {
+      final cart = await supabase
+          .from('entry_carts')
+          .select(
+            'status,payment_status,payment_provider,active_payment_session_id,completed_payment_session_id',
+          )
+          .eq('id', widget.cartId)
+          .maybeSingle();
       final show = await supabase
           .from('shows')
           .select(
@@ -290,6 +301,14 @@ class _CartScreenState extends State<CartScreen> {
 
       if (!mounted) return;
       setState(() {
+        _activePaymentSessionId = cart?['active_payment_session_id']
+            ?.toString();
+        _cartPaymentProvider = cart?['payment_provider']?.toString();
+        _cartLocked =
+            _activePaymentSessionId != null ||
+            cart?['completed_payment_session_id'] != null ||
+            ['pending', 'paid', 'refunded'].contains(cart?['payment_status']) ||
+            (cart?['status'] != null && cart?['status'] != 'active');
         _pricedBalances = pricedBalances;
         _acceptedCodes = acceptedCodes;
         _pricingReady =
@@ -944,11 +963,51 @@ class _CartScreenState extends State<CartScreen> {
   }
 
   Future<void> _removeItem(String itemId) async {
+    if (_cartLocked || _cancellingCheckout) return;
     try {
       await supabase.from('entry_cart_items').delete().eq('id', itemId);
       await _load();
     } catch (e) {
       setState(() => _msg = 'Remove failed: $e');
+    }
+  }
+
+  Future<void> _cancelSquareCheckout() async {
+    final sessionId = _activePaymentSessionId;
+    if (sessionId == null || _cancellingCheckout) return;
+    setState(() {
+      _cancellingCheckout = true;
+      _payingOnline = true;
+    });
+    try {
+      await SquareCheckoutService.cancelUnpaidCheckout(
+        cartId: widget.cartId,
+        paymentSessionId: sessionId,
+      );
+      _squareClientAttemptKey = null;
+      await _load();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Unpaid checkout canceled. You can now remove items or change your cart.',
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.toString())));
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _cancellingCheckout = false;
+          _payingOnline = false;
+        });
+      }
     }
   }
 
@@ -1381,7 +1440,11 @@ class _CartScreenState extends State<CartScreen> {
             tooltip: 'Contests & Add-Ons',
             icon: const Icon(Icons.confirmation_number_outlined),
             onPressed:
-                (_confirming || _payingOnline || AppSession.supportReadOnly)
+                (_confirming ||
+                    _payingOnline ||
+                    _cartLocked ||
+                    _cancellingCheckout ||
+                    AppSession.supportReadOnly)
                 ? null
                 : () async {
                     await Navigator.push(
@@ -1420,6 +1483,56 @@ class _CartScreenState extends State<CartScreen> {
           ? const Center(child: CircularProgressIndicator())
           : ListView(
               children: [
+                if (_cartLocked)
+                  Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: AppTheme.surfaceTextScope(
+                      context,
+                      child: Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: AppColors.surface,
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _activePaymentSessionId != null
+                                  ? 'Checkout in progress'
+                                  : 'Cart is no longer editable',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              _activePaymentSessionId != null
+                                  ? 'An unfinished checkout is holding these items. Cancel the unpaid checkout before removing entries, contests, or add-ons.'
+                                  : 'Submitted or paid entries cannot be removed from this cart.',
+                            ),
+                            if (_activePaymentSessionId != null &&
+                                _cartPaymentProvider == 'square') ...[
+                              const SizedBox(height: 12),
+                              OutlinedButton.icon(
+                                onPressed:
+                                    _cancellingCheckout ||
+                                        AppSession.supportReadOnly
+                                    ? null
+                                    : _cancelSquareCheckout,
+                                icon: const Icon(Icons.edit_outlined),
+                                label: Text(
+                                  _cancellingCheckout
+                                      ? 'Checking Square…'
+                                      : 'Cancel Unpaid Checkout & Edit Cart',
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
                 if (AppSession.supportReadOnly)
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
@@ -1710,6 +1823,8 @@ class _CartScreenState extends State<CartScreen> {
                             onPressed:
                                 (_confirming ||
                                     _payingOnline ||
+                                    _cartLocked ||
+                                    _cancellingCheckout ||
                                     AppSession.supportReadOnly)
                                 ? null
                                 : () async {
@@ -1721,6 +1836,15 @@ class _CartScreenState extends State<CartScreen> {
                                     } catch (e) {
                                       if (mounted) {
                                         setState(() => _msg = e.toString());
+                                        ScaffoldMessenger.of(
+                                          this.context,
+                                        ).showSnackBar(
+                                          SnackBar(
+                                            content: Text(
+                                              'Unable to remove item: $e',
+                                            ),
+                                          ),
+                                        );
                                       }
                                     }
                                   },
@@ -1800,7 +1924,11 @@ class _CartScreenState extends State<CartScreen> {
                                   trailing: IconButton(
                                     tooltip: 'Remove',
                                     icon: const Icon(Icons.delete_outline),
-                                    onPressed: (_confirming || _payingOnline)
+                                    onPressed:
+                                        (_confirming ||
+                                            _payingOnline ||
+                                            _cartLocked ||
+                                            _cancellingCheckout)
                                         ? null
                                         : () =>
                                               _removeItem(it['id'].toString()),

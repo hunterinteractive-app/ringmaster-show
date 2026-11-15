@@ -35,6 +35,9 @@ verify_jwt = false
 [functions.square-reconcile-payment]
 verify_jwt = true
 
+[functions.square-cancel-checkout]
+verify_jwt = true
+
 [functions.payment-quote-preview]
 verify_jwt = true
 

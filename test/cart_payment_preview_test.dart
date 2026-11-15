@@ -31,7 +31,9 @@ void main() {
             final path = req.url.path;
             Object data = [];
             var status = 200;
-            if (path.endsWith('/shows')) {
+            if (path.endsWith('/entry_carts')) {
+              data = {'status': 'active', 'payment_status': 'unpaid'};
+            } else if (path.endsWith('/shows')) {
               data = {
                 'id': 'show',
                 'name': 'Test Show',

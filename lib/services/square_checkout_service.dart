@@ -40,6 +40,19 @@ class SquareCheckoutService {
   SquareCheckoutService._();
   static SupabaseClient get _supabase => ringMasterClient;
 
+  static Future<void> cancelUnpaidCheckout({
+    required String cartId,
+    required String paymentSessionId,
+  }) async {
+    final data = await _invoke('square-cancel-checkout', {
+      'cart_id': cartId,
+      'payment_session_id': paymentSessionId,
+    });
+    if (data['cancelled'] != true) {
+      throw Exception('Square checkout cancellation was not confirmed.');
+    }
+  }
+
   static Future<SquareHostedCheckout> createHostedCheckout({
     required String cartId,
     required String clientAttemptKey,
