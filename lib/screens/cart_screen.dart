@@ -75,10 +75,21 @@ class _CartScreenState extends State<CartScreen> {
         .toList();
     double amount(String key) =>
         rows.fold<num>(0, (sum, b) => sum + (b[key] as num? ?? 0)) / 100.0;
+    // The server includes the one-time exhibitor fee in its show-fee subtotal.
+    // That fee has its own labeled line below, so display only the remainder
+    // as per-show fees. Use the same balance snapshot to avoid counting it twice.
+    final showFee =
+        rows.fold<num>(0, (sum, balance) {
+          final snapshot = balance['fee_snapshot'] as Map?;
+          return sum +
+              (balance['show_fee_subtotal_cents'] as num? ?? 0) -
+              (snapshot?['exhibitor_fee_cents'] as num? ?? 0);
+        }) /
+        100.0;
     return {
       'entries_subtotal': amount('entries_subtotal_cents'),
       'fur_subtotal': amount('fur_subtotal_cents'),
-      'show_fee': amount('show_fee_subtotal_cents'),
+      'show_fee': showFee,
       'discount_amount': amount('discount_cents'),
       'total': amount('balance_due_cents'),
     };
