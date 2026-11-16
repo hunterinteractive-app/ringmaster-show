@@ -54,6 +54,16 @@ class ContestSettings {
     if (!['individual', 'team', 'project'].contains(entryType)) {
       return 'Choose an entry type.';
     }
+    final categorySessionCapacity = data['category_session_capacity'] ?? 0;
+    if (categorySessionCapacity is! int ||
+        categorySessionCapacity < 0 ||
+        categorySessionCapacity > 100000) {
+      return 'Enter a category/session limit from 0 to 100000.';
+    }
+    if (categorySessionCapacity > 0 &&
+        (categories.isEmpty || sessions.isEmpty)) {
+      return 'Add categories and sessions before setting a category/session limit.';
+    }
     for (final values in [categories, animalRoles]) {
       if (values.length > 100 ||
           values.any((v) => v.trim().isEmpty || v.length > 120) ||

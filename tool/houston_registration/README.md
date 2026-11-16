@@ -143,3 +143,32 @@ fees, age/division rules, household authorization, duplicate prevention, local
 checkout, and the single Rabbit roster. Security advisor counts were unchanged.
 No production registrations, agreements, or payments were created for testing;
 this server/configuration update does not require a new web app version.
+
+## Shared category capacity per session
+
+Release 1.00.38 adds **Maximum entries per category per session** under Contest
+Setup → Categories when the contest has sessions. The optional
+`category_session_capacity` defaults to 0 (unlimited). It counts all exhibitors
+and all linked entry portals together for the canonical offering, category, and
+session. It is separate from the existing per-exhibitor category limit, full
+contest capacity, and session capacity.
+
+On November 16, migration `20261116185000_contest_category_session_capacity`
+was applied and Kyle's existing Rabbit/Cavy Costume Contest
+(`d7d7a597-8964-4ef3-aad6-556ccd8de6b6`) was set to 20. Each of the five categories
+has 20 places on March 6 and a separate 20 on March 8. The Rabbit and Cavy
+portals share those places through the original offering; each session retains
+its 100-place total and the existing one-registration-per-exhibitor limit.
+
+Submitted registrations and active payment reservations hold places. Drafts in
+other carts do not reserve places indefinitely; checkout rechecks availability.
+Offering locks serialize competing checkouts. The isolated suite passes 266
+database checks plus deletion integration and a two-checkout race proving only
+one can take the twentieth place. The 25 new database checks cover shared counts,
+stale drafts, payment holds, category/session isolation, and disabled limits.
+Twenty-five model/widget/contrast checks pass, and the actual editor's normal
+and validation states were visually inspected at 390px width. Security advisor
+counts were unchanged. No live registrations or payments were created to test.
+
+The isolated editor preview is
+`tool/houston_registration/preview_contest_capacity.dart`.

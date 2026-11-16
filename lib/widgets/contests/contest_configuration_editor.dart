@@ -31,7 +31,8 @@ class _ContestConfigurationEditorState
   bool get showCategories =>
       widget.showAdditionalOptions ||
       _editingCategories ||
-      cfg.categories.isNotEmpty;
+      cfg.categories.isNotEmpty ||
+      cfg.number('category_session_capacity') > 0;
   bool get showAnimals => widget.showAdditionalOptions || cfg.expandedAnimals;
   bool get showSubmissions =>
       widget.showAdditionalOptions ||
@@ -302,6 +303,14 @@ class _ContestConfigurationEditorState
             'Maximum entries per exhibitor in each category',
             help: '0 means use only the overall entry limit.',
           ),
+          if (cfg.sessions.isNotEmpty ||
+              cfg.number('category_session_capacity') > 0)
+            number(
+              'category_session_capacity',
+              'Maximum entries per category per session',
+              help:
+                  'Total across all exhibitors and linked shows. Each category has a separate limit in each session. 0 means unlimited. Places are reserved at checkout.',
+            ),
         ]),
       section('Full contest registration limit', [
         const Text(

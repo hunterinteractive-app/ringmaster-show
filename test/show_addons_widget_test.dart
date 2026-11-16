@@ -7,6 +7,7 @@ import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ringmaster_show/models/show_addon.dart';
+import 'package:ringmaster_show/models/contest_settings.dart';
 import 'package:ringmaster_show/screens/admin/show_addon_settings_screen.dart';
 import 'package:ringmaster_show/screens/show_addons_screen.dart';
 import 'package:ringmaster_show/services/show_addon_service.dart';
@@ -259,6 +260,60 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets('category/session capacity saves and validates at phone width', (
+    tester,
+  ) async {
+    await size(tester, 390);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.onGradientTheme(AppTheme.lightTheme),
+        home: ShowAddonEditorScreen(
+          showId: 'show',
+          currency: 'usd',
+          service: ShowAddonService(),
+          item: ShowAddon(
+            kind: 'contest',
+            name: 'Costume',
+            contestSettings: ContestSettings({
+              'categories': ['Theme', 'Funny'],
+              'sessions': [
+                {
+                  'id': 'sat',
+                  'name': 'Saturday',
+                  'starts_at': '2030-03-06T12:00:00Z',
+                  'ends_at': '2030-03-06T14:00:00Z',
+                },
+                {
+                  'id': 'mon',
+                  'name': 'Monday',
+                  'starts_at': '2030-03-08T12:00:00Z',
+                  'ends_at': '2030-03-08T14:00:00Z',
+                },
+              ],
+            }),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tapVisible(tester, find.text('Categories').last);
+    final field = find.widgetWithText(
+      TextFormField,
+      'Maximum entries per category per session',
+    );
+    await tester.ensureVisible(field);
+    await tester.enterText(field, '-1');
+    await tapVisible(tester, find.text('Save'));
+    expect(saved, isNull);
+    expect(find.text('Enter 0–100000.'), findsOneWidget);
+    await tester.enterText(field, '20');
+    await tapVisible(tester, find.text('Save'));
+    expect(saved?['contest_config']['category_session_capacity'], 20);
+    expect(saved?['max_per_exhibitor'], 1);
+    expect(saved?['contest_config']['sessions'], hasLength(2));
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets(
     'replacing template needs confirmation and preserves price and dates',

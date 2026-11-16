@@ -29,6 +29,32 @@ void main() {
       }
     },
   );
+  test('category/session capacity requires categories and sessions', () {
+    expect(ContestSettings().validate([]), isNull);
+    for (final invalid in [-1, 1.5, '20', 100001]) {
+      expect(
+        ContestSettings({'category_session_capacity': invalid}).validate([]),
+        'Enter a category/session limit from 0 to 100000.',
+      );
+    }
+    final settings = ContestSettings({'category_session_capacity': 20});
+    expect(settings.validate([]), contains('Add categories and sessions'));
+    settings.data['categories'] = ['Theme'];
+    expect(settings.validate([]), contains('Add categories and sessions'));
+    settings.data['sessions'] = [
+      {
+        'id': 'one',
+        'name': 'Saturday',
+        'starts_at': '2030-03-06T12:00:00Z',
+        'ends_at': '2030-03-06T14:00:00Z',
+      },
+    ];
+    expect(settings.validate([]), isNull);
+    expect(
+      ContestSettings(settings.toJson()).number('category_session_capacity'),
+      20,
+    );
+  });
   test('age cutoff and conditional form validation handle boundaries', () {
     expect(
       ContestSettings.ageOn(DateTime(2015, 9, 16), DateTime(2026, 9, 15)),

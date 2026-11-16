@@ -50,16 +50,19 @@ try:
                  '20261114074909_guard_houston_school_household.sql',
                  '20261114092521_staff_exhibitor_school_information.sql',
                  '20261116180918_houston_original_indemnity_agreement.sql',
-                 '20261116183341_honor_shared_contest_animal_requirement.sql']:
+                 '20261116183341_honor_shared_contest_animal_requirement.sql',
+                 '20261116185000_contest_category_session_capacity.sql']:
         sql((root / 'supabase/migrations' / name).read_text())
     for name in ['houston_registration.sql', 'show_contests_and_extras.sql',
                  'contest_expansion.sql', 'contest_registration_windows.sql',
-                 'linked_contest_judging.sql',
+                 'linked_contest_judging.sql', 'contest_category_session_capacity.sql',
                  'show_addon_deletion.sql']:
         output = sql((root / 'supabase/tests' / name).read_text())
         print(name + '\n' + output)
         if 'not ok ' in output or not (
                 '1..' in output or 'Add-on deletion integration checks passed' in output):
             raise RuntimeError('Regression failed')
+    from capacity_concurrency import run as check_capacity_concurrency
+    check_capacity_concurrency(container, database)
 finally:
     command(['dropdb', '-U', 'supabase_admin', database], check=True)
