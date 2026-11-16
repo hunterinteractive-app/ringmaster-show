@@ -7,8 +7,22 @@ show uses the entry's Youth section, not the overall show name. Youth contest
 registrations also require school details. Open-only entries need the agreement
 but no school fields. Shows outside this owner/club scope are unchanged.
 
-The agreement is unchecked and links to the supplied 2027 V2 handbook and the
-Houston website. Server-side guards cover online payment quotes, free checkout,
+The agreement is unchecked. Release 1.00.37 links the supplied **2027 Open Show
+Indemnity.docx** exactly as received, including every page and signature section.
+The SHA-256 in its immutable URL and `indemnity_document.json` identifies the
+original bytes. The checkbox refers to the full Release of Liability and
+Indemnity; it does not replace the document with a summary. This changes the
+agreement for all four Kyle-owned Houston shows, including Open and Youth.
+
+Acceptance snapshots retain the document title, original filename, URL, SHA-256,
+and extracted full text. Earlier handbook acceptances remain historical records
+and are not converted into indemnity acceptances. A new checkout must accept
+the current version. Completed entries are not retroactively marked accepted
+and no acceptance is created by deployment. The link opens the original Word
+file; this change retains the checkbox flow and does not collect the document's
+separate exhibitor or guardian signatures.
+
+Server-side guards cover online payment quotes, free checkout,
 and pay-at-show submission. Private records retain the authenticated accepting
 user, timestamp, exact agreement version/text/links, school snapshot, and cart
 signature. A changed cart requires another acceptance. Pending payment retries
@@ -75,6 +89,13 @@ flutter run -d web-server --web-port 8096 --target tool/houston_registration/pre
 The preview's Save callback is local only and never records a real agreement.
 
 ## Deployment
+
+For the indemnity update, deploy the web document and new link UI first, verify
+the hosted DOCX SHA-256 against the supplied original, then apply
+`houston_original_indemnity_agreement`. Older app versions also receive the
+document URL through their existing handbook-link field so their agreement
+points to the same original during rollout. New clients label it correctly as
+the Release of Liability and Indemnity.
 
 Hosted migrations `20261114074227_houston_checkout_requirements` and
 `20261114074237_linked_youth_contest_registration`, and

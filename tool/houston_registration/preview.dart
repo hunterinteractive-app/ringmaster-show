@@ -17,7 +17,12 @@ void main() => runApp(
                 child: CartRegistrationRequirementsDialog(
                   requirements: {
                     'agreement':
-                        'I agree to the Houston Livestock Show and Rodeo rules listed in the 2027 Exhibitor Handbook and all terms and conditions listed on the Houston Livestock Show and Rodeo website.',
+                        'I have read and agree to the full 2027 Release of Liability and Indemnity linked above.',
+                    'document': {
+                      'title': '2027 Release of Liability and Indemnity',
+                      'url':
+                          'https://show.ringmasterone.com/documents/houston/2027-open-show-indemnity-c3e23a4c4021.docx',
+                    },
                     'handbook_url':
                         'https://www.rodeohouston.com/wp-content/uploads/2026/10/2027-Exhibitor-Handbook-V2.pdf',
                     'website_url': 'https://www.rodeohouston.com',

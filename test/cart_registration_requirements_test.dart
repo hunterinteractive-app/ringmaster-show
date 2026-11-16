@@ -3,6 +3,24 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ringmaster_show/theme/app_theme.dart';
 import 'package:ringmaster_show/widgets/cart_registration_requirements_dialog.dart';
 import 'package:ringmaster_show/widgets/state_dropdown_field.dart';
+// ignore: depend_on_referenced_packages
+import 'package:url_launcher_platform_interface/url_launcher_platform_interface.dart';
+
+const _documentUrl =
+    'https://show.ringmasterone.com/documents/houston/2027-open-show-indemnity-c3e23a4c4021.docx';
+
+class _DocumentLauncher extends UrlLauncherPlatform {
+  @override
+  final linkDelegate = null;
+  String? opened;
+  String? windowName;
+  @override
+  Future<bool> launchUrl(String url, LaunchOptions options) async {
+    opened = url;
+    windowName = options.webOnlyWindowName;
+    return true;
+  }
+}
 
 void main() {
   Future<void> open(
@@ -10,6 +28,7 @@ void main() {
     required Future<void> Function(List<Map<String, dynamic>>) save,
     int children = 2,
     String initialState = 'TX',
+    bool originalDocument = true,
   }) async {
     tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1;
@@ -28,7 +47,12 @@ void main() {
                   child: CartRegistrationRequirementsDialog(
                     requirements: {
                       'agreement':
-                          'I agree to the Houston Livestock Show and Rodeo rules listed in the 2027 Exhibitor Handbook and all terms and conditions listed on the Houston Livestock Show and Rodeo website.',
+                          'I have read and agree to the full 2027 Release of Liability and Indemnity linked above.',
+                      if (originalDocument)
+                        'document': {
+                          'title': '2027 Release of Liability and Indemnity',
+                          'url': _documentUrl,
+                        },
                       'handbook_url':
                           'https://www.rodeohouston.com/wp-content/uploads/2026/10/2027-Exhibitor-Handbook-V2.pdf',
                       'website_url': 'https://www.rodeohouston.com',
@@ -263,9 +287,52 @@ void main() {
           greaterThanOrEqualTo(4.5),
         );
       }
-      expect(find.text('Read the Exhibitor Handbook'), findsOneWidget);
-      expect(find.text('Houston website and terms'), findsOneWidget);
+      expect(
+        find.text('Read the 2027 Release of Liability and Indemnity'),
+        findsOneWidget,
+      );
+      expect(find.text('Read the Exhibitor Handbook'), findsNothing);
+      expect(find.text('Houston website and terms'), findsNothing);
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets('opens the exact original document without accepting it', (
+    tester,
+  ) async {
+    final previous = UrlLauncherPlatform.instance;
+    final launcher = _DocumentLauncher();
+    UrlLauncherPlatform.instance = launcher;
+    addTearDown(() => UrlLauncherPlatform.instance = previous);
+    var saves = 0;
+    await open(tester, children: 0, save: (_) async => saves++);
+    await tester.tap(
+      find.text('Read the 2027 Release of Liability and Indemnity'),
+    );
+    await tester.pumpAndSettle();
+    expect(launcher.opened, _documentUrl);
+    expect(launcher.windowName, '_blank');
+    expect(saves, 0);
+    expect(
+      tester.widget<CheckboxListTile>(find.byType(CheckboxListTile)).value,
+      isFalse,
+    );
+    await tester.tap(find.text('Continue to checkout'));
+    await tester.pumpAndSettle();
+    expect(saves, 0);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('older policies retain their handbook and website links', (
+    tester,
+  ) async {
+    await open(
+      tester,
+      children: 0,
+      originalDocument: false,
+      save: (_) async {},
+    );
+    expect(find.text('Read the Exhibitor Handbook'), findsOneWidget);
+    expect(find.text('Houston website and terms'), findsOneWidget);
+  });
 }

@@ -65,6 +65,9 @@ class _CartRegistrationRequirementsDialogState
   bool _agreed = false;
   bool _saving = false;
   String? _error;
+  Map<String, dynamic> get _document =>
+      Map<String, dynamic>.from(widget.requirements['document'] as Map? ?? {});
+  bool get _hasDocument => (_document['url']?.toString() ?? '').isNotEmpty;
 
   Future<void> _continue() async {
     if (_saving || !_form.currentState!.validate()) return;
@@ -93,8 +96,8 @@ class _CartRegistrationRequirementsDialogState
     }
   }
 
-  Future<void> _open(String key) async {
-    final uri = Uri.tryParse(widget.requirements[key]?.toString() ?? '');
+  Future<void> _openUrl(Object? address) async {
+    final uri = Uri.tryParse(address?.toString() ?? '');
     if (uri == null ||
         uri.scheme != 'https' ||
         !await launchUrl(uri, webOnlyWindowName: '_blank')) {
@@ -164,21 +167,37 @@ class _CartRegistrationRequirementsDialogState
                   ),
                 ],
                 const SizedBox(height: 18),
-                Wrap(
-                  spacing: 12,
-                  children: [
-                    TextButton.icon(
-                      onPressed: () => _open('handbook_url'),
-                      icon: const Icon(Icons.open_in_new),
-                      label: const Text('Read the Exhibitor Handbook'),
-                    ),
-                    TextButton.icon(
-                      onPressed: () => _open('website_url'),
-                      icon: const Icon(Icons.open_in_new),
-                      label: const Text('Houston website and terms'),
-                    ),
-                  ],
-                ),
+                if (_hasDocument) ...[
+                  Text(
+                    'Required agreement',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  TextButton.icon(
+                    onPressed: () => _openUrl(_document['url']),
+                    icon: const Icon(Icons.open_in_new),
+                    label: Text('Read the ${_document['title']}'),
+                  ),
+                  const Text(
+                    'Opens the complete original Word document. Please read it before agreeing.',
+                  ),
+                ] else
+                  Wrap(
+                    spacing: 12,
+                    children: [
+                      TextButton.icon(
+                        onPressed: () =>
+                            _openUrl(widget.requirements['handbook_url']),
+                        icon: const Icon(Icons.open_in_new),
+                        label: const Text('Read the Exhibitor Handbook'),
+                      ),
+                      TextButton.icon(
+                        onPressed: () =>
+                            _openUrl(widget.requirements['website_url']),
+                        icon: const Icon(Icons.open_in_new),
+                        label: const Text('Houston website and terms'),
+                      ),
+                    ],
+                  ),
                 FormField<bool>(
                   initialValue: false,
                   validator: (_) =>

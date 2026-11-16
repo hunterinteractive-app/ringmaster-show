@@ -19,8 +19,12 @@ insert into shows(id,created_by,owner_user_id,club_id,name,start_date,end_date,i
 select id,pg_temp.fx('secretary'),pg_temp.fx('secretary'),case when k='ordinary' then null else pg_temp.fx('club') end,k,
  current_date,current_date+2,true,true,now()-interval '1 day',now()+interval '1 day','online_or_at_show','club_absorbs',k='host'
 from fx where k in('host','cavy','ordinary');
-insert into show_registration_private.policies
-select pg_temp.fx('secretary'),pg_temp.fx('club'),version,agreement,handbook_url,website_url from show_registration_private.policies limit 1;
+insert into show_registration_private.policies(owner_user_id,club_id,version,agreement,handbook_url,website_url,document)
+select pg_temp.fx('secretary'),pg_temp.fx('club'),version,agreement,handbook_url,website_url,document from show_registration_private.policies limit 1;
+create temporary table policy_fixture as select version,document from show_registration_private.policies where owner_user_id=pg_temp.fx('secretary');
+grant select on policy_fixture to authenticated;
+create function pg_temp.policy_version() returns text language sql as $$select version from policy_fixture;$$;
+grant execute on function pg_temp.policy_version() to authenticated;
 insert into exhibitors(id,display_name,owner_user_id,exhibitor_number,email,is_active,is_test)
 select id,k,case when k='stranger' then pg_temp.fx('other') else pg_temp.fx('buyer') end,
  998100+row_number() over(order by k),k||'@example.invalid',true,true from fx where k in('kid','kid2','adult','stranger');
@@ -59,12 +63,19 @@ select is(get_cart_registration_requirements(pg_temp.fx('cart'))#>>'{exhibitors,
 select is(get_cart_registration_requirements(pg_temp.fx('open_cart'))->>'required','true','Houston Open cart still needs agreement');
 select is(jsonb_array_length(get_cart_registration_requirements(pg_temp.fx('open_cart'))->'exhibitors'),0,'Open cart needs no school fields');
 select is(get_cart_registration_requirements(pg_temp.fx('ordinary_cart'))->>'required','false','unrelated show unaffected');
+select is(get_cart_registration_requirements(pg_temp.fx('open_cart'))#>>'{document,url}',
+ 'https://show.ringmasterone.com/documents/houston/2027-open-show-indemnity-c3e23a4c4021.docx','the original indemnity document is linked');
+select is(get_cart_registration_requirements(pg_temp.fx('open_cart'))->>'handbook_url',
+ get_cart_registration_requirements(pg_temp.fx('open_cart'))#>>'{document,url}','older clients also receive the correct document link');
+select throws_ok($$select save_cart_registration_requirements(pg_temp.fx('open_cart'),'hlsr-2027-handbook-v2',true,'[]')$$,
+ 'P0001','Agree to the Houston Livestock Show and Rodeo rules and terms before checkout.','old handbook acceptance cannot satisfy the new indemnity');
+
 select throws_ok($$select get_cart_registration_requirements(pg_temp.fx('bad_cart'))$$,'42501','Youth exhibitors must belong to this cart household.','malformed cart cannot expose another household exhibitor');
-select throws_ok($$select save_cart_registration_requirements(pg_temp.fx('bad_cart'),'hlsr-2027-handbook-v2',true,'[]')$$,'42501','Youth exhibitors must belong to this cart household.','malformed cart cannot save another household school');
+select throws_ok($$select save_cart_registration_requirements(pg_temp.fx('bad_cart'),pg_temp.policy_version(),true,'[]')$$,'42501','Youth exhibitors must belong to this cart household.','malformed cart cannot save another household school');
 select throws_ok($$select commit_free_entry_cart(pg_temp.fx('bad_cart'))$$,'42501','Youth exhibitors must belong to this cart household.','malformed cart cannot bypass household guard at checkout');
-select throws_ok($$select save_cart_registration_requirements(pg_temp.fx('cart'),'hlsr-2027-handbook-v2',false,'[]')$$,'P0001','Agree to the Houston Livestock Show and Rodeo rules and terms before checkout.','unchecked agreement rejected');
+select throws_ok($$select save_cart_registration_requirements(pg_temp.fx('cart'),pg_temp.policy_version(),false,'[]')$$,'P0001','Agree to the Houston Livestock Show and Rodeo rules and terms before checkout.','unchecked agreement rejected');
 select throws_ok($$select save_cart_registration_requirements(pg_temp.fx('cart'),'old',true,'[]')$$,'P0001','Agree to the Houston Livestock Show and Rodeo rules and terms before checkout.','stale agreement version rejected');
-select throws_ok($$select save_cart_registration_requirements(pg_temp.fx('cart'),'hlsr-2027-handbook-v2',true,'[]')$$,'P0001','Enter school name, city, and state for every youth exhibitor.','missing school rejected');
+select throws_ok($$select save_cart_registration_requirements(pg_temp.fx('cart'),pg_temp.policy_version(),true,'[]')$$,'P0001','Enter school name, city, and state for every youth exhibitor.','missing school rejected');
 select throws_ok($$select commit_entry_cart_day_of(pg_temp.fx('cart'))$$,'P0001','Enter school name, city, and state for every youth exhibitor before checkout.','server prevents bypassing UI during submission');
 select throws_ok($$select commit_free_entry_cart(pg_temp.fx('cart'))$$,'P0001','Enter school name, city, and state for every youth exhibitor before checkout.','free checkout cannot bypass requirements');
 reset role;
@@ -73,20 +84,33 @@ select throws_ok($$select create_payment_quote_attempt(pg_temp.fx('cart'),pg_tem
 select is((select count(*)::int from show_payment_sessions where cart_id=pg_temp.fx('cart')),0,'blocked checkout creates no payment attempt');
 select pg_temp.actor('buyer');
 set local role authenticated;
-select throws_ok($$select save_cart_registration_requirements(pg_temp.fx('cart'),'hlsr-2027-handbook-v2',true,jsonb_build_array(jsonb_build_object('exhibitor_id',pg_temp.fx('stranger'),'school_name','Wrong','city','Wrong','state','TX')))$$,'42501','School information must belong to a youth exhibitor in this cart.','cannot attach another exhibitor');
+select throws_ok($$select save_cart_registration_requirements(pg_temp.fx('cart'),pg_temp.policy_version(),true,jsonb_build_array(jsonb_build_object('exhibitor_id',pg_temp.fx('stranger'),'school_name','Wrong','city','Wrong','state','TX')))$$,'42501','School information must belong to a youth exhibitor in this cart.','cannot attach another exhibitor');
 reset role;
 create function pg_temp.schools() returns jsonb language sql as $$
  select jsonb_agg(jsonb_build_object('exhibitor_id',id,'school_name',' Example School ','city',' Houston ','state','tx')) from fx where k in('kid','kid2');
 $$;
 set local role authenticated;
-select lives_ok($$select save_cart_registration_requirements(pg_temp.fx('cart'),'hlsr-2027-handbook-v2',true,pg_temp.schools())$$,'valid school details and affirmative agreement saved');
-select throws_ok($$select save_cart_registration_requirements(pg_temp.fx('cart'),'hlsr-2027-handbook-v2',true,jsonb_set(pg_temp.schools(),'{0,city}','" "'))$$,'P0001','Enter school name, city, and a two-letter state for every youth exhibitor.','blank school city rejected');
-select throws_ok($$select save_cart_registration_requirements(pg_temp.fx('cart'),'hlsr-2027-handbook-v2',true,jsonb_set(pg_temp.schools(),'{0,state}','"Texas"'))$$,'P0001','Enter school name, city, and a two-letter state for every youth exhibitor.','malformed state rejected');
+select lives_ok($$select save_cart_registration_requirements(pg_temp.fx('cart'),pg_temp.policy_version(),true,pg_temp.schools())$$,'valid school details and affirmative agreement saved');
+select throws_ok($$select save_cart_registration_requirements(pg_temp.fx('cart'),pg_temp.policy_version(),true,jsonb_set(pg_temp.schools(),'{0,city}','" "'))$$,'P0001','Enter school name, city, and a two-letter state for every youth exhibitor.','blank school city rejected');
+select throws_ok($$select save_cart_registration_requirements(pg_temp.fx('cart'),pg_temp.policy_version(),true,jsonb_set(pg_temp.schools(),'{0,state}','"Texas"'))$$,'P0001','Enter school name, city, and a two-letter state for every youth exhibitor.','malformed state rejected');
 reset role;
 select lives_ok($$select show_registration_private.validate_cart(pg_temp.fx('cart'))$$,'completed requirements pass backend validation');
 select is((select count(*)::int from show_registration_private.schools where cart_id=pg_temp.fx('cart')),2,'separate school record for each child');
 select is((select state from show_registration_private.schools where cart_id=pg_temp.fx('cart') and exhibitor_id=pg_temp.fx('kid')),'TX','state normalized');
 select is((select accepted_by from show_registration_private.acceptances where cart_id=pg_temp.fx('cart')),pg_temp.fx('buyer'),'acceptance records authenticated actor');
+select is((select document from show_registration_private.acceptances where cart_id=pg_temp.fx('cart')),
+ (select document from policy_fixture),'acceptance preserves exact document text, original filename, link and SHA-256');
+select ok((select document->>'text' like '%RELATIONSHIP TO MINOR:%' from show_registration_private.acceptances where cart_id=pg_temp.fx('cart')),
+ 'document evidence includes the final signature section');
+update show_registration_private.policies set version=version||'-next',document=document||'{"title":"Next document"}'::jsonb
+ where owner_user_id=pg_temp.fx('secretary');
+select throws_ok($$select show_registration_private.validate_cart(pg_temp.fx('cart'))$$,'P0001',
+ 'Review this cart and agree to the Houston Livestock Show and Rodeo rules and terms before checkout.','new policy version requires fresh acceptance');
+select is((select document from show_registration_private.acceptances where cart_id=pg_temp.fx('cart')),
+ (select document from policy_fixture),'policy revisions never rewrite an existing acceptance');
+update show_registration_private.policies set version=f.version,document=f.document from policy_fixture f
+ where owner_user_id=pg_temp.fx('secretary');
+
 select ok((select handbook_url like '%2027-Exhibitor-Handbook-V2.pdf' and school_snapshot->0->>'school_name'='Example School' from show_registration_private.acceptances where cart_id=pg_temp.fx('cart')),'agreement evidence preserves exact handbook and school snapshot');
 update entry_cart_items set tattoo='CV1-EDITED' where id=pg_temp.fx('youth_item');
 select throws_ok($$select show_registration_private.validate_cart(pg_temp.fx('cart'))$$,'P0001','Review this cart and agree to the Houston Livestock Show and Rodeo rules and terms before checkout.','cart change requires fresh acceptance');
@@ -94,7 +118,7 @@ select lives_ok($$select show_registration_private.validate_cart(pg_temp.fx('ord
 select pg_temp.actor('other');
 set local role authenticated;
 select throws_ok($$select get_cart_registration_requirements(pg_temp.fx('cart'))$$,'42501','You do not have access to this cart.','school information private to household');
-select throws_ok($$select save_cart_registration_requirements(pg_temp.fx('cart'),'hlsr-2027-handbook-v2',true,'[]')$$,'42501','You do not have access to this cart.','another household cannot accept agreement');
+select throws_ok($$select save_cart_registration_requirements(pg_temp.fx('cart'),pg_temp.policy_version(),true,'[]')$$,'42501','You do not have access to this cart.','another household cannot accept agreement');
 select pg_temp.actor('buyer');
 select is(jsonb_array_length(get_show_addons(pg_temp.fx('cavy'))->'items'),1,'Cavy catalog offers only linked rabbit contest');
 select is(get_show_addons(pg_temp.fx('cavy'))#>>'{items,0,host_show_name}','host','shared contest identifies host');
@@ -113,7 +137,7 @@ select is((select count(*)::int from entry_carts where show_id=pg_temp.fx('host'
 select is((select unit_price_cents from show_addons_private.selections where cart_id=pg_temp.fx('cart')),500,'canonical contest fee retained');
 set local role authenticated;
 select throws_ok($$select save_cart_addon(pg_temp.fx('host_cart'),pg_temp.fx('contest'),pg_temp.fx('kid'),1,'{}',null,get_offering_contest_animals(pg_temp.fx('host_cart'),pg_temp.fx('kid'),pg_temp.fx('contest'))#>>'{0,key}')$$,'P0001','The limit for contest is 1 per exhibitor across the full show.','same child cannot register again through rabbit portal');
-select lives_ok($$select save_cart_registration_requirements(pg_temp.fx('cart'),'hlsr-2027-handbook-v2',true,pg_temp.schools())$$,'updated cart can be accepted');
+select lives_ok($$select save_cart_registration_requirements(pg_temp.fx('cart'),pg_temp.policy_version(),true,pg_temp.schools())$$,'updated cart can be accepted');
 select lives_ok($$select commit_entry_cart_day_of(pg_temp.fx('cart'))$$,'Cavy checkout with shared contest and requirements completes without provider payment');
 select pg_temp.actor('secretary');
 select is(jsonb_array_length(get_show_addon_registrations(pg_temp.fx('host'))),1,'rabbit secretary sees youth cavy registration in same roster');
