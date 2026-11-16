@@ -41,6 +41,13 @@ entries. Another unpaid cart, Open-only cavy entries, other households, and
 unlinked shows do not qualify. The host contest controls its registration window,
 age date, capacity, fees, and publication state.
 
+On November 16, Rabbit Judging (Individual) and Rabbit Judging (Team) were also
+linked to the Cavy show. Their existing offerings remain under Youth Breeding
+Rabbit, at $5 per individual and $20 per team, with Junior/Intermediate/Senior
+divisions and the existing age rules. These judging contests do not require an
+animal entry or animal selection; sharing them preserves that setting in both
+portals. Costume and Showmanship still require an eligible Youth animal.
+
 ## Validation
 
 Release 1.00.31 replaces the school-state text box with a searchable dropdown
@@ -117,3 +124,22 @@ byte-for-byte. Hosted reads confirmed the four scoped shows use the new version.
 The local suite passed 225 database checks plus deletion integration, seven
 checkout browser tests, and four contrast checks. Security advisor counts were
 unchanged.
+
+Migration `20261116183341_honor_shared_contest_animal_requirement` preserves the
+configured animal-entry requirement when a contest is shared. The two live
+judging links were inserted separately as show configuration, guarded by the
+verified Kyle owner, Houston club, host/source show IDs, and offering names/IDs:
+
+- Individual: `38771a52-312d-47e6-99df-0d4c52005797`
+- Team: `3a08ca6e-5273-4f58-b27f-40be52118ef4`
+- Host: `275bbfe9-6ef7-4c86-b914-23afee7ceffc`
+- Source Cavy show: `62c1a1ea-da4d-4ac5-a23e-065d14dce251`
+
+The authenticated live Cavy catalog returned both judging contests as open,
+alongside Costume and Showmanship, with their original fees and Rabbit host.
+The isolated suite passed 241 database checks plus deletion integration. The 16
+new judging checks cover standalone entry from both portals, team registration,
+fees, age/division rules, household authorization, duplicate prevention, local
+checkout, and the single Rabbit roster. Security advisor counts were unchanged.
+No production registrations, agreements, or payments were created for testing;
+this server/configuration update does not require a new web app version.
