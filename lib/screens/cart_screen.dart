@@ -1,3 +1,4 @@
+import '../widgets/meat_pen_tattoos.dart';
 // lib/screens/cart_screen.dart
 
 import 'package:flutter/material.dart';
@@ -228,7 +229,7 @@ class _CartScreenState extends State<CartScreen> {
       final items = await supabase
           .from('entry_cart_items')
           .select(
-            'id,exhibitor_id,section_id,animal_id,species,breed,variety,fur_variety,sex,tattoo,animal_name,class_name,created_at,is_fur,is_exhibitor_fee_carrier,is_show_addon_carrier',
+            'id,exhibitor_id,section_id,animal_id,species,meat_pen_id,meat_pen_tattoos,breed,variety,fur_variety,sex,tattoo,animal_name,class_name,created_at,is_fur,is_exhibitor_fee_carrier,is_show_addon_carrier',
           )
           .eq('cart_id', widget.cartId)
           .order('created_at');
@@ -892,7 +893,7 @@ class _CartScreenState extends State<CartScreen> {
     }
 
     if (_isMeatPenEntry(item)) {
-      return '$sectionName — Meat Pen';
+      return '$sectionName — Meat Pen${hasMeatPenId(item) ? ' • ${item['meat_pen_id']}' : ''}';
     }
 
     if (_isCommercialEntry(item)) {
@@ -917,6 +918,9 @@ class _CartScreenState extends State<CartScreen> {
 
   String _cartItemSubtitle(Map<String, dynamic> item) {
     if (_isMeatPenEntry(item)) {
+      if (hasMeatPenId(item)) {
+        return '${meatPenTattooSummary(item)}\nAfter checkout: My Entries → this show → Pen ID → Add/Update tattoos.';
+      }
       final tattoo = (item['tattoo'] ?? '').toString().trim();
       return tattoo.isEmpty
           ? 'Commercial • Meat Pen'

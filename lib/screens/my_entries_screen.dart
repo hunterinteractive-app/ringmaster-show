@@ -18,6 +18,7 @@ import '../theme/app_theme.dart';
 import '../utils/date_time_utils.dart';
 import '../utils/entry_class_name.dart';
 import '../widgets/edit_entry_dialog.dart';
+import '../widgets/meat_pen_tattoos.dart';
 import '../utils/species_sex.dart';
 import '../widgets/rm_widgets.dart';
 import '../widgets/stripe_payment_confirmation_dialog.dart';
@@ -111,7 +112,7 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
           .toSet();
 
       final selectColumns =
-          'id,show_id,exhibitor_id,animal_id,species,tattoo,breed,variety,sex,'
+          'id,show_id,exhibitor_id,animal_id,species,tattoo,meat_pen_id,meat_pen_tattoos,breed,variety,sex,'
           'class_name,status,section_id,created_at,exhibitor_user_id';
 
       final rowsById = <String, Map<String, dynamic>>{};
@@ -157,7 +158,7 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
         final shows = await supabase
             .from('shows')
             .select(
-              'id,name,start_date,entry_close_at,'
+              'id,name,start_date,entry_close_at,is_locked,'
               'superintendent_judge_order_published,'
               'superintendent_judge_order_published_at',
             )
@@ -472,6 +473,12 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
   Future<void> _editEntry(Map<String, dynamic> entry) async {
     final showId = entry['show_id']?.toString() ?? '';
     if (showId.isEmpty) return;
+
+    if (hasMeatPenId(entry)) {
+      if (AppSession.supportReadOnly) return;
+      if (await showMeatPenTattooUpdate(context, entry)) await _load();
+      return;
+    }
 
     if (_deadlinePassedForShow(showId)) {
       setState(
@@ -1143,7 +1150,9 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
                     judgeOrderPublished: _judgeOrderPublishedForShow(showId),
                     deadlinePassed: _deadlinePassedForShow(showId),
                     closeAt: _parseTs(_showsById[showId]?['entry_close_at']),
-                    readOnly: AppSession.supportReadOnly,
+                    readOnly:
+                        AppSession.supportReadOnly ||
+                        _showsById[showId]?['is_locked'] == true,
                     exhibitorBuckets: grouped[showId] ?? const {},
                     exhibitorLabel: _exhibitorLabelById,
                     sectionLabel: _sectionLabel,
@@ -1517,7 +1526,10 @@ class _ShowExpansionCard extends StatelessWidget {
 
                                                               final canEdit =
                                                                   !readOnly &&
-                                                                  !deadlinePassed &&
+                                                                  (hasMeatPenId(
+                                                                        e,
+                                                                      ) ||
+                                                                      !deadlinePassed) &&
                                                                   !scratched;
                                                               final canScratch =
                                                                   !readOnly &&
@@ -1589,7 +1601,11 @@ class _ShowExpansionCard extends StatelessWidget {
                                                                                       crossAxisAlignment: CrossAxisAlignment.start,
                                                                                       children: [
                                                                                         Text(
-                                                                                          tattoo.isEmpty
+                                                                                          hasMeatPenId(
+                                                                                                e,
+                                                                                              )
+                                                                                              ? 'Pen ID: ${e['meat_pen_id']}\n${meatPenTattooSummary(e)}'
+                                                                                              : tattoo.isEmpty
                                                                                               ? '(No tattoo)'
                                                                                               : tattoo,
                                                                                           style: TextStyle(
@@ -1647,8 +1663,14 @@ class _ShowExpansionCard extends StatelessWidget {
                                                                                           Icons.edit,
                                                                                           size: 18,
                                                                                         ),
-                                                                                        label: const Text(
-                                                                                          'Edit Entry',
+                                                                                        label: Text(
+                                                                                          hasMeatPenId(
+                                                                                                e,
+                                                                                              )
+                                                                                              ? meatPenTattooAction(
+                                                                                                  e,
+                                                                                                )
+                                                                                              : 'Edit Entry',
                                                                                         ),
                                                                                       ),
                                                                                     if (canScratch)

@@ -45,18 +45,21 @@ try:
     sql("""insert into auth.users(id,aud,role,email,raw_app_meta_data,raw_user_meta_data)
         values(gen_random_uuid(),'authenticated','authenticated',
         'local-deletion-fixture@example.invalid','{}','{}');""")
+    sql((root / 'tool/houston_registration/meat_pen_local_contract.sql').read_text())
+    sql((root / 'supabase/migrations/20261112005909_meat_pen_master_six_class_breeds.sql').read_text())
     for name in ['20261114074227_houston_checkout_requirements.sql',
                  '20261114074237_linked_youth_contest_registration.sql',
                  '20261114074909_guard_houston_school_household.sql',
                  '20261114092521_staff_exhibitor_school_information.sql',
                  '20261116180918_houston_original_indemnity_agreement.sql',
                  '20261116183341_honor_shared_contest_animal_requirement.sql',
-                 '20261116185000_contest_category_session_capacity.sql']:
+                 '20261116185000_contest_category_session_capacity.sql',
+                 '20261116193136_stable_meat_pen_identifiers.sql']:
         sql((root / 'supabase/migrations' / name).read_text())
     for name in ['houston_registration.sql', 'show_contests_and_extras.sql',
                  'contest_expansion.sql', 'contest_registration_windows.sql',
                  'linked_contest_judging.sql', 'contest_category_session_capacity.sql',
-                 'show_addon_deletion.sql']:
+                 'show_addon_deletion.sql', 'stable_meat_pen_identifiers.sql']:
         output = sql((root / 'supabase/tests' / name).read_text())
         print(name + '\n' + output)
         if 'not ok ' in output or not (

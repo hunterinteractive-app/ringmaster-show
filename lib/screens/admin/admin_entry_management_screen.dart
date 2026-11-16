@@ -21,6 +21,8 @@ import 'no_email_exhibitor_option.dart';
 import 'closeout/data/report_data_reader.dart';
 import '../../services/manual_animal_lookup.dart';
 import '../../widgets/exhibitor_school_information.dart';
+import '../../widgets/meat_pen_tattoos.dart';
+import '../enter_show_screen.dart' show showMeatPenDialog;
 
 SupabaseClient get supabase => ringMasterClient;
 
@@ -670,6 +672,11 @@ class _AdminEntryManagementScreenState
     }
   }
 
+  Future<void> _updatePenTattoos(Map<String, dynamic> entry) async {
+    if (AppSession.supportReadOnly) return;
+    if (await showMeatPenTattooUpdate(context, entry)) await _loadEntries();
+  }
+
   Future<void> _openEdit(Map<String, dynamic> entry) async {
     // Entry Management should edit the show entry snapshot, not the saved
     // animal master profile. Saved animal profiles may belong to an exhibitor
@@ -1123,8 +1130,9 @@ class _AdminEntryManagementScreenState
                                       scratchedAt.isNotEmpty) ||
                                   status == 'scratched';
 
-                              final titleLeft =
-                                  animalName.isNotEmpty && tattoo.isNotEmpty
+                              final titleLeft = hasMeatPenId(e)
+                                  ? 'Pen ID: ${e['meat_pen_id']} • ${meatPenTattooSummary(e)}'
+                                  : animalName.isNotEmpty && tattoo.isNotEmpty
                                   ? '$animalName • $tattoo'
                                   : animalName.isNotEmpty
                                   ? animalName
@@ -1171,6 +1179,7 @@ class _AdminEntryManagementScreenState
                                   onSelected: (v) {
                                     if (v == 'edit') _openEdit(e);
                                     if (v == 'move') _openMove(e);
+                                    if (v == 'tattoos') _updatePenTattoos(e);
                                     if (v == 'scratch') {
                                       _toggleScratch(e);
                                     }
@@ -1180,6 +1189,13 @@ class _AdminEntryManagementScreenState
                                     }
                                   },
                                   itemBuilder: (_) => [
+                                    if (hasMeatPenId(e) &&
+                                        !AppSession.supportReadOnly &&
+                                        !isScratched)
+                                      PopupMenuItem(
+                                        value: 'tattoos',
+                                        child: Text(meatPenTattooAction(e)),
+                                      ),
                                     const PopupMenuItem(
                                       value: 'edit',
                                       child: Text('Edit'),
@@ -1787,9 +1803,10 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
         'animal_name': _animalName.text.trim().isEmpty
             ? null
             : _animalName.text.trim(),
-        'tattoo': _tattoo.text.trim().isEmpty
-            ? null
-            : _tattoo.text.trim().toUpperCase(),
+        if (!hasMeatPenId(widget.entry))
+          'tattoo': _tattoo.text.trim().isEmpty
+              ? null
+              : _tattoo.text.trim().toUpperCase(),
         'breed': _breed.text.trim().isEmpty ? null : _breed.text.trim(),
         'variety': canonicalVariety.isEmpty ? null : canonicalVariety,
         'sex': _sexValue == null || _sexValue!.trim().isEmpty
@@ -1989,7 +2006,7 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
             const SizedBox(height: 10),
             TextField(
               controller: _tattoo,
-              enabled: !_saving,
+              enabled: !_saving && !hasMeatPenId(widget.entry),
               textCapitalization: TextCapitalization.characters,
               inputFormatters: [UpperCaseTextFormatter()],
               style: _entrySheetDropdownTextStyle,
@@ -3221,141 +3238,17 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
   }
 
   Future<void> _openSecretaryMeatPenDialog() async {
-    final breed = TextEditingController();
-    final variety = TextEditingController();
-    final tattoo1 = TextEditingController();
-    final tattoo2 = TextEditingController();
-    final tattoo3 = TextEditingController();
-    String? error;
-    const inputTextStyle = TextStyle(color: AppColors.text);
-    const inputLabelStyle = TextStyle(color: AppColors.muted);
-
+    final input = await showMeatPenDialog(context, showId: widget.showId);
+    if (input == null) return;
     try {
-      await showDialog<void>(
-        context: context,
-        builder: (dialogContext) => Theme(
-          data: AppTheme.surfaceDialogTheme(Theme.of(dialogContext)),
-          child: StatefulBuilder(
-            builder: (context, setDialogState) => AlertDialog(
-              title: const Text('Add Meat Pen'),
-              content: SizedBox(
-                width: 420,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Text(
-                      'Enter the shared breed, variety, and all three tattoos.',
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: breed,
-                      style: inputTextStyle,
-                      decoration: const InputDecoration(
-                        labelText: 'Breed',
-                        labelStyle: inputLabelStyle,
-                        floatingLabelStyle: inputLabelStyle,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    TextField(
-                      controller: variety,
-                      style: inputTextStyle,
-                      decoration: const InputDecoration(
-                        labelText: 'Variety',
-                        labelStyle: inputLabelStyle,
-                        floatingLabelStyle: inputLabelStyle,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    TextField(
-                      controller: tattoo1,
-                      style: inputTextStyle,
-                      decoration: const InputDecoration(
-                        labelText: 'Tattoo 1',
-                        labelStyle: inputLabelStyle,
-                        floatingLabelStyle: inputLabelStyle,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    TextField(
-                      controller: tattoo2,
-                      style: inputTextStyle,
-                      decoration: const InputDecoration(
-                        labelText: 'Tattoo 2',
-                        labelStyle: inputLabelStyle,
-                        floatingLabelStyle: inputLabelStyle,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    TextField(
-                      controller: tattoo3,
-                      style: inputTextStyle,
-                      decoration: const InputDecoration(
-                        labelText: 'Tattoo 3',
-                        labelStyle: inputLabelStyle,
-                        floatingLabelStyle: inputLabelStyle,
-                      ),
-                    ),
-                    if (error != null) ...[
-                      const SizedBox(height: 10),
-                      Text(
-                        error!,
-                        style: const TextStyle(color: AppColors.danger),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Cancel'),
-                ),
-                FilledButton(
-                  onPressed: () async {
-                    final values = [
-                      breed.text,
-                      variety.text,
-                      tattoo1.text,
-                      tattoo2.text,
-                      tattoo3.text,
-                    ].map((value) => value.trim()).toList();
-                    if (values.any((value) => value.isEmpty)) {
-                      setDialogState(
-                        () => error =
-                            'Breed, variety, and all three tattoos are required.',
-                      );
-                      return;
-                    }
-                    try {
-                      await _saveSecretaryMeatPen(
-                        breed: values[0],
-                        variety: values[1],
-                        tattoos: values
-                            .sublist(2)
-                            .map((value) => value.toUpperCase())
-                            .toList(),
-                      );
-                      if (context.mounted) {
-                        Navigator.pop(context);
-                      }
-                    } catch (e) {
-                      setDialogState(() => error = e.toString());
-                    }
-                  },
-                  child: const Text('Add Meat Pen'),
-                ),
-              ],
-            ),
-          ),
-        ),
+      await _saveSecretaryMeatPen(
+        breed: input.breed,
+        variety: input.variety,
+        tattoos: input.tattoos,
+        usesPenId: input.usesPenId,
       );
-    } finally {
-      breed.dispose();
-      variety.dispose();
-      tattoo1.dispose();
-      tattoo2.dispose();
-      tattoo3.dispose();
+    } catch (e) {
+      if (mounted) setState(() => _msg = 'Meat Pen entry failed: $e');
     }
   }
 
@@ -3363,6 +3256,7 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
     required String breed,
     required String variety,
     required List<String> tattoos,
+    required bool usesPenId,
   }) async {
     final exhibitorId = _exhibitorId;
     if (exhibitorId == null || exhibitorId.isEmpty) {
@@ -3377,7 +3271,6 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
     final exhibitor = _selectedExhibitor();
     final ownerUserId = (exhibitor?['owner_user_id'] ?? '').toString().trim();
     final now = DateTime.now().toUtc().toIso8601String();
-    final commercialLabel = _commercialLabel('meat_pen');
     await supabase.from('entries').insert([
       for (final sectionId in sections)
         {
@@ -3387,13 +3280,14 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
           'exhibitor_user_id': ownerUserId.isEmpty ? null : ownerUserId,
           'animal_id': null,
           'species': 'rabbit',
-          'tattoo': tattoos.join(' / '),
-          // A Meat Pen is entered as a commercial class, not as its rabbits'
-          // underlying breed and variety.
-          'breed': 'Commercial',
-          'variety': commercialLabel,
+          if (usesPenId)
+            'meat_pen_tattoos': tattoos
+          else
+            'tattoo': tattoos.join(' / '),
+          'breed': breed,
+          'variety': variety,
           'sex': null,
-          'class_name': commercialLabel,
+          'class_name': 'Meat Pen',
           'is_fur': false,
           'status': 'entered',
           'created_at': now,

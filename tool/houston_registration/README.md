@@ -172,3 +172,30 @@ counts were unchanged. No live registrations or payments were created to test.
 
 The isolated editor preview is
 `tool/houston_registration/preview_contest_capacity.dart`.
+
+## Meat pens with tattoos assigned later
+
+Enabled for Kyle's Houston Youth Meat Pen Show through
+`meat_pens_private.enabled_shows`. Other shows retain their existing tattoo
+requirement. The entry form and secretary entry form share the same six-class
+breed picker and can explicitly select **Tattoos not yet assigned**.
+
+A server-assigned `MP-` Pen ID is linked to the entry's exhibitor and copied from
+cart item to entry by the checkout trigger. It cannot be renamed. Actual tattoos
+are stored separately as three values; an empty array means pending. The legacy
+`tattoo` display contains the Pen ID and tattoo status so existing reports and
+check-in sheets retain usable identification. Existing supplied tattoos are
+preserved, including any placeholders; the migration does not guess what an
+exhibitor meant.
+
+After checkout: **My Entries → show → exhibitor → Pen ID → Add tattoos**.
+Enter all three actual tattoos and Save. The action becomes **Update tattoos**.
+This identification-only action remains available after the entry deadline,
+until the show is locked. It does not reopen entry editing or change payment
+records. Staff use **Entry Management → entry's three-dot menu → Add/Update
+tattoos**. No new tattoo requirement is imposed on check-in.
+
+The SQL regression covers distinct Pen IDs, pending and actual tattoos,
+pay-at-show/free/Square-simulation checkout, repeated finalization, unchanged
+payments, after-deadline updates, staff and household access, and locked shows.
+All payment simulation happens in the disposable local database.

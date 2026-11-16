@@ -1,4 +1,5 @@
 import '../widgets/animal_sync_panel.dart';
+import '../widgets/meat_pen_tattoos.dart';
 import 'package:ringmaster_show/services/registration_write.dart';
 import 'package:ringmaster_show/reporting_core/network/transient_retry.dart';
 // lib/screens/enter_show_screen.dart
@@ -2071,7 +2072,7 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
       case 'stewer':
         return 'Stewer: 6 months of age or older and over ${_formatWeight(_stewerMinWeightExclusive)} lb.';
       case 'meat_pen':
-        return 'Meat Pen: special 3-rabbit entry with 3 tattoos.';
+        return 'Meat Pen: special entry for a group of 3 rabbits.';
       default:
         return '';
     }
@@ -2411,7 +2412,10 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
           'animal_id': null,
           'exhibitor_id': _selectedExhibitorId,
           'species': 'rabbit',
-          'tattoo': tattooText,
+          if (meatPenInput.usesPenId)
+            'meat_pen_tattoos': meatPenInput.tattoos
+          else
+            'tattoo': tattooText,
           'breed': meatPenInput.breed,
           'variety': meatPenInput.variety,
           'sex': null,
@@ -2993,11 +2997,13 @@ class MeatPenInput {
   final String breed;
   final String variety;
   final List<String> tattoos;
+  final bool usesPenId;
 
   const MeatPenInput({
     required this.breed,
     required this.variety,
     required this.tattoos,
+    this.usesPenId = false,
   });
 }
 
@@ -3028,6 +3034,8 @@ class _MeatPenDialogState extends State<_MeatPenDialog> {
   String? _msg;
 
   bool _loadingBreeds = true;
+  bool _usesPenId = false;
+  bool _pendingTattoos = false;
   bool _loadingVarieties = false;
 
   bool _isLopBreedName(String breedName) {
@@ -3119,21 +3127,36 @@ class _MeatPenDialogState extends State<_MeatPenDialog> {
       _loadingBreeds = true;
     });
 
-    final res = await supabase
-        .from('breeds')
-        .select('id,name,species,class_system')
-        .eq('species', 'rabbit')
-        .eq('class_system', 'six')
-        .eq('is_active', true)
-        .isFilter('local_show_id', null)
-        .order('name');
+    try {
+      final enabled = await supabase.rpc(
+        'meat_pen_registration_enabled',
+        params: {'p_show_id': widget.showId},
+      );
+      final res = await supabase
+          .from('breeds')
+          .select('id,name,species,class_system')
+          .eq('species', 'rabbit')
+          .eq('class_system', 'six')
+          .eq('is_active', true)
+          .isFilter('local_show_id', null)
+          .order('name');
 
-    if (!mounted) return;
+      if (!mounted) return;
 
-    setState(() {
-      _breedOptions = (res as List).cast<Map<String, dynamic>>();
-      _loadingBreeds = false;
-    });
+      setState(() {
+        _usesPenId = enabled == true;
+        _breedOptions = (res as List).cast<Map<String, dynamic>>();
+        _loadingBreeds = false;
+      });
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _loadingBreeds = false;
+          _msg =
+              'Could not load meat-pen options. Close this window and try again.';
+        });
+      }
+    }
   }
 
   Future<void> _loadVarietiesForBreed(String breedId) async {
@@ -3230,8 +3253,9 @@ class _MeatPenDialogState extends State<_MeatPenDialog> {
       return;
     }
 
-    if (t1.isEmpty || t2.isEmpty || t3.isEmpty) {
-      setState(() => _msg = 'All 3 tattoos are required.');
+    final tattooError = validateMeatPenTattoos([t1, t2, t3]);
+    if (!_pendingTattoos && tattooError != null) {
+      setState(() => _msg = tattooError);
       return;
     }
 
@@ -3253,7 +3277,8 @@ class _MeatPenDialogState extends State<_MeatPenDialog> {
                   variety.toLowerCase(),
             )['name']
             .toString(),
-        tattoos: [t1, t2, t3],
+        tattoos: _pendingTattoos ? [] : [t1, t2, t3],
+        usesPenId: _usesPenId,
       ),
     );
   }
@@ -3315,26 +3340,25 @@ class _MeatPenDialogState extends State<_MeatPenDialog> {
                 },
               ),
               const SizedBox(height: 12),
-              TextField(
-                controller: _tattoo1,
-                textCapitalization: TextCapitalization.characters,
-                inputFormatters: [UpperCaseTextFormatter()],
-                decoration: const InputDecoration(labelText: 'Tattoo 1'),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: _tattoo2,
-                textCapitalization: TextCapitalization.characters,
-                inputFormatters: [UpperCaseTextFormatter()],
-                decoration: const InputDecoration(labelText: 'Tattoo 2'),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: _tattoo3,
-                textCapitalization: TextCapitalization.characters,
-                inputFormatters: [UpperCaseTextFormatter()],
-                decoration: const InputDecoration(labelText: 'Tattoo 3'),
-              ),
+              if (_usesPenId) ...[
+                const Text(
+                  'A permanent Pen ID will be assigned automatically and linked to the selected exhibitor.',
+                ),
+                CheckboxListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Tattoos not yet assigned'),
+                  value: _pendingTattoos,
+                  onChanged: (value) => setState(() {
+                    _pendingTattoos = value ?? false;
+                    _msg = null;
+                  }),
+                ),
+              ],
+              if (!_pendingTattoos)
+                MeatPenTattooFields(
+                  controllers: [_tattoo1, _tattoo2, _tattoo3],
+                ),
+              if (_usesPenId) const Text(meatPenLaterInstructions),
               if (_msg != null) ...[
                 const SizedBox(height: 10),
                 Text(
