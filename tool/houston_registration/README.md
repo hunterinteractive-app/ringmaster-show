@@ -200,3 +200,29 @@ pay-at-show/free/Square-simulation checkout, repeated finalization, unchanged
 payments, before-deadline updates, deadline enforcement for staff and households,
 and locked shows.
 All payment simulation happens in the disposable local database.
+
+## Houston meat pen entry limit
+
+On November 16, `20261116211354_houston_meat_pen_entry_limit` enabled a maximum
+of **two active meat pen entries per exhibitor** for Kyle's Houston Youth Meat
+Pen Show. The private configuration is scoped to that show only. One pen counts
+as one entry; its three tattoos do not count separately. Each exhibitor in a
+household has their own allowance.
+
+Cart additions count existing entries, the current cart, and unfinished payment
+checkouts. Unpaid drafts in other carts do not reserve places indefinitely; every
+checkout rechecks the limit before making a payment quote or submitting entries.
+A per-show/exhibitor lock prevents simultaneous checkouts exceeding two. Direct
+secretary entry, reassignment, and restoring scratched entries use the same
+blocker. Cart-to-entry finalization counts a pen once and retries remain safe.
+
+Already-entered excess pens and existing cart items are preserved for secretary
+review. Scratched or removed entries release their places. Existing tattoo
+updates remain available under the entry-deadline rules. Deployment does not
+create refunds, charges, or remove entries.
+
+Validation: 33 new local database assertions plus concurrent submission and
+payment-quote races passed, alongside the existing Houston regression suite.
+Hosted checks confirmed exactly one configured show, both table guards, all
+three checkout guards, and pending carts still within the limit. No live payment
+was made during testing.

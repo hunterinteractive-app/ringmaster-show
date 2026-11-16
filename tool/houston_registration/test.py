@@ -55,12 +55,14 @@ try:
                  '20261116183341_honor_shared_contest_animal_requirement.sql',
                  '20261116185000_contest_category_session_capacity.sql',
                  '20261116193136_stable_meat_pen_identifiers.sql',
-                 '20261116195433_meat_pen_tattoo_entry_deadline.sql']:
+                 '20261116195433_meat_pen_tattoo_entry_deadline.sql',
+                 '20261116211354_houston_meat_pen_entry_limit.sql']:
         sql((root / 'supabase/migrations' / name).read_text())
     for name in ['houston_registration.sql', 'show_contests_and_extras.sql',
                  'contest_expansion.sql', 'contest_registration_windows.sql',
                  'linked_contest_judging.sql', 'contest_category_session_capacity.sql',
-                 'show_addon_deletion.sql', 'stable_meat_pen_identifiers.sql']:
+                 'show_addon_deletion.sql', 'stable_meat_pen_identifiers.sql',
+                 'houston_meat_pen_entry_limit.sql']:
         output = sql((root / 'supabase/tests' / name).read_text())
         print(name + '\n' + output)
         if 'not ok ' in output or not (
@@ -68,5 +70,7 @@ try:
             raise RuntimeError('Regression failed')
     from capacity_concurrency import run as check_capacity_concurrency
     check_capacity_concurrency(container, database)
+    from meat_pen_limit_concurrency import run as check_meat_pen_limit_concurrency
+    check_meat_pen_limit_concurrency(container, database)
 finally:
     command(['dropdb', '-U', 'supabase_admin', database], check=True)
