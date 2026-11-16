@@ -110,3 +110,10 @@ Migration `20261114092521_staff_exhibitor_school_information` adds the staff
 reader. Hosted read checks confirmed the owner can call it and anonymous users
 cannot; private tables remain inaccessible directly. No production records were
 created or changed during school-display verification.
+
+The indemnity migration was applied as `20261116180918` on November 16, 2026,
+after release 1.00.37 passed CI and the live DOCX matched the supplied original
+byte-for-byte. Hosted reads confirmed the four scoped shows use the new version.
+The local suite passed 225 database checks plus deletion integration, seven
+checkout browser tests, and four contrast checks. Security advisor counts were
+unchanged.
