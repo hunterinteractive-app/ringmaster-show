@@ -3301,6 +3301,7 @@ class _MeatPenDialogState extends State<_MeatPenDialog> {
               const SizedBox(height: 12),
               if (_loadingBreeds) const LinearProgressIndicator(),
               _FocusOpenAutocomplete(
+                key: const ValueKey('meat-pen-breed'),
                 textController: _breedText,
                 focusNode: _breedFocus,
                 labelText: 'Breed (required)',
@@ -3323,6 +3324,7 @@ class _MeatPenDialogState extends State<_MeatPenDialog> {
               if (_breedId != null && _loadingVarieties)
                 const LinearProgressIndicator(),
               _FocusOpenAutocomplete(
+                key: const ValueKey('meat-pen-variety'),
                 textController: _varietyText,
                 focusNode: _varietyFocus,
                 labelText: 'Variety (required)',
@@ -3404,6 +3406,7 @@ class _FocusOpenAutocomplete extends StatefulWidget {
   final Widget? suffixIcon;
 
   const _FocusOpenAutocomplete({
+    super.key,
     required this.textController,
     required this.focusNode,
     required this.labelText,
