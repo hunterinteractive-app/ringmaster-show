@@ -54,7 +54,8 @@ try:
                  '20261116180918_houston_original_indemnity_agreement.sql',
                  '20261116183341_honor_shared_contest_animal_requirement.sql',
                  '20261116185000_contest_category_session_capacity.sql',
-                 '20261116193136_stable_meat_pen_identifiers.sql']:
+                 '20261116193136_stable_meat_pen_identifiers.sql',
+                 '20261116195433_meat_pen_tattoo_entry_deadline.sql']:
         sql((root / 'supabase/migrations' / name).read_text())
     for name in ['houston_registration.sql', 'show_contests_and_extras.sql',
                  'contest_expansion.sql', 'contest_registration_windows.sql',

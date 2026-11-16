@@ -35,7 +35,7 @@ void main() {
           if (rejectSave) {
             return http.Response(
               jsonEncode({
-                'message': 'Show is locked. Changes are not allowed.',
+                'message': 'Entry deadline passed. Tattoos can no longer be changed.',
                 'code': 'P0001',
               }),
               400,
@@ -229,7 +229,7 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(
-        find.text('Show is locked. Changes are not allowed.'),
+        find.text('Entry deadline passed. Tattoos can no longer be changed.'),
         findsOneWidget,
         reason: tester
             .widgetList<Text>(find.byType(Text))

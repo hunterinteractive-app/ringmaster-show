@@ -190,12 +190,13 @@ exhibitor meant.
 
 After checkout: **My Entries → show → exhibitor → Pen ID → Add tattoos**.
 Enter all three actual tattoos and Save. The action becomes **Update tattoos**.
-This identification-only action remains available after the entry deadline,
-until the show is locked. It does not reopen entry editing or change payment
+This identification-only action is available until the show’s entry deadline.
+After the deadline, neither exhibitors nor secretaries can change tattoos. It does not reopen entry editing or change payment
 records. Staff use **Entry Management → entry's three-dot menu → Add/Update
 tattoos**. No new tattoo requirement is imposed on check-in.
 
 The SQL regression covers distinct Pen IDs, pending and actual tattoos,
 pay-at-show/free/Square-simulation checkout, repeated finalization, unchanged
-payments, after-deadline updates, staff and household access, and locked shows.
+payments, before-deadline updates, deadline enforcement for staff and households,
+and locked shows.
 All payment simulation happens in the disposable local database.

@@ -5,7 +5,7 @@ import '../theme/app_theme.dart';
 const meatPenLaterInstructions =
     'After checkout, open My Entries, choose this show and exhibitor, find your Pen ID, '
     'then select Add tattoos. Enter all 3 tattoos and Save. You can update them later '
-    'using the same Pen ID, even after entries close, until the show is locked. '
+    'using the same Pen ID until the show’s entry deadline. '
     'The show secretary can also update them in Entry Management.';
 
 bool hasMeatPenId(Map<String, dynamic> entry) =>

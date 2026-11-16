@@ -178,6 +178,10 @@ class _AdminEntryManagementScreenState
     extends State<AdminEntryManagementScreen> {
   bool _loading = true;
   bool _canRefund = false;
+  DateTime? _entryCloseAt;
+  bool _showLocked = false;
+  bool get _penTattooDeadlinePassed =>
+      _entryCloseAt != null && !DateTime.now().isBefore(_entryCloseAt!);
   bool _sortExhibitorsByLastName = false;
   String? _msg;
 
@@ -335,9 +339,13 @@ class _AdminEntryManagementScreenState
   Future<void> _loadEntries() async {
     final show = await supabase
         .from('shows')
-        .select('coop_numbering_mode')
+        .select('coop_numbering_mode,entry_close_at,is_locked')
         .eq('id', widget.showId)
         .single();
+    _entryCloseAt = DateTime.tryParse(
+      (show['entry_close_at'] ?? '').toString(),
+    );
+    _showLocked = show['is_locked'] == true;
     final coopNumberingMode = (show['coop_numbering_mode'] ?? 'separate')
         .toString()
         .trim()
@@ -673,7 +681,13 @@ class _AdminEntryManagementScreenState
   }
 
   Future<void> _updatePenTattoos(Map<String, dynamic> entry) async {
-    if (AppSession.supportReadOnly) return;
+    if (AppSession.supportReadOnly || _showLocked) return;
+    if (_penTattooDeadlinePassed) {
+      setState(
+        () => _msg = 'Entry deadline passed. Tattoos can no longer be changed.',
+      );
+      return;
+    }
     if (await showMeatPenTattooUpdate(context, entry)) await _loadEntries();
   }
 
@@ -1191,10 +1205,16 @@ class _AdminEntryManagementScreenState
                                   itemBuilder: (_) => [
                                     if (hasMeatPenId(e) &&
                                         !AppSession.supportReadOnly &&
+                                        !_showLocked &&
                                         !isScratched)
                                       PopupMenuItem(
                                         value: 'tattoos',
-                                        child: Text(meatPenTattooAction(e)),
+                                        enabled: !_penTattooDeadlinePassed,
+                                        child: Text(
+                                          _penTattooDeadlinePassed
+                                              ? 'Tattoos — entry deadline passed'
+                                              : meatPenTattooAction(e),
+                                        ),
                                       ),
                                     const PopupMenuItem(
                                       value: 'edit',

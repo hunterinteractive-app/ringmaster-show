@@ -250,7 +250,7 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
   bool _deadlinePassedForShow(String showId) {
     final closeAt = _parseTs(_showsById[showId]?['entry_close_at']);
     if (closeAt == null) return false;
-    return DateTime.now().isAfter(closeAt.toLocal());
+    return !DateTime.now().isBefore(closeAt);
   }
 
   bool _hideShowAfter48h(String showId) {
@@ -474,17 +474,17 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
     final showId = entry['show_id']?.toString() ?? '';
     if (showId.isEmpty) return;
 
-    if (hasMeatPenId(entry)) {
-      if (AppSession.supportReadOnly) return;
-      if (await showMeatPenTattooUpdate(context, entry)) await _load();
-      return;
-    }
-
     if (_deadlinePassedForShow(showId)) {
       setState(
         () => _msg =
             'Entry deadline passed. Editing is locked. You can still scratch entries.',
       );
+      return;
+    }
+
+    if (hasMeatPenId(entry)) {
+      if (AppSession.supportReadOnly) return;
+      if (await showMeatPenTattooUpdate(context, entry)) await _load();
       return;
     }
 
@@ -1526,10 +1526,7 @@ class _ShowExpansionCard extends StatelessWidget {
 
                                                               final canEdit =
                                                                   !readOnly &&
-                                                                  (hasMeatPenId(
-                                                                        e,
-                                                                      ) ||
-                                                                      !deadlinePassed) &&
+                                                                  !deadlinePassed &&
                                                                   !scratched;
                                                               final canScratch =
                                                                   !readOnly &&
