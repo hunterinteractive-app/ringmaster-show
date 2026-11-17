@@ -402,6 +402,10 @@ class ControlSheetScan {
 const _unreadableCode = FormatException(
   'The page code could not be read. Retake the photo with the entire page in focus.',
 );
+const _unreadableCorners = FormatException(
+  'The four corner markers could not be aligned. Take the photo straight above '
+  'the page in even light, with a little space around all four edges.',
+);
 
 /// Call on a background isolate where Flutter supports it.
 ControlSheetScan readControlSheetScan(Uint8List bytes) {
@@ -454,13 +458,21 @@ ControlSheetScan readControlSheetScan(Uint8List bytes) {
   final hasAlignment = points.length == 4;
   final alignment = last - (hasAlignment ? 3 * module : 0);
   math.Point<double> point(int i) => math.Point(points[i].x, points[i].y);
+  final qrTopLeft = math.Point(qrLeft + first, qrTop + first);
+  final qrTopRight = math.Point(qrLeft + last, qrTop + first);
+  final qrBottomLeft = math.Point(qrLeft + first, qrTop + last);
+  final qrAnchors = [
+    (qrTopLeft, point(1)),
+    (qrTopRight, point(2)),
+    (qrBottomLeft, point(0)),
+  ];
 
   final approximate = _PageTransform(
     [
-      math.Point(qrLeft, qrTop) + math.Point(first, first),
-      math.Point(qrLeft + last, qrTop + first),
+      qrTopLeft,
+      qrTopRight,
       math.Point(qrLeft + alignment, qrTop + alignment),
-      math.Point(qrLeft + first, qrTop + last),
+      qrBottomLeft,
     ],
     [
       point(1),
@@ -475,19 +487,7 @@ ControlSheetScan readControlSheetScan(Uint8List bytes) {
     source.width,
     source.height,
   );
-  final corners = [
-    for (final corner in scanSheetCorners)
-      pixels.findMarker(approximate, corner),
-  ];
-  final transform = _PageTransform(scanSheetCorners, corners);
-  if (transform
-          .map(math.Point(qrLeft + first, qrTop + first))
-          .distanceTo(point(1)) >
-      point(1).distanceTo(point(2)) * .055) {
-    throw const FormatException(
-      'The page is bent or clipped. Retake the photo on a flat surface.',
-    );
-  }
+  final transform = _alignScanPage(pixels, bitmap, approximate, qrAnchors);
 
   return ControlSheetScan(
     [for (final page in blocks) _readBlock(pixels, transform, page)],
@@ -496,6 +496,114 @@ ControlSheetScan readControlSheetScan(Uint8List bytes) {
       quality: 85,
     ),
   );
+}
+
+_PageTransform _alignScanPage(
+  _ScanPixels pixels,
+  qr.BinaryBitmap bitmap,
+  _PageTransform approximate,
+  List<(math.Point<double>, math.Point<double>)> anchors,
+) {
+  final qrWidth = anchors[0].$2.distanceTo(anchors[1].$2);
+  final maxError = qrWidth * .055;
+
+  double qrError(_PageTransform transform) => anchors.fold<double>(
+    0,
+    (error, anchor) =>
+        math.max(error, transform.map(anchor.$1).distanceTo(anchor.$2)),
+  );
+  bool hasFourSquares(_PageTransform transform) => scanSheetCorners.every(
+    (corner) => pixels.isHollowSquare(transform, corner),
+  );
+
+  final estimatedCorners = [
+    for (final corner in scanSheetCorners)
+      pixels.findMarker(approximate, corner),
+  ];
+  if (estimatedCorners.every((corner) => corner != null)) {
+    final transform = _PageTransform(
+      scanSheetCorners,
+      estimatedCorners.nonNulls.toList(),
+    );
+    if (qrError(transform) <= maxError && hasFourSquares(transform)) {
+      return transform;
+    }
+  }
+
+  // A subpixel error inside the QR code can move the estimated bottom corners
+  // by many pixels. Look for the hollow squares in the whole photo instead.
+  final approximatePaper = _PageTransform(
+    [
+      anchors[0].$2,
+      anchors[1].$2,
+      anchors[1].$2 + anchors[2].$2 - anchors[0].$2,
+      anchors[2].$2,
+    ],
+    [
+      anchors[0].$1,
+      anchors[1].$1,
+      anchors[1].$1 + anchors[2].$1 - anchors[0].$1,
+      anchors[2].$1,
+    ],
+  );
+  final nominalMarkerWidth =
+      qrWidth / anchors[0].$1.distanceTo(anchors[1].$1) * 14;
+  final candidates = pixels.hollowSquares(
+    bitmap.getBlackMatrix().get,
+    minSpan: math.max(5, (nominalMarkerWidth * .35).floor()),
+    maxSpan: (nominalMarkerWidth * 3).ceil(),
+  );
+  final located = [
+    for (final point in candidates) (point, approximatePaper.map(point)),
+  ];
+  final choices = [
+    for (final expected in scanSheetCorners)
+      (located
+              .where(
+                (candidate) =>
+                    (candidate.$2.x - expected.x).abs() < 250 &&
+                    (candidate.$2.y - expected.y).abs() < 330,
+              )
+              .toList()
+            ..sort(
+              (a, b) => a.$2
+                  .distanceTo(expected)
+                  .compareTo(b.$2.distanceTo(expected)),
+            ))
+          .take(5)
+          .map((candidate) => candidate.$1)
+          .toList(),
+  ];
+
+  _PageTransform? best;
+  var bestError = maxError;
+  final selected = <math.Point<double>>[];
+  void matchCorners(int index) {
+    if (index == choices.length) {
+      // The corners must describe a convex page in the same order as the PDF.
+      for (var i = 0; i < selected.length; i++) {
+        final a = selected[(i + 1) % 4] - selected[i];
+        final b = selected[(i + 2) % 4] - selected[(i + 1) % 4];
+        if (a.x * b.y - a.y * b.x <= 0) return;
+      }
+      final transform = _PageTransform(scanSheetCorners, selected);
+      final error = qrError(transform);
+      if (error < bestError && hasFourSquares(transform)) {
+        best = transform;
+        bestError = error;
+      }
+      return;
+    }
+    for (final corner in choices[index]) {
+      if (selected.contains(corner)) continue;
+      selected.add(corner);
+      matchCorners(index + 1);
+      selected.removeLast();
+    }
+  }
+
+  matchCorners(0);
+  return best ?? (throw _unreadableCorners);
 }
 
 ControlSheetScanBlock _readBlock(
@@ -574,7 +682,7 @@ class _ScanPixels {
 
   // The hollow marker avoids being mistaken for a QR finder pattern.
   // Searching in PDF coordinates preserves the template's shape on angled scans.
-  math.Point<double> findMarker(
+  math.Point<double>? findMarker(
     _PageTransform transform,
     math.Point<double> expected,
   ) {
@@ -620,12 +728,79 @@ class _ScanPixels {
         }
       }
     }
-    if (bestScore < 120) {
-      throw const FormatException(
-        'A corner marker is missing or blurred. Include all four corners in the scan.',
-      );
+    return bestScore >= 45 ? transform.map(refined) : null;
+  }
+
+  List<math.Point<double>> hollowSquares(
+    bool Function(int x, int y) isBlack, {
+    required int minSpan,
+    required int maxSpan,
+  }) {
+    final seen = Uint8List(width * height);
+    final pending = <int>[];
+    final candidates = <math.Point<double>>[];
+
+    void visit(int x, int y) {
+      final offset = y * width + x;
+      if (seen[offset] != 0 || !isBlack(x, y)) return;
+      seen[offset] = 1;
+      pending.add(offset);
     }
-    return transform.map(refined);
+
+    for (var y = 0; y < height; y++) {
+      for (var x = 0; x < width; x++) {
+        visit(x, y);
+        if (pending.isEmpty) continue;
+        var left = x, right = x, top = y, bottom = y, area = 0;
+        while (pending.isNotEmpty) {
+          final offset = pending.removeLast();
+          final col = offset % width;
+          final row = offset ~/ width;
+          left = math.min(left, col);
+          right = math.max(right, col);
+          top = math.min(top, row);
+          bottom = math.max(bottom, row);
+          area++;
+          if (col > 0) visit(col - 1, row);
+          if (col + 1 < width) visit(col + 1, row);
+          if (row > 0) visit(col, row - 1);
+          if (row + 1 < height) visit(col, row + 1);
+        }
+        final spanX = right - left + 1;
+        final spanY = bottom - top + 1;
+        final density = area / (spanX * spanY);
+        final center = math.Point((left + right) / 2, (top + bottom) / 2);
+        if (spanX >= minSpan &&
+            spanY >= minSpan &&
+            spanX <= maxSpan &&
+            spanY <= maxSpan &&
+            spanX / spanY >= .45 &&
+            spanX / spanY <= 2.2 &&
+            density >= .18 &&
+            density <= .78 &&
+            !isBlack(center.x.round(), center.y.round())) {
+          candidates.add(center);
+        }
+      }
+    }
+    return candidates;
+  }
+
+  bool isHollowSquare(_PageTransform transform, math.Point<double> center) {
+    double at(double x, double y) =>
+        _sample(transform.map(center + math.Point(x, y)));
+    final interior = [at(0, 0), at(2, 0), at(-2, 0), at(0, 2), at(0, -2)]
+      ..sort();
+    final cutoff = interior[2] * .78;
+    final sides = [at(5.5, 0), at(-5.5, 0), at(0, 5.5), at(0, -5.5)];
+    final corners = [
+      at(5.5, 5.5),
+      at(-5.5, 5.5),
+      at(5.5, -5.5),
+      at(-5.5, -5.5),
+    ];
+    return sides.where((value) => value < cutoff).length >= 3 &&
+        corners.where((value) => value < cutoff).length >= 3;
   }
 
   double bubbleDarkness(_PageTransform transform, math.Point<double> center) {

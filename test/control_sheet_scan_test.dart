@@ -333,6 +333,91 @@ void main() {
     _expectMarks(readControlSheetScan(image.encodeJpg(photo, quality: 80)));
   });
 
+  test('reads a complete control sheet with shadow over the far markers', () {
+    final layout = ControlSheetScanPage(
+      showId: _page.showId,
+      sectionId: _page.sectionId,
+      entryIds: _page.entryIds.take(12).toList(),
+      awards: _page.awards,
+      placementCount: 21,
+      firstRowY: 280,
+      includesOutcomes: true,
+      awardsLayout: ControlSheetAwardsLayout.centeredHeader,
+    );
+    final ranks = [for (var place = 1; place <= 11; place++) '$place', 'NP'];
+    final photo = _angledPhoto(
+      _makeScan(compactBlocks: [layout], markedRows: ranks),
+    );
+    for (final pixel in photo) {
+      final shade = 1 - .62 * (pixel.y / photo.height);
+      final gray = (28 + pixel.r * shade).clamp(0, 255).round();
+      pixel.setRgb(gray, gray, gray);
+    }
+    final scan = readControlSheetScan(image.encodeJpg(photo, quality: 68));
+    expect(scan.blocks.single.page.entryIds, layout.entryIds);
+    expect(scan.blocks.single.rows.map((row) => row.marks.single), ranks);
+    expect(scan.blocks.single.rows.expand((row) => row.uncertain), isEmpty);
+  });
+
+  test('aligns the page when the QR alignment point is slightly offset', () {
+    final layout = ControlSheetScanPage(
+      showId: _page.showId,
+      sectionId: _page.sectionId,
+      entryIds: _page.entryIds.take(12).toList(),
+      awards: _page.awards,
+      placementCount: 21,
+      firstRowY: 280,
+      includesOutcomes: true,
+      awardsLayout: ControlSheetAwardsLayout.centeredHeader,
+    );
+    final ranks = [for (var place = 1; place <= 12; place++) '$place'];
+    final paper = image.copyResize(
+      _makeScan(compactBlocks: [layout], markedRows: ranks),
+      width: 1360,
+      interpolation: image.Interpolation.linear,
+    );
+    final qrCode = qr.QRCodeReader().decode(
+      qr.BinaryBitmap(
+        qr.HybridBinarizer(
+          qr.RGBLuminanceSource(
+            paper.width,
+            paper.height,
+            paper
+                .convert(numChannels: 4)
+                .getBytes(order: image.ChannelOrder.abgr)
+                .buffer
+                .asInt32List(),
+          ),
+        ),
+      ),
+    );
+    expect(qrCode.resultPoints, hasLength(4));
+    final center = qrCode.resultPoints.last;
+    final module =
+        compactSheetQrSize *
+        paper.width /
+        scanSheetWidth /
+        (qrCode.version! * 4 + 17);
+    final radius = (module * 2.55).floor();
+    final photo = image.Image.from(paper);
+    for (
+      var y = center.y.round() - radius;
+      y <= center.y.round() + radius;
+      y++
+    ) {
+      for (
+        var x = center.x.round() - radius;
+        x <= center.x.round() + radius;
+        x++
+      ) {
+        photo.setPixel(x - 3, y - 2, paper.getPixel(x, y));
+      }
+    }
+    final scan = readControlSheetScan(image.encodeJpg(photo, quality: 84));
+    expect(scan.blocks.single.rows.map((row) => row.marks.single), ranks);
+    expect(scan.blocks.single.rows.expand((row) => row.uncertain), isEmpty);
+  });
+
   test('rejects a scan with an erased corner marker', () {
     final incomplete = image.Image.from(paper);
     image.fillRect(
@@ -345,7 +430,13 @@ void main() {
     );
     expect(
       () => readControlSheetScan(image.encodePng(incomplete)),
-      throwsFormatException,
+      throwsA(
+        isA<FormatException>().having(
+          (error) => error.message,
+          'message',
+          contains('corner markers could not be aligned'),
+        ),
+      ),
     );
   });
 
