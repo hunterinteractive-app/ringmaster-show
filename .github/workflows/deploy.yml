@@ -40,6 +40,9 @@ jobs:
           flutter test test/cod_award_eligibility_test.dart test/recognition_timeline_test.dart test/rabbit_results_rules_test.dart test/cavy_results_rules_test.dart test/report_population_regression_test.dart test/sweepstakes_cod_population_test.dart
           flutter test --platform chrome test/qr_results_save_widget_test.dart
 
+      - name: Verify independent operational report PDFs
+        run: flutter test test/operational_closeout_reports_test.dart
+
       - name: Build Flutter Web
         run: flutter build web --release --pwa-strategy=none
 

@@ -212,6 +212,10 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
     'entered_exhibitors_contact_report',
     'entered_exhibitors_list_report',
     'michelles_special_report',
+    'ribbon_payout_report',
+    'payback_report',
+    'judge_report',
+    'breed_judged_totals_report',
   };
 
   static const String _michellesSecretaryId =
@@ -4848,11 +4852,8 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
   }
 
   Future<void> _generateCurrentReportGroupByName(String reportName) async {
-    if (reportName != 'unpaid_balances_report' &&
-        reportName != 'paid_exhibitor_report' &&
-        reportName != 'checkin_sheet' &&
-        reportName != 'entered_exhibitors_contact_report' &&
-        reportName != 'entered_exhibitors_list_report') {
+    if (!_preShowReportKeys.contains(reportName) &&
+        reportName != 'checkin_sheet') {
       final ready = await _ensureResultsReadyForReports();
       if (!ready) return;
     }
@@ -4937,12 +4938,8 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
         'Michelle’s Special Report is not available for this show.',
       );
     }
-    if (reportName != 'unpaid_balances_report' &&
-        reportName != 'paid_exhibitor_report' &&
-        reportName != 'checkin_sheet' &&
-        reportName != 'entered_exhibitors_contact_report' &&
-        reportName != 'entered_exhibitors_list_report' &&
-        reportName != 'michelles_special_report') {
+    if (!_preShowReportKeys.contains(reportName) &&
+        reportName != 'checkin_sheet') {
       final ready = await _ensureResultsReadyForReports();
       if (!ready) return;
     }
@@ -5192,8 +5189,10 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
       );
 
       ReportArtifactSummary? artifact;
-      final finalizeRunId = _finalizeRunIdForSelectedScope;
       final isPreShowReport = _preShowReportKeys.contains(reportName);
+      final finalizeRunId = isPreShowReport
+          ? ''
+          : _finalizeRunIdForSelectedScope;
       if (finalizeRunId.isEmpty && !isPreShowReport) {
         throw StateError(
           'Finalize this scope before generating report artifacts.',
@@ -7331,7 +7330,11 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
 
   @override
   Widget build(BuildContext context) {
-    ShowAssistantController.instance.register(context, 'Close Show/Reports', widget.showId);
+    ShowAssistantController.instance.register(
+      context,
+      'Close Show/Reports',
+      widget.showId,
+    );
     final reportsBlocked = !_resultsReadyForReports;
     final reportsBlockedMessage = _resultsReadinessMessage();
     final selectedScopeFinalized = _selectedCloseoutScopeIsFinalized;
@@ -8533,6 +8536,10 @@ class _ReportActionsCardState extends State<_ReportActionsCard> {
       _selectedReportName == 'entered_exhibitors_contact_report' ||
       _selectedReportName == 'entered_exhibitors_list_report' ||
       _selectedReportName == 'michelles_special_report' ||
+      _selectedReportName == 'ribbon_payout_report' ||
+      _selectedReportName == 'payback_report' ||
+      _selectedReportName == 'judge_report' ||
+      _selectedReportName == 'breed_judged_totals_report' ||
       _selectedReportName == 'checkin_sheet';
 
   bool get _selectedReportCanEmail {

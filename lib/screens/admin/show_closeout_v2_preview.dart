@@ -1,3 +1,11 @@
+import 'closeout/data/loaders/ribbon_payout_report_loader.dart';
+import 'closeout/pdf/builders/ribbon_payout_report_pdf.dart';
+import 'closeout/data/loaders/payback_report_loader.dart';
+import 'closeout/pdf/builders/payback_report_pdf.dart';
+import 'closeout/data/loaders/judge_report_loader.dart';
+import 'closeout/pdf/builders/judge_report_pdf.dart';
+import 'closeout/data/loaders/breed_judged_totals_report_loader.dart';
+import 'closeout/pdf/builders/breed_judged_totals_report_pdf.dart';
 import 'closeout/widgets/manual_report_delivery_panel.dart';
 import '../../services/show_addon_report_service.dart';
 import '../../widgets/show_addon_report_downloads.dart';
@@ -4577,6 +4585,10 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
     'entered_exhibitors_contact_report',
     'entered_exhibitors_list_report',
     'michelles_special_report',
+    'ribbon_payout_report',
+    'payback_report',
+    'judge_report',
+    'breed_judged_totals_report',
   };
   static const _reportAssets = FlutterReportAssetLoader();
 
@@ -5288,6 +5300,34 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
         'michelles_special_report' =>
           await MichellesSpecialReportCsvBuilder().buildFile(
             await MichellesSpecialReportLoader(_supabase).load(request),
+            request,
+          ),
+        'ribbon_payout_report' =>
+          await RibbonPayoutReportPdf(assets: _reportAssets).buildFile(
+            await RibbonPayoutReportLoader(
+              CloseoutRepository(_supabase),
+            ).load(request),
+            request,
+          ),
+        'payback_report' =>
+          await (await PaybackReportPdfBuilder.fromAssets(
+            _reportAssets,
+          )).buildFile(
+            await PaybackReportLoader(supabase: _supabase).loadRequest(request),
+            request,
+          ),
+        'judge_report' =>
+          await JudgeReportPdfBuilder(assets: _reportAssets).buildFile(
+            await JudgeReportLoader(supabase: _supabase).load(request),
+            request,
+          ),
+        'breed_judged_totals_report' =>
+          await BreedJudgedTotalsReportPdfBuilder(
+            assets: _reportAssets,
+          ).buildFile(
+            await BreedJudgedTotalsReportLoader(
+              supabase: _supabase,
+            ).load(request),
             request,
           ),
         _ => throw StateError('This report is not an operational report.'),
