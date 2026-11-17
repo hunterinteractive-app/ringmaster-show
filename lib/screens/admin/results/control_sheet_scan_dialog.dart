@@ -52,6 +52,21 @@ class _DraftRow {
     if (places.length == 1) {
       placement = places.single == 'NP' || overLimit ? '0' : places.single;
     }
+    if (places.isEmpty &&
+        outcomes.isEmpty &&
+        !ControlSheetOutcome.values.any(
+          (outcome) => row.uncertain.contains(outcome.code),
+        )) {
+      final possiblePlaces = row.uncertain.where(
+        (mark) =>
+            mark == 'NP' ||
+            (int.tryParse(mark) ?? scanSheetPlacementsPerPage + 1) <=
+                scanSheetPlacementsPerPage,
+      );
+      if (possiblePlaces.length == 1) {
+        placement = possiblePlaces.single == 'NP' ? '0' : possiblePlaces.single;
+      }
+    }
     outcome = outcomes.length == 1 ? outcomes.single : null;
     awards = row.marks.intersection(options);
     final conflictingOutcome =

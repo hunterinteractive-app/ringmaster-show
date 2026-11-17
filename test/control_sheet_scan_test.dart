@@ -324,6 +324,51 @@ void main() {
     }
   });
 
+  test('reads colored fill and a check while keeping a cross for review', () {
+    final layout = ControlSheetScanPage(
+      showId: _page.showId,
+      sectionId: _page.sectionId,
+      entryIds: _page.entryIds.take(1).toList(),
+      awards: const {'BOV', 'BOB'},
+      placementCount: 1,
+      firstRowY: 280,
+      includesOutcomes: true,
+      awardsLayout: ControlSheetAwardsLayout.centeredHeader,
+    );
+    final paper = _makeScan(compactBlocks: [layout], markedRows: []);
+    final first = layout.bubble(0, 0);
+    image.fillCircle(
+      paper,
+      x: (first.x * 3).round(),
+      y: (first.y * 3).round(),
+      radius: 12,
+      color: image.ColorRgb8(78, 254, 215),
+    );
+    void stroke(int column, int x1, int y1, int x2, int y2) {
+      final center = layout.awardBubble(column);
+      final x = (center.x * 3).round();
+      final y = (center.y * 3).round();
+      image.drawLine(
+        paper,
+        x1: x + x1,
+        y1: y + y1,
+        x2: x + x2,
+        y2: y + y2,
+        thickness: 5,
+        color: image.ColorRgb8(15, 15, 15),
+      );
+    }
+
+    stroke(0, -9, -3, -2, 7);
+    stroke(0, -2, 7, 12, -5);
+    stroke(1, -9, -8, 9, 8);
+    stroke(1, -9, 8, 9, -8);
+    final scanned = readControlSheetScan(image.encodeJpg(paper, quality: 82));
+    expect(scanned.blocks.single.rows.single.marks, {'1', 'BOV'});
+    expect(scanned.blocks.single.rows.single.uncertain, {'BOB'});
+    expect(scanned.blocks.single.unassignedAwards, isEmpty);
+  });
+
   test('reads placements and awards, including the final row', () {
     _expectMarks(readControlSheetScan(image.encodePng(paper)));
   });
@@ -533,13 +578,13 @@ void main() {
         for (var i = 0; i < 200; i++) {
           await Future<void>.delayed(const Duration(milliseconds: 25));
           await tester.pump();
-          if (find.text('4 marked rows · 2 to review').evaluate().isNotEmpty) {
+          if (find.text('5 marked rows · 2 to review').evaluate().isNotEmpty) {
             break;
           }
         }
       });
       await tester.pumpAndSettle();
-      expect(find.text('4 marked rows · 2 to review'), findsOneWidget);
+      expect(find.text('5 marked rows · 2 to review'), findsOneWidget);
       expect(find.textContaining('no clear first-place mark'), findsOneWidget);
       expect(
         tester
@@ -552,11 +597,11 @@ void main() {
       await tester.ensureVisible(find.text('Mark specials reviewed'));
       await tester.tap(find.text('Mark specials reviewed'));
       await tester.pumpAndSettle();
-      expect(find.text('4 marked rows · 1 to review'), findsOneWidget);
+      expect(find.text('5 marked rows · 1 to review'), findsOneWidget);
       await tester.ensureVisible(find.text('Mark reviewed'));
       await tester.tap(find.text('Mark reviewed'));
       await tester.pumpAndSettle();
-      expect(find.text('4 marked rows · 0 to review'), findsOneWidget);
+      expect(find.text('5 marked rows · 0 to review'), findsOneWidget);
       await tester.tap(find.text('Check results'));
       await tester.pumpAndSettle();
       expect(checked?.map((change) => change.placement), [
@@ -564,12 +609,14 @@ void main() {
         '0',
         null,
         null,
+        '3',
       ]);
       expect(checked?.map((change) => change.outcome), [
         null,
         null,
         ControlSheetOutcome.scratch,
         ControlSheetOutcome.wrongTattoo,
+        null,
       ]);
 
       expect(tester.takeException(), isNull);

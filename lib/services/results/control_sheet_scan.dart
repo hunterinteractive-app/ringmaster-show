@@ -399,6 +399,8 @@ class ControlSheetScan {
   const ControlSheetScan(this.blocks, this.preview);
 }
 
+enum _BubbleMark { blank, possible, marked }
+
 const _unreadableCode = FormatException(
   'The page code could not be read. Retake the photo with the entire page in focus.',
 );
@@ -484,8 +486,7 @@ ControlSheetScan readControlSheetScan(Uint8List bytes) {
 
   final pixels = _ScanPixels(
     Uint8List.sublistView(luminance.getMatrix()),
-    source.width,
-    source.height,
+    source,
   );
   final transform = _alignScanPage(pixels, bitmap, approximate, qrAnchors);
 
@@ -617,22 +618,25 @@ ControlSheetScanBlock _readBlock(
   ];
   final unassignedAwards = <String>{};
   if (page.headerAwards && page.awards.isNotEmpty) {
-    final firstPlaces = rows.where((row) => row.marks.contains('1'));
+    final firstPlaces = rows.where(
+      (row) => row.marks.contains('1') || row.uncertain.contains('1'),
+    );
     final winner = firstPlaces.length == 1 ? firstPlaces.single : null;
-    final clear =
+    final hasWinner =
         winner != null &&
-        winner.marks.length == 1 &&
-        winner.uncertain.isEmpty &&
-        !rows.any((row) => row.uncertain.contains('1'));
-    for (final (column, award) in page.awardColumns.indexed) {
-      final darkness = pixels.bubbleDarkness(
-        transform,
-        page.awardBubble(column),
-      );
-      if (darkness >= .22) {
-        if (!clear) {
+        winner.marks.every((label) => label == '1') &&
+        winner.uncertain.every((label) => label == '1');
+    final columns = page.awardColumns;
+    final centers = [
+      for (var col = 0; col < columns.length; col++) page.awardBubble(col),
+    ];
+    final shift = pixels.bubbleRowOffset(transform, centers);
+    for (final (column, award) in columns.indexed) {
+      final mark = pixels.readBubble(transform, centers[column] + shift);
+      if (mark != _BubbleMark.blank) {
+        if (!hasWinner) {
           unassignedAwards.add(award);
-        } else if (darkness >= .62) {
+        } else if (mark == _BubbleMark.marked) {
           winner.marks.add(award);
         } else {
           winner.uncertain.add(award);
@@ -652,14 +656,20 @@ ControlSheetScanRow _readRow(
   final marks = <String>{};
   final uncertain = <String>{};
   final columns = page.columns;
+  final centers = [
+    for (var col = 0; col < columns.length; col++) page.bubble(row, col),
+  ];
+  final shift = pixels.bubbleRowOffset(transform, centers);
   for (var col = 0; col < columns.length; col++) {
     final label = columns[col];
-    final center = page.bubble(row, col);
-    final darkness = pixels.bubbleDarkness(transform, center);
-    if (darkness >= .62) {
-      marks.add(label);
-    } else if (darkness >= .22) {
-      uncertain.add(label);
+    final center = centers[col] + shift;
+    switch (pixels.readBubble(transform, center)) {
+      case _BubbleMark.blank:
+        break;
+      case _BubbleMark.possible:
+        uncertain.add(label);
+      case _BubbleMark.marked:
+        marks.add(label);
     }
   }
   return ControlSheetScanRow(page.entryIds[row], marks, uncertain);
@@ -667,10 +677,11 @@ ControlSheetScanRow _readRow(
 
 class _ScanPixels {
   final Uint8List values;
-  final int width;
-  final int height;
+  final image.Image source;
+  int get width => source.width;
+  int get height => source.height;
 
-  _ScanPixels(this.values, this.width, this.height);
+  _ScanPixels(this.values, this.source);
 
   double _sample(math.Point<double> point) {
     if (!point.x.isFinite || !point.y.isFinite) return 255;
@@ -803,21 +814,114 @@ class _ScanPixels {
         corners.where((value) => value < cutoff).length >= 3;
   }
 
-  double bubbleDarkness(_PageTransform transform, math.Point<double> center) {
-    double at(double x, double y) =>
-        _sample(transform.map(center + math.Point(x, y)));
-    final paper = [at(0, 8), at(0, -8), at(2, 8), at(-2, -8)]..sort();
-    final cutoff = paper[2] * .75;
+  math.Point<double> bubbleRowOffset(
+    _PageTransform transform,
+    List<math.Point<double>> centers, {
+    int radius = 4,
+  }) {
+    const directions = [
+      math.Point(1.0, 0.0),
+      math.Point(0.0, 1.0),
+      math.Point(.707, .707),
+      math.Point(-.707, .707),
+    ];
+
+    double score(math.Point<double> shift) {
+      var total = 0.0;
+      for (final center in centers) {
+        final shifted = center + shift;
+        double contrast(math.Point<double> axis) {
+          final rim = _sample(transform.map(shifted + axis * 5));
+          final paper = _sample(transform.map(shifted + axis * 6.5));
+          return (paper - rim).clamp(0, 120).toDouble();
+        }
+
+        for (final axis in directions) {
+          final near = contrast(axis);
+          final far = contrast(axis * -1);
+          total += near + far + math.min(near, far);
+        }
+      }
+      // Prefer the position from the corner markers when evidence is similar.
+      return total / centers.length -
+          8 * shift.distanceTo(const math.Point(0.0, 0.0));
+    }
+
+    var best = const math.Point(0.0, 0.0);
+    var bestScore = score(best);
+    for (var y = -radius; y <= radius; y++) {
+      for (var x = -radius; x <= radius; x++) {
+        final shift = math.Point(x.toDouble(), y.toDouble());
+        final value = score(shift);
+        if (value <= bestScore) continue;
+        best = shift;
+        bestScore = value;
+      }
+    }
+    final coarse = best;
+    for (final y in [-.5, 0.0, .5]) {
+      for (final x in [-.5, 0.0, .5]) {
+        final shift = coarse + math.Point(x, y);
+        final value = score(shift);
+        if (value <= bestScore) continue;
+        best = shift;
+        bestScore = value;
+      }
+    }
+    return best;
+  }
+
+  _BubbleMark readBubble(_PageTransform transform, math.Point<double> center) {
+    final shift = bubbleRowOffset(transform, [center], radius: 3);
+    center += shift;
+    image.Pixel colorAt(double x, double y) {
+      final point = transform.map(center + math.Point(x, y));
+      return source.getPixelSafe(point.x.round(), point.y.round());
+    }
+
+    final paper = [
+      colorAt(0, 8),
+      colorAt(0, -8),
+      colorAt(2, 8),
+      colorAt(-2, -8),
+    ];
+    double cutoff(num Function(image.Pixel) channel) {
+      final values = paper.map(channel).toList()..sort();
+      return values[2] * .75;
+    }
+
+    final red = cutoff((pixel) => pixel.r);
+    final green = cutoff((pixel) => pixel.g);
+    final blue = cutoff((pixel) => pixel.b);
     var dark = 0;
     var total = 0;
+    var upper = 0, leftArm = 0, rightArm = 0, bend = 0, aboveBend = 0;
     for (var y = -3; y <= 3; y++) {
       for (var x = -3; x <= 3; x++) {
         if (x * x + y * y > 12) continue;
         total++;
-        if (at(x.toDouble(), y.toDouble()) < cutoff) dark++;
+        final pixel = colorAt(x.toDouble(), y.toDouble());
+        if (pixel.r >= red && pixel.g >= green && pixel.b >= blue) continue;
+        dark++;
+        if (y < -1) upper++;
+        if (y.abs() <= 1 && x <= -2) leftArm++;
+        if (y.abs() <= 1 && x >= 2) rightArm++;
+        if (y >= 1 && x.abs() <= 1) bend++;
+        if (y <= 0 && x.abs() <= 1) aboveBend++;
       }
     }
-    return dark / total;
+    final coverage = dark / total;
+    // A check has two arms meeting low in the bubble and little ink above.
+    // Sparse crosses and other strokes remain possible marks for review.
+    final isCheck =
+        coverage >= .40 &&
+        upper <= 1 &&
+        leftArm >= 2 &&
+        rightArm >= 2 &&
+        bend >= 3 &&
+        aboveBend <= 2;
+    if (coverage >= .64 || isCheck) return _BubbleMark.marked;
+    return coverage >= .28 ? _BubbleMark.possible : _BubbleMark.blank;
   }
 }
 
