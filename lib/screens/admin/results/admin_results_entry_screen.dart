@@ -11,6 +11,7 @@ import 'package:ringmaster_show/services/ringmaster_backend.dart';
 import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
 import 'package:ringmaster_show/services/show_lock_service.dart';
 import 'package:ringmaster_show/services/app_session.dart';
+import 'package:ringmaster_show/services/role_service.dart';
 import 'package:ringmaster_show/services/results_entry_validation.dart';
 import 'package:ringmaster_show/services/results_award_configuration.dart';
 import 'package:ringmaster_show/services/results_group_resolution.dart';
@@ -22,6 +23,10 @@ import 'package:ringmaster_show/services/results/final_award_readiness.dart';
 import 'package:ringmaster_show/utils/species_sex.dart';
 import 'package:ringmaster_show/screens/admin/admin_entry_management_screen.dart'
     show showAdminEntryEditSheet;
+
+import '../print_packs/control_sheet_labels.dart';
+import 'package:ringmaster_show/services/results/control_sheet_scan.dart';
+import 'control_sheet_scan_dialog.dart';
 
 SupabaseClient get supabase => ringMasterClient;
 
@@ -686,6 +691,7 @@ class AdminResultsEntryScreen extends StatefulWidget {
 }
 
 class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
+  late final Future<bool> _bubblePilotAccess = RoleService.isSuperAdmin();
   bool _didAutoOpenInitialEntryFromRoot = false;
   bool _loading = true;
   String? _msg;
@@ -2507,6 +2513,260 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
     );
   }
 
+  Future<void> _scanControlSheets() async {
+    if (AppSession.isSupportMode ||
+        !await RoleService.isSuperAdmin() ||
+        !mounted) {
+      return;
+    }
+    final checked = await showControlSheetScanDialog(
+      context,
+      showId: widget.showId,
+      loadSection: (sectionId) => _fetchHydratedEntries(sectionId: sectionId),
+      validate: _validateControlSheetScan,
+    );
+    if (!mounted || checked == null) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Pilot checked $checked ${checked == 1 ? 'entry' : 'entries'}. No results were saved.',
+        ),
+      ),
+    );
+  }
+
+  Future<int> _validateControlSheetScan(List<ScanResultChange> changes) async {
+    if (AppSession.isSupportMode || !await RoleService.isSuperAdmin()) {
+      throw StateError(
+        'The bubble control sheet pilot is available to super admins.',
+      );
+    }
+    final sectionIds = changes
+        .map((change) => resultsSectionScopeForEntry(change.entry))
+        .toSet();
+    final latest = <Map<String, dynamic>>[];
+    for (final sectionId in sectionIds) {
+      latest.addAll(await _fetchHydratedEntries(sectionId: sectionId));
+    }
+    final byId = {for (final entry in latest) resultsEntryId(entry): entry};
+
+    final proposed = <String, Map<String, dynamic>>{};
+    final changedAwards = <String>{};
+    final errors = <String>{};
+
+    String value(Map<String, dynamic> entry, String key) =>
+        (entry[key] ?? '').toString().trim().toLowerCase();
+
+    final byMarkedEntry = <String, List<ScanResultChange>>{};
+    for (final change in changes) {
+      byMarkedEntry
+          .putIfAbsent(resultsEntryId(change.entry), () => [])
+          .add(change);
+    }
+
+    for (final MapEntry(key: id, value: marks) in byMarkedEntry.entries) {
+      final scannedEntry = marks.first.entry;
+      final scannedPlacements = marks
+          .map((mark) => mark.placement)
+          .nonNulls
+          .toSet();
+      final label = _entryShortAnimalLabel(scannedEntry);
+      if (scannedPlacements.length > 1) {
+        errors.add('$label has two different placements marked on its sheets.');
+        continue;
+      }
+      final scannedAwards = {for (final mark in marks) ...mark.awards};
+      final outcomes = marks.map((mark) => mark.outcome).nonNulls.toSet();
+      if (outcomes.length > 1 ||
+          (outcomes.isNotEmpty &&
+              (scannedPlacements.isNotEmpty || scannedAwards.isNotEmpty))) {
+        errors.add(
+          '$label has conflicting placement, award, or outcome marks.',
+        );
+        continue;
+      }
+      final entry = byId[id];
+      if (entry == null) {
+        errors.add('$label is no longer in the printed section.');
+        continue;
+      }
+      if ([
+        'section_id',
+        'breed',
+        'variety',
+        'fur_variety',
+        'class_name',
+        'sex',
+        'tattoo',
+        'is_fur',
+      ].any((key) => value(entry, key) != value(scannedEntry, key))) {
+        errors.add('$label changed during review. Reload the latest sheet.');
+        continue;
+      }
+      final previousPlace = value(entry, 'placement');
+      final previousAwards = _entryAwardCodes(entry).toSet();
+      final outcome = outcomes.firstOrNull;
+      if (outcome != null) {
+        final status = value(entry, 'result_status');
+        final scratched =
+            value(entry, 'scratched_at').isNotEmpty || status == 'scratched';
+        final disqualified =
+            entry['is_disqualified'] == true || _isDisqualifiedStatus(status);
+        final reason = value(entry, 'disqualified_reason');
+        final expectedReason = _dqReasonFromStatus(
+          outcome.status,
+        ).toLowerCase();
+        final sameOutcome = switch (outcome) {
+          ControlSheetOutcome.scratch => scratched,
+          ControlSheetOutcome.noShow =>
+            !scratched &&
+                !disqualified &&
+                (status == 'no show' || entry['is_shown'] == false),
+          _ =>
+            !scratched &&
+                disqualified &&
+                (reason.isEmpty ? _dqReasonFromStatus(status) : reason)
+                        .toLowerCase() ==
+                    expectedReason,
+        };
+        if (previousPlace.isNotEmpty ||
+            previousAwards.isNotEmpty ||
+            (!sameOutcome && _entryHasBasicOutcome(entry))) {
+          errors.add('$label already has a different saved result.');
+          continue;
+        }
+        if (!sameOutcome) {
+          proposed[id] = {
+            ...entry,
+            'placement': null,
+            'result_status': outcome.status,
+            'is_shown': outcome.isDq,
+            'is_disqualified': outcome.isDq,
+            'disqualified_reason': outcome.isDq
+                ? _dqReasonFromStatus(outcome.status)
+                : null,
+            '_awards': const <String>[],
+          };
+        }
+        continue;
+      }
+      if (value(entry, 'scratched_at').isNotEmpty ||
+          entry['is_shown'] == false ||
+          entry['is_disqualified'] == true ||
+          !const {'', 'shown'}.contains(value(entry, 'result_status'))) {
+        errors.add(
+          '$label is scratched or has a saved result other than Shown.',
+        );
+        continue;
+      }
+
+      final placement = scannedPlacements.firstOrNull ?? previousPlace;
+      if (previousPlace.isNotEmpty && previousPlace != placement) {
+        errors.add(
+          '$label already has placement $previousPlace. Skip this row or use Results Entry to correct it.',
+        );
+        continue;
+      }
+      final awards = scannedAwards.map(_canonicalAwardCode).toSet();
+      final newAwards = awards.difference(previousAwards);
+      final merged = {...previousAwards, ...newAwards};
+      if (placement == '0' && merged.isNotEmpty) {
+        errors.add('$label cannot receive an award with NP marked.');
+        continue;
+      }
+      if (newAwards.isNotEmpty) {
+        final rules = rulesForEntry(entry);
+        final result = rules.validateAwardSelection(
+          entry: entry,
+          selectedAwards: merged,
+        );
+        if (placement != '1' ||
+            _isFurEntry(entry) ||
+            _isPreJuniorClassName(value(entry, 'class_name'))) {
+          errors.add(
+            '$label must be eligible for specials and placed first to receive an award.',
+          );
+          continue;
+        }
+        if (recognitionAwardsDisallowed(entry, newAwards)) {
+          errors.add('$label: ${recognitionIneligibilityReason(entry)}');
+          continue;
+        }
+        if (!result.valid) {
+          errors.add('$label: ${result.message}');
+          continue;
+        }
+        changedAwards.add(id);
+      }
+      if (previousPlace == placement && newAwards.isEmpty) continue;
+
+      proposed[id] = {
+        ...entry,
+        'placement': placement,
+        'result_status': 'Shown',
+        'is_shown': true,
+        '_awards': merged.toList(),
+      };
+    }
+    final updated = [
+      for (final entry in latest) proposed[resultsEntryId(entry)] ?? entry,
+    ];
+
+    String placementScope(Map<String, dynamic> row) => [
+      _entryScopeSectionId(row),
+      resultsSpeciesForEntry(row),
+      _entryScopeBreed(row),
+      if (_isFurEntry(row)) ...[
+        'fur',
+        controlSheetFurColor(row).toLowerCase(),
+      ] else ...[
+        _entryScopeVariety(row),
+        _entrySexKey(row),
+      ],
+      value(row, 'class_name'),
+      value(row, 'placement'),
+    ].join('|');
+    final placed = <String, Map<String, dynamic>>{};
+    for (final entry in updated) {
+      final placement = int.tryParse(value(entry, 'placement')) ?? 0;
+      if (placement <= 0 || value(entry, 'scratched_at').isNotEmpty) continue;
+      final key = placementScope(entry);
+      final other = placed.putIfAbsent(key, () => entry);
+      if (identical(entry, other)) continue;
+      if (proposed.containsKey(resultsEntryId(entry)) ||
+          proposed.containsKey(resultsEntryId(other))) {
+        errors.add(
+          '${_entryShortAnimalLabel(entry)} and ${_entryShortAnimalLabel(other)} both have placement $placement in the same class.',
+        );
+      }
+    }
+
+    if (changedAwards.isNotEmpty) {
+      final relevantBreeds = {
+        for (final id in changedAwards)
+          '${_entryScopeSectionId(proposed[id]!)}|${_entryScopeBreed(proposed[id]!)}',
+      };
+      bool relevant(Map<String, dynamic> entry) => relevantBreeds.contains(
+        '${_entryScopeSectionId(entry)}|${_entryScopeBreed(entry)}',
+      );
+      final previousIssues = _buildValidationIssues(
+        entries: latest.where(relevant).toList(),
+      ).map((issue) => issue.message).toSet();
+      for (final issue in _buildValidationIssues(
+        entries: updated.where(relevant).toList(),
+      )) {
+        if (previousIssues.contains(issue.message)) continue;
+        if (issue.code.startsWith('duplicate_') ||
+            issue.code == 'opposite_sex' ||
+            issue.code == 'missing_group_for_group_award') {
+          errors.add(issue.message);
+        }
+      }
+    }
+    if (errors.isNotEmpty) throw StateError(errors.join('\n'));
+    return byMarkedEntry.length;
+  }
+
   @override
   Widget build(BuildContext context) {
     final grouped = _groupByBreed(_entries);
@@ -2549,6 +2809,17 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
       useScrollView: false,
       bodyPadding: EdgeInsets.zero,
       actions: [
+        if (!widget.isQrEntryMode && !AppSession.isSupportMode)
+          FutureBuilder<bool>(
+            future: _bubblePilotAccess,
+            builder: (context, snapshot) => snapshot.data == true
+                ? IconButton(
+                    tooltip: 'Scan control sheets (pilot)',
+                    onPressed: _loading ? null : _scanControlSheets,
+                    icon: const Icon(Icons.document_scanner_outlined),
+                  )
+                : const SizedBox.shrink(),
+          ),
         IconButton(
           tooltip: 'Validate full section',
           onPressed: _loading ? null : _openValidationSheet,

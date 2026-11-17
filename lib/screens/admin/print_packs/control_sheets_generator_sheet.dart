@@ -7,6 +7,9 @@ import 'package:ringmaster_show/theme/app_theme.dart';
 import 'package:ringmaster_show/utils/entry_class_name.dart';
 import 'package:ringmaster_show/utils/species_sex.dart';
 import 'package:ringmaster_show/services/ringmaster_backend.dart';
+import 'package:ringmaster_show/services/app_session.dart';
+import 'package:ringmaster_show/services/role_service.dart';
+import 'package:ringmaster_show/services/results/control_sheet_scan.dart';
 
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -16,6 +19,7 @@ import 'print_pack_pdf_helpers.dart';
 import 'control_sheet_labels.dart';
 import 'control_sheet_footer.dart';
 import 'control_sheet_judging_order.dart';
+import 'control_sheet_scan_pdf.dart';
 import '../closeout/data/report_data_reader.dart';
 
 SupabaseClient get supabase => ringMasterClient;
@@ -234,6 +238,7 @@ class ControlSheetsGeneratorSheet extends StatefulWidget {
 
 class _ControlSheetsGeneratorSheetState
     extends State<ControlSheetsGeneratorSheet> {
+  late final Future<bool> _bubblePilotAccess = RoleService.isSuperAdmin();
   bool _building = false;
   String? _msg;
 
@@ -411,7 +416,9 @@ class _ControlSheetsGeneratorSheetState
     return 99;
   }
 
-  Future<List<Map<String, dynamic>>> _fetchEntries() async {
+  Future<List<Map<String, dynamic>>> _fetchEntries({
+    required bool includeScratched,
+  }) async {
     final raw = <Map<String, dynamic>>[];
     final idsToFetch = widget.sectionIds.isNotEmpty
         ? widget.sectionIds
@@ -481,7 +488,7 @@ class _ControlSheetsGeneratorSheetState
                 params: {
                   'p_show_id': widget.showId,
                   'p_section_id': sectionId,
-                  'p_include_scratched': widget.includeScratched,
+                  'p_include_scratched': includeScratched,
                 },
               )
               .order('entry_id')
@@ -568,7 +575,7 @@ class _ControlSheetsGeneratorSheetState
             .eq('show_id', widget.showId)
             .eq('section_id', sectionId)
             .eq('is_fur', true);
-        if (!widget.includeScratched) {
+        if (!includeScratched) {
           query = query.isFilter('scratched_at', null);
         }
         return query
@@ -869,6 +876,7 @@ class _ControlSheetsGeneratorSheetState
     List<Map<String, dynamic>> rows,
     pw.ThemeData theme, {
     required bool includeQrCode,
+    required bool bubbleSheet,
     ControlSheetJudgingOrder? judgingOrder,
     required Map<String, Map<String, int>> cavySopSortMap,
   }) {
@@ -913,6 +921,7 @@ class _ControlSheetsGeneratorSheetState
           color.toLowerCase(),
           cls.toLowerCase(),
           sex.toLowerCase(),
+          if (bubbleSheet) _safe(row, 'species').toLowerCase(),
         ].join('|');
 
         grouped.putIfAbsent(key, () => <Map<String, dynamic>>[]);
@@ -1252,6 +1261,11 @@ class _ControlSheetsGeneratorSheetState
             : judgingOrder.rank(a).compareTo(judgingOrder.rank(b));
         return order != 0 ? order : compareControlPages(a, b);
       });
+
+    if (bubbleSheet) {
+      _addCompactBubblePages(doc, sortedAllPages, judgingOrder);
+      return doc;
+    }
 
     final sortedSectionGroups =
         <MapEntry<String, List<Map<String, dynamic>>>>[];
@@ -2066,7 +2080,155 @@ class _ControlSheetsGeneratorSheetState
     return doc;
   }
 
-  Future<void> _generatePdf({required bool includeQrCode}) async {
+  void _addCompactBubblePages(
+    pw.Document doc,
+    List<Map<String, dynamic>> sortedClasses,
+    ControlSheetJudgingOrder? judgingOrder,
+  ) {
+    String entryId(Map<String, dynamic> row) =>
+        (row['entry_id'] ?? row['id'] ?? '').toString().trim();
+
+    List<String> countKeys(Map<String, dynamic> group) {
+      final breed = [
+        'sectionId',
+        'species',
+        'breed',
+      ].map((key) => controlSheetCountLabel(group[key])).join('|');
+      final color = '$breed|${controlSheetCountLabel(group['color'])}';
+      final age = '$color|${controlSheetCountLabel(group['class'])}';
+      return [
+        breed,
+        color,
+        age,
+        '$age|${controlSheetCountLabel(group['sex'])}',
+      ];
+    }
+
+    final totals = <String, ({Set<String> entries, Set<String> exhibitors})>{};
+    for (final group in sortedClasses) {
+      final entries = (group['rows'] as List<Map<String, dynamic>>);
+      for (final key in countKeys(group)) {
+        final count = totals.putIfAbsent(
+          key,
+          () => (entries: {}, exhibitors: {}),
+        );
+        count.entries.addAll(entries.map(entryId).where((id) => id.isNotEmpty));
+        count.exhibitors.addAll(
+          entries
+              .map((row) => _safe(row, 'exhibitor_id'))
+              .where((id) => id.isNotEmpty),
+        );
+      }
+    }
+    ControlSheetCount count(String key) => (
+      entries: totals[key]!.entries.length,
+      exhibitors: totals[key]!.exhibitors.length,
+    );
+
+    final blocks = <BubbleControlSheetPrintBlock>[];
+    final printedAt = DateTime.now();
+    var top = bubbleControlSheetBodyTop;
+    var rowCount = 0;
+    String? currentKey;
+    var sectionTitle = '';
+
+    void flushPage() {
+      if (blocks.isEmpty) return;
+      addBubbleControlSheetPage(
+        document: doc,
+        blocks: List.of(blocks),
+        showName: widget.showName,
+        section: sectionTitle,
+        judge: controlSheetJudgeLabel(blocks.map((block) => block.judge)),
+        printedAt: printedAt,
+        byVariety: _pageBreakByVariety,
+      );
+      blocks.clear();
+      top = bubbleControlSheetBodyTop;
+      rowCount = 0;
+    }
+
+    final rowHeight = outcomeSheetRowHeight.toInt();
+    final maxRows =
+        (bubbleControlSheetBodyBottom -
+            bubbleControlSheetBodyTop -
+            bubbleControlSheetBlockHeaderHeight) ~/
+        rowHeight;
+    for (final group in sortedClasses) {
+      final keys = countKeys(group);
+      final sectionId = _safe(group, 'sectionId');
+      final pageKey = [
+        keys[0],
+        if (judgingOrder != null) judgingOrder.rank(group),
+        if (_pageBreakByVariety) keys[1],
+      ].join('|');
+      if (pageKey != currentKey) {
+        flushPage();
+        currentKey = pageKey;
+        sectionTitle = _safe(group, 'sectionTitle');
+      }
+
+      final entries = [...(group['rows'] as List<Map<String, dynamic>>)]
+        ..sort((a, b) {
+          final coop = _coopNumberSortValue(
+            _safe(a, 'coop_number'),
+          ).compareTo(_coopNumberSortValue(_safe(b, 'coop_number')));
+          if (coop != 0) return coop;
+          final tattoo = _animalPrintLabel(a).compareTo(_animalPrintLabel(b));
+          return tattoo != 0 ? tattoo : entryId(a).compareTo(entryId(b));
+        });
+
+      for (var offset = 0; offset < entries.length; offset += maxRows) {
+        final rows = entries.skip(offset).take(maxRows).toList();
+        final height =
+            bubbleControlSheetBlockHeaderHeight + rows.length * rowHeight;
+        if (top + height > bubbleControlSheetBodyBottom ||
+            rowCount + rows.length > scanSheetRowsPerPage) {
+          flushPage();
+        }
+        blocks.add(
+          BubbleControlSheetPrintBlock(
+            layout: ControlSheetScanPage(
+              showId: widget.showId,
+              sectionId: sectionId,
+              entryIds: rows.map(entryId).toList(),
+              placementCount: entries.length,
+              includesOutcomes: true,
+              awardsLayout: ControlSheetAwardsLayout.centeredHeader,
+              firstRowY:
+                  top + bubbleControlSheetBlockHeaderHeight + rowHeight ~/ 2,
+              awards: (group['specials'] as List<String>).toSet(),
+            ),
+            breed: _safe(group, 'breed'),
+            variety: _safe(group, 'color').replaceAll(' / ', '/'),
+            className: _safe(group, 'class'),
+            sex: _safe(group, 'sex'),
+            judge: _safe(group, 'judgeName'),
+            breedCount: count(keys[0]),
+            varietyCount: count(keys[1]),
+            ageCount: count(keys[2]),
+            classCount: count(keys[3]),
+            rows: [
+              for (final row in rows)
+                (
+                  coop: _safe(row, 'coop_number'),
+                  ear: _animalPrintLabel(row),
+                  exhibitor: _safe(row, 'exhibitor_label'),
+                ),
+            ],
+          ),
+        );
+        top += height + bubbleControlSheetBlockGap;
+        rowCount += rows.length;
+      }
+    }
+    flushPage();
+  }
+
+  Future<void> _generatePdf({
+    bool includeQrCode = false,
+    bool bubbleSheet = false,
+  }) async {
     if (_building) return;
 
     setState(() {
@@ -2075,7 +2237,15 @@ class _ControlSheetsGeneratorSheetState
     });
 
     try {
-      final rows = await _fetchEntries();
+      if (bubbleSheet &&
+          (AppSession.isSupportMode || !await RoleService.isSuperAdmin())) {
+        throw StateError(
+          'The bubble control sheet pilot is available to super admins.',
+        );
+      }
+      final rows = await _fetchEntries(
+        includeScratched: !bubbleSheet && widget.includeScratched,
+      );
 
       if (rows.isEmpty) {
         if (!mounted) return;
@@ -2101,13 +2271,14 @@ class _ControlSheetsGeneratorSheetState
         rows,
         theme,
         includeQrCode: includeQrCode,
+        bubbleSheet: bubbleSheet,
         cavySopSortMap: cavySopSortMap,
         judgingOrder: judgingOrder,
       );
       final bytes = await doc.save();
 
       final name =
-          'control_${_pageBreakByVariety ? 'by_variety' : 'compact'}_${widget.showName}_${widget.sectionLabel}${includeQrCode ? '_QR' : ''}.pdf';
+          'control_${bubbleSheet ? 'bubbles' : (_pageBreakByVariety ? 'by_variety' : 'compact')}_${widget.showName}_${widget.sectionLabel}${includeQrCode ? '_QR' : ''}.pdf';
 
       final savedPath = await savePdfToUserChosenLocation(
         bytes: Uint8List.fromList(bytes),
@@ -2312,6 +2483,24 @@ class _ControlSheetsGeneratorSheetState
                 _building ? 'Building PDF…' : 'Generate PDF with QR Code',
               ),
             ),
+            if (!AppSession.isSupportMode)
+              FutureBuilder<bool>(
+                future: _bubblePilotAccess,
+                builder: (context, snapshot) => snapshot.data == true
+                    ? Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: FilledButton.icon(
+                          onPressed: _building
+                              ? null
+                              : () => _generatePdf(bubbleSheet: true),
+                          icon: const Icon(Icons.checklist),
+                          label: const Text(
+                            'Generate bubble control sheets (pilot)',
+                          ),
+                        ),
+                      )
+                    : const SizedBox.shrink(),
+              ),
             const SizedBox(height: 8),
             OutlinedButton(
               onPressed: _building ? null : () => Navigator.pop(context),
