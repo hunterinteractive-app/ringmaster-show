@@ -57,6 +57,31 @@ void main() {
   });
 
   group('emailReportNamesFor', () {
+    test('all state formats select the full package', () {
+      for (final name in stateClubReportNames) {
+        expect(
+          emailReportNamesFor(
+            sourceReportName: name,
+            sourceMetadata: {'sanctioning_body': 'STATE CLUB'},
+            includeReports: true,
+            includeLegs: false,
+          ),
+          stateClubReportNames,
+        );
+      }
+    });
+    test('national Cavy shared formats retain their existing selection', () {
+      expect(
+        emailReportNamesFor(
+          sourceReportName: 'details_by_breed',
+          sourceMetadata: {'sanctioning_body': 'NATIONAL CLUB'},
+          includeReports: true,
+          includeLegs: false,
+        ),
+        {'details_by_breed'},
+      );
+    });
+
     test('keeps a club report selected when includeReports is true', () {
       expect(
         emailReportNamesFor(

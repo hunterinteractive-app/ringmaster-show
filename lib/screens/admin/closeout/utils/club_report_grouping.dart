@@ -25,12 +25,22 @@ Set<String> emailReportNamesFor({
   required String sourceReportName,
   required bool includeReports,
   required bool includeLegs,
+  Map<String, dynamic> sourceMetadata = const {},
 }) {
+  if (isStateClubPackage(sourceReportName, sourceMetadata)) {
+    return stateClubReportNames;
+  }
   if (!exhibitorPackageReportNames.contains(sourceReportName)) {
     return {sourceReportName};
   }
   return {if (includeReports) 'exhibitor_report', if (includeLegs) 'legs'};
 }
+
+/// Shared report formats also serve national Cavy clubs. Only state-club
+/// sanctions opt into the full state package.
+bool isStateClubPackage(String reportName, Map<String, dynamic> metadata) =>
+    stateClubReportNames.contains(reportName) &&
+    _upper(metadata['sanctioning_body']) == 'STATE CLUB';
 
 bool isClubReportName(String reportName) =>
     clubReportNames.contains(reportName);

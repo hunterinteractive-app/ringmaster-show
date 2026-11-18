@@ -24,6 +24,7 @@ import 'package:ringmaster_show/screens/admin/closeout/data/loaders/breed_awards
 import 'package:ringmaster_show/screens/admin/closeout/pdf/builders/breed_awards_overview_pdf.dart';
 
 import 'package:flutter/material.dart';
+import 'package:ringmaster_show/theme/app_theme.dart';
 import 'package:ringmaster_show/reporting_core/assets/flutter_report_asset_loader.dart';
 import 'package:ringmaster_show/screens/admin/closeout/csv/builders/michelles_special_report_csv.dart';
 import 'package:ringmaster_show/screens/admin/closeout/csv/builders/other_reports_csv.dart';
@@ -5502,6 +5503,7 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
     if (recipient == null) return const [];
     final reportNames = emailReportNamesFor(
       sourceReportName: source.reportName,
+      sourceMetadata: source.metadata,
       includeReports: includeReports,
       includeLegs: includeLegs,
     );
@@ -5548,6 +5550,11 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
             _metadataString(source, 'breed_name');
       }
       if (_needsClub) {
+        if (isStateClubPackage(source.reportName, source.metadata)) {
+          return isStateClubPackage(artifact.reportName, artifact.metadata) &&
+              _metadataString(artifact, 'club_name').toLowerCase() ==
+                  _metadataString(source, 'club_name').toLowerCase();
+        }
         return _metadataString(artifact, 'club_name') ==
                 _metadataString(source, 'club_name') &&
             _metadataString(artifact, 'scope').toUpperCase() ==
@@ -5563,6 +5570,10 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
     required bool includeReports,
     required bool includeLegs,
   }) {
+    if (allShows &&
+        isStateClubPackage(artifact.reportName, artifact.metadata)) {
+      return '${widget.showName} - State Club Reports - All Shows';
+    }
     final scope = _metadataString(artifact, 'scope');
     final letter = _metadataString(artifact, 'show_letter');
     final suffix = allShows
@@ -5630,23 +5641,42 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
       );
       return;
     }
+    final fullStatePackage =
+        allShows && isStateClubPackage(source.reportName, source.metadata);
+    final packageDetails = fullStatePackage
+        ? (artifacts
+              .map(
+                (artifact) =>
+                    '${_metadataString(artifact, 'scope')} '
+                    '${_metadataString(artifact, 'show_letter')} — '
+                    '${_friendlyReportName(artifact.reportName)}',
+              )
+              .toList()
+            ..sort())
+        : const <String>[];
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text(allShows ? 'Email All Shows?' : 'Email This Show?'),
-        content: Text(
-          'This will send ${artifacts.length} generated report file${artifacts.length == 1 ? '' : 's'} to $recipient.',
+      builder: (context) => Theme(
+        data: AppTheme.surfaceDialogTheme(Theme.of(context)),
+        child: AlertDialog(
+          title: Text(allShows ? 'Email All Shows?' : 'Email This Show?'),
+          content: SingleChildScrollView(
+            child: Text(
+              'This will send ${artifacts.length} generated report file${artifacts.length == 1 ? '' : 's'} to $recipient.'
+              '${fullStatePackage ? '\n\nState club package across Open and Youth shows:\n${packageDetails.join('\n')}' : ''}',
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Send Email'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Send Email'),
-          ),
-        ],
       ),
     );
     if (confirmed != true || !mounted) return;
