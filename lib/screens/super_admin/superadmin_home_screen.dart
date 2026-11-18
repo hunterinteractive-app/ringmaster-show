@@ -55,7 +55,7 @@ class _SuperadminHomeScreenState extends State<SuperadminHomeScreen> {
   Future<void> _openImpersonateUser() async {
     await Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => const _SupportImpersonationScreen()),
+      MaterialPageRoute(builder: (_) => const SupportImpersonationScreen()),
     );
   }
 
@@ -342,16 +342,16 @@ class _SuperadminToolCard extends StatelessWidget {
   }
 }
 
-class _SupportImpersonationScreen extends StatefulWidget {
-  const _SupportImpersonationScreen();
+class SupportImpersonationScreen extends StatefulWidget {
+  const SupportImpersonationScreen({super.key});
 
   @override
-  State<_SupportImpersonationScreen> createState() =>
-      _SupportImpersonationScreenState();
+  State<SupportImpersonationScreen> createState() =>
+      SupportImpersonationScreenState();
 }
 
-class _SupportImpersonationScreenState
-    extends State<_SupportImpersonationScreen> {
+class SupportImpersonationScreenState
+    extends State<SupportImpersonationScreen> {
   final TextEditingController _searchController = TextEditingController();
 
   bool _loading = false;
@@ -371,58 +371,26 @@ class _SupportImpersonationScreenState
     super.dispose();
   }
 
-  String _bestExhibitorName(Map<String, dynamic> row) {
-    final display = (row['display_name'] ?? '').toString().trim();
-    if (display.isNotEmpty) return display;
-
-    final showing = (row['showing_name'] ?? '').toString().trim();
-    if (showing.isNotEmpty) return showing;
-
-    final first = (row['first_name'] ?? '').toString().trim();
-    final last = (row['last_name'] ?? '').toString().trim();
-    final fullName = [first, last].where((x) => x.isNotEmpty).join(' ').trim();
-    if (fullName.isNotEmpty) return fullName;
-
-    return '';
-  }
-
-  Future<Map<String, String>> _loadExhibitorNamesByUserId(
-    Iterable<String> userIds,
+  Future<List<SupportImpersonatedUser>> _findUsers(
+    String query,
+    int limit,
   ) async {
-    final ids = userIds
-        .map((id) => id.trim())
-        .where((id) => id.isNotEmpty)
-        .toSet()
+    final rows = await supabase.rpc(
+      'search_support_users',
+      params: {'p_query': query, 'p_limit': limit},
+    );
+    return (rows as List)
+        .map((raw) {
+          final row = Map<String, dynamic>.from(raw as Map);
+          return SupportImpersonatedUser(
+            userId: (row['user_id'] ?? '').toString(),
+            email: (row['email'] ?? '').toString(),
+            displayName: (row['display_name'] ?? '').toString(),
+            exhibitorName: (row['exhibitor_name'] ?? '').toString(),
+          );
+        })
+        .where((user) => user.userId.isNotEmpty)
         .toList();
-
-    if (ids.isEmpty) return <String, String>{};
-
-    final result = <String, String>{};
-
-    for (var i = 0; i < ids.length; i += 100) {
-      final chunk = ids.skip(i).take(100).toList();
-
-      final rows = await supabase
-          .from('exhibitors')
-          .select(
-            'owner_user_id,display_name,showing_name,first_name,last_name',
-          )
-          .inFilter('owner_user_id', chunk)
-          .order('created_at');
-
-      for (final raw in rows as List) {
-        final row = Map<String, dynamic>.from(raw as Map);
-        final ownerUserId = (row['owner_user_id'] ?? '').toString().trim();
-        if (ownerUserId.isEmpty || result.containsKey(ownerUserId)) continue;
-
-        final name = _bestExhibitorName(row);
-        if (name.isNotEmpty) {
-          result[ownerUserId] = name;
-        }
-      }
-    }
-
-    return result;
   }
 
   Future<void> _loadInitialUsers() async {
@@ -433,29 +401,7 @@ class _SupportImpersonationScreenState
     });
 
     try {
-      final rows = await supabase
-          .from('profiles')
-          .select('user_id,email,display_name')
-          .order('email')
-          .limit(100);
-
-      final profileRows = (rows as List).cast<Map<String, dynamic>>();
-      final exhibitorNamesByUserId = await _loadExhibitorNamesByUserId(
-        profileRows.map((row) => (row['user_id'] ?? '').toString()),
-      );
-
-      final users = profileRows
-          .map((row) {
-            final userId = (row['user_id'] ?? '').toString();
-            return SupportImpersonatedUser(
-              userId: userId,
-              email: (row['email'] ?? '').toString(),
-              displayName: (row['display_name'] ?? '').toString(),
-              exhibitorName: exhibitorNamesByUserId[userId] ?? '',
-            );
-          })
-          .where((user) => user.userId.isNotEmpty)
-          .toList();
+      final users = await _findUsers('', 100);
 
       if (!mounted) return;
 
@@ -497,35 +443,7 @@ class _SupportImpersonationScreenState
     });
 
     try {
-      final safeQuery = query
-          .replaceAll('%', '')
-          .replaceAll(',', '')
-          .replaceAll('*', '')
-          .trim();
-
-      final rows = await supabase
-          .from('profiles')
-          .select('user_id,email,display_name')
-          .or('email.ilike.*$safeQuery*,display_name.ilike.*$safeQuery*')
-          .limit(200);
-
-      final profileRows = (rows as List).cast<Map<String, dynamic>>();
-      final exhibitorNamesByUserId = await _loadExhibitorNamesByUserId(
-        profileRows.map((row) => (row['user_id'] ?? '').toString()),
-      );
-
-      final users = profileRows
-          .map((row) {
-            final userId = (row['user_id'] ?? '').toString();
-            return SupportImpersonatedUser(
-              userId: userId,
-              email: (row['email'] ?? '').toString(),
-              displayName: (row['display_name'] ?? '').toString(),
-              exhibitorName: exhibitorNamesByUserId[userId] ?? '',
-            );
-          })
-          .where((user) => user.userId.isNotEmpty)
-          .toList();
+      final users = await _findUsers(query, 200);
 
       if (!mounted) return;
 
@@ -596,7 +514,7 @@ class _SupportImpersonationScreenState
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
             child: Text(
-              'Select a user from the list, or search by email or display name to narrow it down.',
+              'Search login or exhibitor emails, profile names, or linked exhibitor names. Partial names and comma-separated names are supported.',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 color: AppColors.headerForeground.withValues(alpha: .82),
                 fontWeight: FontWeight.w600,
@@ -615,7 +533,8 @@ class _SupportImpersonationScreenState
                       style: const TextStyle(color: AppColors.text),
                       decoration: const InputDecoration(
                         labelText: 'Search users',
-                        hintText: 'Email or name',
+                        floatingLabelBehavior: FloatingLabelBehavior.never,
+                        hintText: 'Login email, exhibitor email, or name',
                         border: OutlineInputBorder(),
                         prefixIcon: Icon(Icons.search, color: AppColors.muted),
                         labelStyle: TextStyle(color: AppColors.muted),

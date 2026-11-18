@@ -139,6 +139,63 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  testWidgets(
+    'class counter includes weight DQ and unworthy but excludes wrong class',
+    (tester) async {
+      tester.view.physicalSize = const Size(430, 1000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final statuses = [
+        'Shown',
+        'Disqualified - Overweight',
+        'Unworthy of Award',
+        'Disqualified - Wrong Class',
+        'No Show',
+      ];
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.lightTheme,
+          home: ResultsAnimalsScreen(
+            showId: 'show',
+            showName: 'Test Show',
+            sectionLabel: 'Open A',
+            breed: 'Mini Rex',
+            variety: 'Black',
+            classSexLabel: 'Senior Buck',
+            isFurOrWoolClass: false,
+            entries: [
+              for (var i = 0; i < statuses.length; i++)
+                {
+                  'entry_id': 'entry$i',
+                  'exhibitor_id': 'ex$i',
+                  'tattoo': 'ear$i',
+                  'breed': 'Mini Rex',
+                  'variety': 'Black',
+                  'class_name': 'Senior',
+                  'sex': 'Buck',
+                  'result_status': statuses[i],
+                  'is_shown': statuses[i] != 'No Show',
+                  'is_disqualified': statuses[i].startsWith('Disqualified'),
+                },
+            ],
+            judges: const [],
+            onBulkJudgeApply: (entries, judge) async {},
+            breedClassSystems: const {'mini rex': 'four'},
+            finalAwardMode: 'bis_ris',
+            showsByGroup: false,
+            showsByVariety: true,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('5 entries'), findsOneWidget);
+      expect(find.text('3 in class count'), findsOneWidget);
+      expect(find.textContaining('shown/eligible'), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   for (final group in [false, true]) {
     for (final award in ['Best of Breed', 'Best Opposite Sex of Breed']) {
       testWidgets(
@@ -171,6 +228,28 @@ void main() {
       );
     }
   }
+
+  testWidgets(
+    'DQ - Weight saves a disqualification without placement or awards',
+    (tester) async {
+      await openSheet(tester);
+      await tester.tap(find.byType(DropdownButtonFormField<String>).at(1));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('DQ - Weight').last);
+      await tester.tap(find.text('DQ - Weight').last);
+      await tester.pumpAndSettle();
+      expect(find.text('Disqualified - Overweight'), findsNothing);
+      await tester.ensureVisible(find.text('Save'));
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+      expect(saves.single['p_is_disqualified'], true);
+      expect(saves.single['p_is_shown'], true);
+      expect(saves.single['p_disqualified_reason'], 'Overweight');
+      expect(saves.single['p_placement'], '');
+      expect(saves.single['p_awards'], isEmpty);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('anonymous writer saves attribution and BOB', (tester) async {
     await openSheet(tester);

@@ -1,3 +1,4 @@
+import 'package:ringmaster_show/services/results/class_population.dart';
 import '../../utils/report_entry_order.dart';
 // lib/screens/admin/closeout/data/loaders/legs_report_loader.dart
 
@@ -1030,14 +1031,8 @@ class LegsReportLoader {
     return type != 'no_show' && type != 'wrong_variety' && type != 'wrong_sex';
   }
 
-  bool _countsForClass(Map<String, dynamic> row) {
-    final type = _normalizedDisqualificationType(row);
-    return type != 'no_show' &&
-        type != 'wrong_variety' &&
-        type != 'wrong_class' &&
-        type != 'overweight' &&
-        type != 'wrong_sex';
-  }
+  bool _countsForClass(Map<String, dynamic> row) =>
+      countsTowardClassPopulation(row);
 
   String _normalizeSex(String value) {
     final compact = value.trim().toUpperCase().replaceAll(

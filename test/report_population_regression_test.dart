@@ -256,8 +256,8 @@ void main() {
       addTearDown(fixture.client.dispose);
       final data = await ExhibitorReportLoader(fixture.repo).load(_request);
       final byTattoo = {for (final row in data.entries) row.tattoo: row};
-      expect(byTattoo['a']!.classCount, 5);
-      expect(byTattoo['a']!.exhibitorCount, 5);
+      expect(byTattoo['a']!.classCount, 6);
+      expect(byTattoo['a']!.exhibitorCount, 6);
       expect(byTattoo['a']!.earnedLeg, isTrue);
       expect(byTattoo['y']!.classCount, 2);
       expect(byTattoo['y']!.earnedLeg, isFalse);
@@ -269,8 +269,35 @@ void main() {
     },
   );
 
+  test(
+    'weight DQ supplies the fifth class animal but cannot earn a leg',
+    () async {
+      final fixture = _Fixture([
+        _row('a'),
+        _row('b'),
+        _row('c', exhibitor: 'ex2'),
+        _row('d', exhibitor: 'ex2'),
+        _row(
+          'weight',
+          exhibitor: 'ex3',
+          values: {
+            'is_disqualified': true,
+            'disqualified_reason': 'Overweight',
+            'result_status': 'Disqualified - Overweight',
+            'placement': 1,
+          },
+        ),
+      ], award: 'FIRST');
+      addTearDown(fixture.client.dispose);
+      final legs = await LegsReportLoader(fixture.repo).load(_request);
+      expect(legs.single.entryId, 'a');
+      expect(legs.single.animalsCount, 5);
+      expect(legs.single.exhibitorsCount, 3);
+    },
+  );
+
   for (final (award, animals) in [
-    ('FIRST', 5),
+    ('FIRST', 6),
     ('BOB', 8),
     ('BOG', 7),
     ('BOV', 7),
@@ -326,11 +353,11 @@ void main() {
       final first = await loader.load(_request);
       expect(
         first.entries.firstWhere((row) => row.tattoo == 'a').classCount,
-        5,
+        6,
       );
       rows.removeWhere((row) => row['entry_id'] == 'b');
       final next = await loader.load(_request);
-      expect(next.entries.firstWhere((row) => row.tattoo == 'a').classCount, 4);
+      expect(next.entries.firstWhere((row) => row.tattoo == 'a').classCount, 5);
       expect(fixture.repo.snapshotLoads, 2);
     },
   );

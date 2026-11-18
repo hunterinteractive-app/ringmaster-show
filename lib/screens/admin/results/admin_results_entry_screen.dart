@@ -1,3 +1,4 @@
+import 'package:ringmaster_show/services/results/class_population.dart';
 import 'package:ringmaster_show/services/results/cod_eligibility.dart';
 import 'package:ringmaster_show/services/final_award_format.dart';
 import 'package:ringmaster_show/screens/admin/closeout/data/results_entry_reader.dart';
@@ -144,6 +145,10 @@ const List<String> kResultStatuses = [
   'Disqualified - Other',
   'Unworthy of Award',
 ];
+
+// Keep the stored status compatible with existing results and printed scans.
+String resultStatusLabel(String status) =>
+    status == 'Disqualified - Overweight' ? 'DQ - Weight' : status;
 
 bool _isDisqualifiedStatus(String status) {
   return status.trim().toLowerCase().startsWith('disqualified');
@@ -6477,7 +6482,9 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
                             children: [
                               _infoPill('$entryCount entries'),
                               _infoPill('$exhibitorCount exhibitors'),
-                              _infoPill('${_shownCount()} shown/eligible'),
+                              _infoPill(
+                                '${_entries.where(countsTowardClassPopulation).length} in class count',
+                              ),
                             ],
                           ),
                         ),
@@ -6539,7 +6546,8 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
 
                   final subtitleParts = <String>[
                     if (exhibitor.isNotEmpty) exhibitor,
-                    if (resultStatus.isNotEmpty) 'Status: $resultStatus',
+                    if (resultStatus.isNotEmpty)
+                      'Status: ${resultStatusLabel(resultStatus)}',
                     if (placement.isNotEmpty) 'Place: $placement',
                     if (awardsText.isNotEmpty) 'Awards: $awardsText',
                     if (judgeId.isNotEmpty)
@@ -7886,7 +7894,7 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
                     .map(
                       (status) => DropdownMenuItem<String>(
                         value: status,
-                        child: Text(status),
+                        child: Text(resultStatusLabel(status)),
                       ),
                     )
                     .toList(),

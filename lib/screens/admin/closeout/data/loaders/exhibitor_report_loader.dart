@@ -1,3 +1,4 @@
+import 'package:ringmaster_show/services/results/class_population.dart';
 // lib/screens/admin/closeout/data/loaders/exhibitor_report_loader.dart
 
 import '../../utils/report_entry_order.dart';
@@ -667,30 +668,8 @@ class ExhibitorReportLoader {
     return byEntryIdAndShow;
   }
 
-  bool _countsAsJudgedAnimal(Map<String, dynamic> row) {
-    if (_str(row['scratched_at']).isNotEmpty) return false;
-    if (row['is_shown'] == false) return false;
-
-    final status = _str(row['result_status']).toLowerCase();
-    final dqReason = _str(row['disqualified_reason']).toLowerCase();
-
-    if (status == 'no show' || status == 'no_show' || status == 'noshow') {
-      return false;
-    }
-
-    final excludesFromClassCount =
-        status.contains('wrong sex') ||
-        status.contains('wrong variety') ||
-        status.contains('wrong class') ||
-        status.contains('overweight') ||
-        dqReason == 'wrong sex' ||
-        dqReason == 'wrong variety' ||
-        dqReason == 'wrong class' ||
-        dqReason == 'overweight';
-
-    if (excludesFromClassCount) return false;
-    return true;
-  }
+  bool _countsAsJudgedAnimal(Map<String, dynamic> row) =>
+      countsTowardClassPopulation(row);
 
   String _displayResultOrPlacement(
     Map<String, dynamic> row,
@@ -707,6 +686,9 @@ class ExhibitorReportLoader {
     }
 
     if (isDisqualified || status.startsWith('Disqualified')) {
+      if (status == 'Disqualified - Overweight' || dqReason == 'Overweight') {
+        return 'DQ - Weight';
+      }
       if (status.startsWith('Disqualified - ')) return status;
       if (dqReason.isNotEmpty) return 'Disqualified - $dqReason';
       return 'Disqualified';
