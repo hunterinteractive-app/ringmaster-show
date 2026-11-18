@@ -485,8 +485,129 @@ void main() {
     );
   });
 
+  testWidgets('flags opposite-sex award conflicts and updates after an edit', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final blocks = [
+      for (var index = 0; index < 2; index++)
+        ControlSheetScanPage(
+          showId: _page.showId,
+          sectionId: _page.sectionId,
+          entryIds: [_page.entryIds[index]],
+          awards: const {'BOB', 'BOS'},
+          placementCount: 1,
+          firstRowY: 280 + index * 180,
+          includesOutcomes: true,
+          awardsLayout: ControlSheetAwardsLayout.centeredHeader,
+        ),
+    ];
+    final directory = Directory.systemTemp.createTempSync(
+      'scan-status-awards-',
+    );
+    addTearDown(() => directory.deleteSync(recursive: true));
+    final scan = File('${directory.path}/awards.png')
+      ..writeAsBytesSync(
+        image.encodePng(
+          _makeScan(
+            compactBlocks: blocks,
+            markedRows: ['1'],
+            markedSpecials: [
+              {'BOB': 13},
+              {'BOS': 13},
+            ],
+          ),
+        ),
+      );
+    const channel = MethodChannel('plugins.flutter.io/file_selector');
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      channel,
+      (_) async => [scan.path],
+    );
+    addTearDown(
+      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        channel,
+        null,
+      ),
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.onGradientTheme(AppTheme.lightTheme),
+        home: Scaffold(
+          body: Builder(
+            builder: (context) => FilledButton(
+              onPressed: () => showControlSheetScanDialog(
+                context,
+                showId: _page.showId,
+                loadSection: (_) async => [
+                  for (var index = 0; index < 2; index++)
+                    {
+                      'entry_id': _page.entryIds[index],
+                      'section_id': _page.sectionId,
+                      'tattoo': 'BUCK$index',
+                      'species': 'rabbit',
+                      'breed': 'Californian',
+                      'variety': 'Standard',
+                      'class_name': index == 0 ? 'Senior' : 'Junior',
+                      'sex': 'Buck',
+                    },
+                ],
+                validate: (changes) async => changes.length,
+              ),
+              child: const Text('Open scan review'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('Open scan review'));
+    await tester.pumpAndSettle();
+    await tester.runAsync(() async {
+      await tester.tap(find.text('Choose scans'));
+      for (var attempt = 0; attempt < 200; attempt++) {
+        await Future<void>.delayed(const Duration(milliseconds: 25));
+        await tester.pump();
+        if (find.text('2 needs fixing').evaluate().isNotEmpty) break;
+      }
+    });
+    await tester.pumpAndSettle();
+    expect(find.text('2 needs fixing'), findsOneWidget);
+    expect(find.textContaining('are not opposite sex'), findsNWidgets(2));
+    expect(
+      tester
+          .widget<FilledButton>(
+            find.widgetWithText(FilledButton, 'Check results'),
+          )
+          .onPressed,
+      isNull,
+    );
+    final row = find.byKey(ValueKey('scan-review-${_page.entryIds[1]}'));
+    final award = find.descendant(
+      of: row,
+      matching: find.widgetWithText(FilterChip, 'BOSB'),
+    );
+    await tester.ensureVisible(award);
+    await tester.tap(award);
+    await tester.pumpAndSettle();
+    expect(find.text('0 needs fixing'), findsOneWidget);
+    expect(find.text('2 good'), findsOneWidget);
+    expect(find.textContaining('are not opposite sex'), findsNothing);
+    expect(
+      tester
+          .widget<FilledButton>(
+            find.widgetWithText(FilledButton, 'Check results'),
+          )
+          .onPressed,
+      isNotNull,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
-    'requires reviewing faint marks and unassigned specials on a phone',
+    'colors clear marks, review items and correctable conflicts on a phone',
     (tester) async {
       tester.view.physicalSize = const Size(390, 844);
       tester.view.devicePixelRatio = 1;
@@ -500,7 +621,7 @@ void main() {
       final layout = ControlSheetScanPage(
         showId: _page.showId,
         sectionId: _page.sectionId,
-        entryIds: _page.entryIds.take(5).toList(),
+        entryIds: _page.entryIds.take(7).toList(),
         awards: _page.awards,
         placementCount: 21,
         firstRowY: 280,
@@ -509,12 +630,12 @@ void main() {
       );
       final scanImage = _makeScan(
         compactBlocks: [layout],
-        markedRows: ['20', 'NP', 'SCR', 'WT'],
+        markedRows: ['20', 'NP', 'SCR', 'WT', '2', '2'],
         markedSpecials: [
           {'BOB': 13},
         ],
       );
-      final faint = layout.bubble(4, 2);
+      final faint = layout.bubble(6, 2);
       image.fillCircle(
         scanImage,
         x: (faint.x * 3).round(),
@@ -558,6 +679,7 @@ void main() {
                         'variety': 'Broken',
                         'class_name': 'Senior',
                         'sex': 'Buck',
+                        'species': 'rabbit',
                       },
                   ],
                   validate: (results) async {
@@ -578,13 +700,27 @@ void main() {
         for (var i = 0; i < 200; i++) {
           await Future<void>.delayed(const Duration(milliseconds: 25));
           await tester.pump();
-          if (find.text('5 marked rows · 2 to review').evaluate().isNotEmpty) {
+          if (find.text('7 marked rows · 2 to review').evaluate().isNotEmpty) {
             break;
           }
         }
       });
       await tester.pumpAndSettle();
-      expect(find.text('5 marked rows · 2 to review'), findsOneWidget);
+      expect(find.text('7 marked rows · 2 to review'), findsOneWidget);
+      expect(find.text('4 good'), findsOneWidget);
+      expect(find.text('2 needs review'), findsOneWidget);
+      expect(find.text('2 needs fixing'), findsOneWidget);
+      for (final (row, background) in [
+        (0, AppColors.successBg),
+        (4, AppColors.dangerBg),
+        (6, AppColors.warningBg),
+      ]) {
+        final card = tester.widget<Container>(
+          find.byKey(ValueKey('scan-review-${_page.entryIds[row]}')),
+        );
+        expect((card.decoration! as BoxDecoration).color, background);
+      }
+      expect(find.textContaining('both have place 2'), findsNWidgets(2));
       expect(find.textContaining('no clear first-place mark'), findsOneWidget);
       expect(
         tester
@@ -594,14 +730,32 @@ void main() {
             .onPressed,
         isNull,
       );
+      final duplicate = find.byKey(
+        ValueKey('scan-review-${_page.entryIds[5]}'),
+      );
+      final placement = find.descendant(
+        of: duplicate,
+        matching: find.byWidgetPredicate(
+          (widget) => widget is DropdownButton<String>,
+        ),
+      );
+      await tester.ensureVisible(placement);
+      await tester.tap(placement);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Place 4').last);
+      await tester.pumpAndSettle();
+      expect(find.text('0 needs fixing'), findsOneWidget);
+      expect(find.text('6 good'), findsOneWidget);
+      expect(find.textContaining('both have place 2'), findsNothing);
       await tester.ensureVisible(find.text('Mark specials reviewed'));
       await tester.tap(find.text('Mark specials reviewed'));
       await tester.pumpAndSettle();
-      expect(find.text('5 marked rows · 1 to review'), findsOneWidget);
+      expect(find.text('7 marked rows · 1 to review'), findsOneWidget);
       await tester.ensureVisible(find.text('Mark reviewed'));
       await tester.tap(find.text('Mark reviewed'));
       await tester.pumpAndSettle();
-      expect(find.text('5 marked rows · 0 to review'), findsOneWidget);
+      expect(find.text('7 marked rows · 0 to review'), findsOneWidget);
+      expect(find.text('7 good'), findsOneWidget);
       await tester.tap(find.text('Check results'));
       await tester.pumpAndSettle();
       expect(checked?.map((change) => change.placement), [
@@ -609,6 +763,8 @@ void main() {
         '0',
         null,
         null,
+        '2',
+        '4',
         '3',
       ]);
       expect(checked?.map((change) => change.outcome), [
@@ -616,6 +772,8 @@ void main() {
         null,
         ControlSheetOutcome.scratch,
         ControlSheetOutcome.wrongTattoo,
+        null,
+        null,
         null,
       ]);
 
