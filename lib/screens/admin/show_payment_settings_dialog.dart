@@ -417,7 +417,7 @@ class _ShowPaymentSettingsDialogState
                                                 DropdownMenuItem(
                                                   value: 'pay_day_of_show',
                                                   child: Text(
-                                                    'Pay Day of Show',
+                                                    'Pay at Show',
                                                   ),
                                                 ),
                                                 DropdownMenuItem(

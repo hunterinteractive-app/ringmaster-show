@@ -652,7 +652,7 @@ class _EntriesByBreedSectionTableState
       context,
       child: Container(
         margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-        padding: const EdgeInsets.all(12),
+
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
@@ -664,14 +664,21 @@ class _EntriesByBreedSectionTableState
             ),
           ],
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: ExpansionTile(
+          key: const PageStorageKey('entry-totals'),
+          initiallyExpanded: MediaQuery.sizeOf(context).width >= 600,
+          title: const Text(
+            'Entry Totals',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+          ),
+          subtitle: Text(
+            widget.showExhibitorCounts
+                ? '$totalShowing entries · ${totalExhibitors.length} exhibitors'
+                : '$totalShowing entries',
+          ),
+          childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+          expandedCrossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Entry Totals',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
-            ),
-            const SizedBox(height: 10),
             Wrap(
               runSpacing: 8,
               children: [
@@ -956,70 +963,106 @@ class _EntriesByBreedSectionTableState
           ),
           child: AppTheme.gradientTextScope(
             context,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 14, 12, 6),
-                  child: Row(
+            child: CustomScrollView(
+              slivers: [
+                SliverToBoxAdapter(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Expanded(
-                        child: Text(
-                          widget.title,
-                          style: Theme.of(context).textTheme.titleMedium
-                              ?.copyWith(fontWeight: FontWeight.w700),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(12, 14, 12, 6),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                widget.title,
+                                style: Theme.of(context).textTheme.titleMedium
+                                    ?.copyWith(
+                                      fontWeight: FontWeight.w700,
+                                      color: AppColors.headerForeground,
+                                    ),
+                              ),
+                            ),
+                            if (widget.showExportButton &&
+                                MediaQuery.sizeOf(context).width >= 600) ...[
+                              TextButton.icon(
+                                onPressed: _exportCsv,
+                                icon: const Icon(Icons.download),
+                                label: const Text('CSV'),
+                              ),
+                              TextButton.icon(
+                                onPressed: _exportPdf,
+                                icon: const Icon(Icons.picture_as_pdf),
+                                label: const Text('PDF'),
+                              ),
+                              const SizedBox(width: 6),
+                            ],
+                            IconButton(
+                              tooltip: 'Reload',
+                              onPressed: _load,
+                              icon: const Icon(Icons.refresh),
+                            ),
+                          ],
                         ),
                       ),
-                      if (widget.showExportButton) ...[
-                        TextButton.icon(
-                          onPressed: _exportCsv,
-                          icon: const Icon(Icons.download),
-                          label: const Text('CSV'),
+                      if (widget.showExportButton &&
+                          MediaQuery.sizeOf(context).width < 600)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          child: Wrap(
+                            children: [
+                              TextButton.icon(
+                                onPressed: _exportCsv,
+                                icon: const Icon(Icons.download),
+                                label: const Text('CSV'),
+                              ),
+                              TextButton.icon(
+                                onPressed: _exportPdf,
+                                icon: const Icon(Icons.picture_as_pdf),
+                                label: const Text('PDF'),
+                              ),
+                            ],
+                          ),
                         ),
-                        TextButton.icon(
-                          onPressed: _exportPdf,
-                          icon: const Icon(Icons.picture_as_pdf),
-                          label: const Text('PDF'),
+                      if (AppSession.supportReadOnly)
+                        Container(
+                          width: double.infinity,
+                          margin: const EdgeInsets.fromLTRB(12, 4, 12, 0),
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.amber.shade100,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.amber.shade300),
+                          ),
+                          child: const Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Icon(
+                                Icons.support_agent,
+                                size: 18,
+                                color: AppColors.text,
+                              ),
+                              SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'Support Mode — Viewing entry counts as an admin while viewing another user.',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.text,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                        const SizedBox(width: 6),
-                      ],
-                      IconButton(
-                        tooltip: 'Reload',
-                        onPressed: _load,
-                        icon: const Icon(Icons.refresh),
-                      ),
+                      _countsLegendBar(),
+                      _overallTotalsHeader(),
                     ],
                   ),
                 ),
-                if (AppSession.supportReadOnly)
-                  Container(
-                    width: double.infinity,
-                    margin: const EdgeInsets.fromLTRB(12, 4, 12, 0),
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.amber.shade100,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.amber.shade300),
-                    ),
-                    child: const Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Icon(Icons.support_agent, size: 18),
-                        SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            'Support Mode — Viewing entry counts as an admin while viewing another user.',
-                            style: TextStyle(fontWeight: FontWeight.w700),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                _countsLegendBar(),
-                _overallTotalsHeader(),
-                Expanded(
-                  child: ListView.builder(
-                    padding: const EdgeInsets.all(12),
+                SliverPadding(
+                  padding: const EdgeInsets.all(12),
+                  sliver: SliverList.builder(
                     itemCount: _breedGroups.length,
                     itemBuilder: (context, index) {
                       final breed = _breedGroups[index];

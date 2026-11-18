@@ -1354,7 +1354,7 @@ class _CartScreenState extends State<CartScreen> {
                   if (config.allowAtShow)
                     const ButtonSegment(
                       value: 'at_show',
-                      label: Text('Pay at show'),
+                      label: Text('Pay at Show'),
                       icon: Icon(Icons.storefront),
                     ),
                 ],
@@ -1992,7 +1992,7 @@ class _CartScreenState extends State<CartScreen> {
                                   ? 'Confirm Registration (Pay at Show)'
                                   : _items.isEmpty
                                   ? 'Confirm Fee (Pay at Show)'
-                                  : 'Confirm Entries (Pay Day-of-Show)',
+                                  : 'Confirm Entries (Pay at Show)',
                             ),
                           ),
                   ),

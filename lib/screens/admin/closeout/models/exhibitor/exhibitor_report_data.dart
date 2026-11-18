@@ -40,6 +40,9 @@ class ExhibitorEntryRow {
   final int? exhibitorCount;
 
   final String awardsText;
+
+  /// Award label to its competition population; omitted for unknown scopes.
+  final Map<String, ExhibitorAwardCount> awardCounts;
   final String judgeName;
   final bool earnedLeg;
 
@@ -58,9 +61,16 @@ class ExhibitorEntryRow {
     required this.classCount,
     required this.exhibitorCount,
     required this.awardsText,
+    this.awardCounts = const {},
     required this.judgeName,
     required this.earnedLeg,
     required this.specialtyPoints,
     required this.totalPoints,
   });
+}
+
+class ExhibitorAwardCount {
+  final int animals;
+  final int exhibitors;
+  const ExhibitorAwardCount(this.animals, this.exhibitors);
 }

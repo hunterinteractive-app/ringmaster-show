@@ -1958,7 +1958,7 @@ class _ShowFeesDialogState extends State<_ShowFeesDialog> {
                 contentPadding: EdgeInsets.zero,
                 value: 'pay_at_show_only',
                 title: Text(
-                  'Pay at show only',
+                  'Pay at Show only',
                   style: TextStyle(fontWeight: FontWeight.w600),
                 ),
               ),

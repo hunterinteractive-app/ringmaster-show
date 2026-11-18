@@ -43,6 +43,9 @@ jobs:
       - name: Verify independent operational report PDFs
         run: flutter test test/operational_closeout_reports_test.dart test/club_report_grouping_test.dart test/state_club_email_package_test.dart
 
+      - name: Verify exhibitor award counts and mobile breed layouts
+        run: flutter test test/exhibitor_award_populations_test.dart test/exhibitor_report_pdf_layout_test.dart test/breed_counts_mobile_layout_test.dart
+
       - name: Build Flutter Web
         run: flutter build web --release --pwa-strategy=none
 

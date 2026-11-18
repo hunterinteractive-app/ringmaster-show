@@ -3,6 +3,7 @@
 import 'dart:typed_data';
 
 import 'package:pdf/pdf.dart';
+import 'package:ringmaster_show/utils/cavy/cavy_awards.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:ringmaster_show/reporting_core/assets/report_asset_loader.dart';
 
@@ -70,7 +71,21 @@ class ExhibitorReportPdfBuilder {
         theme: theme,
         header: (_) => _header(data, logoImage),
         footer: (context) => _footer(context),
-        build: (_) => [pw.SizedBox(height: 10), _table(data.entries)],
+        build: (_) => [
+          if (data.entries.any((row) => row.awardCounts.isNotEmpty))
+            pw.Padding(
+              padding: const pw.EdgeInsets.only(top: 4),
+              child: pw.Text(
+                'Under each breed/group/variety award: animals / exhibitors in competition. Counts do not indicate a leg.',
+                style: const pw.TextStyle(
+                  fontSize: 7,
+                  color: PdfColors.grey800,
+                ),
+              ),
+            ),
+          pw.SizedBox(height: 10),
+          _table(data.entries),
+        ],
       ),
     );
 
@@ -169,6 +184,45 @@ class ExhibitorReportPdfBuilder {
     );
   }
 
+  String _compactAwardLabel(String label) {
+    for (final entry in cavyAwardLabels.entries) {
+      if (entry.value == label) return entry.key;
+    }
+    return label;
+  }
+
+  pw.Widget _awardsCell(ExhibitorEntryRow row) {
+    if (row.awardCounts.isEmpty) {
+      return pw.Text(row.awardsText, style: const pw.TextStyle(fontSize: 6.3));
+    }
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        for (final label in row.awardsText.split(', '))
+          pw.Padding(
+            padding: const pw.EdgeInsets.symmetric(vertical: 1),
+            child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Text(
+                  _compactAwardLabel(label),
+                  style: const pw.TextStyle(fontSize: 6.3),
+                ),
+                if (row.awardCounts[label] case final count?)
+                  pw.Text(
+                    '${count.animals} / ${count.exhibitors}',
+                    style: const pw.TextStyle(
+                      fontSize: 6.3,
+                      color: PdfColors.grey800,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+
   pw.Widget _table(List<ExhibitorEntryRow> rows) {
     return pw.TableHelper.fromTextArray(
       border: pw.TableBorder.all(color: PdfColors.grey700, width: 0.4),
@@ -221,7 +275,7 @@ class ExhibitorReportPdfBuilder {
           r.placing,
           r.classCount?.toString() ?? '',
           r.exhibitorCount?.toString() ?? '',
-          r.awardsText,
+          _awardsCell(r),
           r.judgeName,
           r.earnedLeg ? 'Yes' : '',
           r.specialtyPoints.toString(),

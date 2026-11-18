@@ -10,6 +10,7 @@ import '../../models/exhibitor/exhibitor_report_data.dart';
 import '../closeout_repository.dart';
 import '../report_data_reader.dart';
 import '../report_population_index.dart';
+import '../exhibitor_award_populations.dart';
 import 'legs_report_loader.dart';
 
 class ExhibitorReportLoader {
@@ -174,6 +175,7 @@ class ExhibitorReportLoader {
       }
     }
 
+    final awardPopulations = ExhibitorAwardPopulations(allEligibleRows);
     final entryRows = rowList.map((row) {
       final entryId = _str(row['entry_id']);
       final judgeRef = _str(row['judged_by_show_judge_id']);
@@ -205,6 +207,10 @@ class ExhibitorReportLoader {
         classCount: ctx?.classCount,
         exhibitorCount: ctx?.exhibitorCount,
         awardsText: _formatAwards(awards),
+        awardCounts: {
+          for (final entry in awardPopulations.forEntry(row, awards).entries)
+            _formatAwards({entry.key}): entry.value,
+        },
         judgeName: judgeNamesByRef[judgeRef] ?? '',
         earnedLeg: earnedLegEntryIds.contains(entryId),
         specialtyPoints: pointsByEntryId[entryId] ?? 0,

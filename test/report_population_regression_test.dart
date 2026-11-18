@@ -10,6 +10,24 @@ import 'package:ringmaster_show/screens/admin/closeout/data/loaders/legs_report_
 import 'package:ringmaster_show/screens/admin/closeout/models/base/report_request.dart';
 
 void main() {
+  test(
+    'exhibitor report includes every breed special, not only the leg award',
+    () async {
+      final fixture = _Fixture(_qualificationRows(), award: 'BOB,BOG,BOV');
+      addTearDown(fixture.client.dispose);
+      final report = await ExhibitorReportLoader(fixture.repo).load(_request);
+      final winner = report.entries.firstWhere((e) => e.tattoo == 'a');
+      expect(
+        winner.awardCounts.keys,
+        containsAll(['Best of Breed', 'BOG', 'Best of Variety']),
+      );
+      expect(
+        winner.awardCounts['Best of Breed']!.animals,
+        greaterThan(winner.classCount!),
+      );
+      expect(winner.awardsText, 'Best of Breed, BOG, Best of Variety');
+    },
+  );
   for (final status in ['cod', 'recognized', 'retired']) {
     test(
       'leg and exhibitor reports honor dated $status despite COD label',
