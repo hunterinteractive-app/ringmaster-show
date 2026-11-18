@@ -18,6 +18,7 @@ import 'package:ringmaster_show/services/results_award_configuration.dart';
 import 'package:ringmaster_show/services/results_group_resolution.dart';
 import 'package:ringmaster_show/services/results/results_rules.dart';
 import 'package:ringmaster_show/services/results/results_rules_router.dart';
+import 'package:ringmaster_show/services/results/result_status.dart';
 import 'package:ringmaster_show/services/results/rabbit_results_validation.dart';
 import 'package:ringmaster_show/services/results/cavy_results_validation.dart';
 import 'package:ringmaster_show/services/results/final_award_readiness.dart';
@@ -26,7 +27,6 @@ import 'package:ringmaster_show/screens/admin/admin_entry_management_screen.dart
     show showAdminEntryEditSheet;
 
 import '../print_packs/control_sheet_labels.dart';
-import 'package:ringmaster_show/services/results/control_sheet_scan.dart';
 import 'control_sheet_scan_dialog.dart';
 
 SupabaseClient get supabase => ringMasterClient;
@@ -133,22 +133,6 @@ bool _bestAgeAwardMatchesClass({
 
   return false;
 }
-
-const List<String> kResultStatuses = [
-  'Shown',
-  'No Show',
-  'Disqualified - Wrong Sex',
-  'Disqualified - Wrong Variety',
-  'Disqualified - Wrong Class',
-  'Disqualified - Overweight',
-  'Disqualified - Wrong Tattoo',
-  'Disqualified - Other',
-  'Unworthy of Award',
-];
-
-// Keep the stored status compatible with existing results and printed scans.
-String resultStatusLabel(String status) =>
-    status == 'Disqualified - Overweight' ? 'DQ - Weight' : status;
 
 bool _isDisqualifiedStatus(String status) {
   return status.trim().toLowerCase().startsWith('disqualified');
@@ -2619,14 +2603,18 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
             entry['is_disqualified'] == true || _isDisqualifiedStatus(status);
         final reason = value(entry, 'disqualified_reason');
         final expectedReason = _dqReasonFromStatus(
-          outcome.status,
+          outcome.storedValue,
         ).toLowerCase();
         final sameOutcome = switch (outcome) {
-          ControlSheetOutcome.scratch => scratched,
-          ControlSheetOutcome.noShow =>
+          ResultStatus.scratched => scratched,
+          ResultStatus.noShow =>
             !scratched &&
                 !disqualified &&
                 (status == 'no show' || entry['is_shown'] == false),
+          ResultStatus.unworthy =>
+            !scratched &&
+                !disqualified &&
+                status == outcome.storedValue.toLowerCase(),
           _ =>
             !scratched &&
                 disqualified &&
@@ -2644,11 +2632,11 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
           proposed[id] = {
             ...entry,
             'placement': null,
-            'result_status': outcome.status,
-            'is_shown': outcome.isDq,
+            'result_status': outcome.storedValue,
+            'is_shown': outcome.isShown,
             'is_disqualified': outcome.isDq,
             'disqualified_reason': outcome.isDq
-                ? _dqReasonFromStatus(outcome.status)
+                ? _dqReasonFromStatus(outcome.storedValue)
                 : null,
             '_awards': const <String>[],
           };
@@ -7948,11 +7936,11 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
                   isExpanded: true,
                   initialValue: _resultStatus,
                   decoration: const InputDecoration(labelText: 'Result Status'),
-                  items: kResultStatuses
+                  items: resultEntryStatuses
                       .map(
                         (status) => DropdownMenuItem<String>(
-                          value: status,
-                          child: Text(resultStatusLabel(status)),
+                          value: status.storedValue,
+                          child: Text(status.label),
                         ),
                       )
                       .toList(),

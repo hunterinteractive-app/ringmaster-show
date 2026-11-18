@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import 'package:image/image.dart' as image;
 import 'package:zxing2/qrcode.dart' as qr;
+import 'result_status.dart';
 
 const scanSheetRowsPerPage = 20;
 const scanSheetWidth = 612.0;
@@ -22,20 +23,21 @@ const outcomeSheetRowHeight = 36.0;
 enum ControlSheetAwardsLayout { rows, offsetHeader, centeredHeader }
 
 enum ControlSheetOutcome {
-  scratch('SCR', 'Scratched'),
-  noShow('NS', 'No Show'),
-  wrongSex('WS', 'Disqualified - Wrong Sex'),
-  wrongVariety('WV', 'Disqualified - Wrong Variety'),
-  wrongClass('WC', 'Disqualified - Wrong Class'),
-  overweight('OW', 'Disqualified - Overweight'),
-  wrongTattoo('WT', 'Disqualified - Wrong Tattoo'),
-  otherDq('OTH', 'Disqualified - Other');
+  scratch('SCR', ResultStatus.scratched),
+  noShow('NS', ResultStatus.noShow),
+  wrongSex('WS', ResultStatus.wrongSex),
+  wrongVariety('WV', ResultStatus.wrongVariety),
+  wrongClass('WC', ResultStatus.wrongClass),
+  overweight('OW', ResultStatus.overweight),
+  wrongTattoo('WT', ResultStatus.wrongTattoo),
+  otherDq('OTH', ResultStatus.otherDq);
 
-  const ControlSheetOutcome(this.code, this.status);
+  const ControlSheetOutcome(this.code, this.resultStatus);
   final String code;
-  final String status;
+  final ResultStatus resultStatus;
 
-  bool get isDq => this != scratch && this != noShow;
+  String get status => resultStatus.storedValue;
+  bool get isDq => resultStatus.isDq;
 }
 
 const _scanSheetAwardCodes = ['BOV', 'BOSV', 'BOG', 'BOSG', 'BOB', 'BOS'];

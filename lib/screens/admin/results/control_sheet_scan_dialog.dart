@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart' show compute;
 import 'package:flutter/material.dart';
 import 'package:printing/printing.dart';
 import 'package:ringmaster_show/services/results/control_sheet_scan.dart';
+import 'package:ringmaster_show/services/results/result_status.dart';
 import 'package:ringmaster_show/services/results/results_rules_router.dart';
 import 'package:ringmaster_show/services/results_entry_validation.dart';
 import 'package:ringmaster_show/theme/app_theme.dart';
@@ -14,7 +15,7 @@ import '../print_packs/control_sheet_labels.dart';
 typedef ScanResultChange = ({
   Map<String, dynamic> entry,
   String? placement,
-  ControlSheetOutcome? outcome,
+  ResultStatus? outcome,
   Set<String> awards,
 });
 
@@ -121,6 +122,7 @@ class _DraftRow {
         .toList();
     final outcomes = ControlSheetOutcome.values
         .where((outcome) => row.marks.contains(outcome.code))
+        .map((outcome) => outcome.resultStatus)
         .toList();
     final overLimit = places.any(
       (mark) => (int.tryParse(mark) ?? 0) > scanSheetPlacementsPerPage,
@@ -157,13 +159,14 @@ class _DraftRow {
         (placement == null && awards.isNotEmpty);
     uncertain = {
       if (places.length > 1 || overLimit || conflictingOutcome) ...places,
-      if (conflictingOutcome) ...outcomes.map((outcome) => outcome.status),
+      if (conflictingOutcome) ...outcomes.map((outcome) => outcome.label),
       if (conflictingOutcome) ...awards,
       for (final mark in row.uncertain)
         ControlSheetOutcome.values
                 .where((outcome) => outcome.code == mark)
                 .firstOrNull
-                ?.status ??
+                ?.resultStatus
+                .label ??
             (mark == 'BOS' ? 'BOSB' : mark),
     }.join(', ');
   }
@@ -172,7 +175,7 @@ class _DraftRow {
   final Set<String> options;
   final int placementCount;
   String? placement;
-  ControlSheetOutcome? outcome;
+  ResultStatus? outcome;
   late Set<String> awards;
   late bool review;
   late String uncertain;
@@ -658,18 +661,16 @@ class _ControlSheetScanDialogState extends State<ControlSheetScanDialog> {
                 ),
                 SizedBox(
                   width: 265,
-                  child: DropdownButton<ControlSheetOutcome>(
+                  child: DropdownButton<ResultStatus>(
                     isExpanded: true,
-                    value: row.outcome,
-                    hint: const Text(
-                      'Scratch / No Show / DQ',
-                      overflow: TextOverflow.ellipsis,
-                    ),
+                    value: row.outcome ?? ResultStatus.shown,
                     onChanged: _working
                         ? null
                         : (value) => setState(() {
-                            row.outcome = value;
-                            if (value != null) {
+                            row.outcome = value == ResultStatus.shown
+                                ? null
+                                : value;
+                            if (row.outcome != null) {
                               row.placement = null;
                               row.awards.clear();
                             }
@@ -677,17 +678,11 @@ class _ControlSheetScanDialogState extends State<ControlSheetScanDialog> {
                             _issues = [];
                           }),
                     items: [
-                      const DropdownMenuItem(child: Text('Clear outcome')),
-                      for (final outcome in ControlSheetOutcome.values)
+                      for (final status in ResultStatus.values)
                         DropdownMenuItem(
-                          value: outcome,
+                          value: status,
                           child: Text(
-                            outcome == ControlSheetOutcome.scratch
-                                ? 'Scratch'
-                                : outcome.status.replaceFirst(
-                                    'Disqualified - ',
-                                    'DQ: ',
-                                  ),
+                            status.label,
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),

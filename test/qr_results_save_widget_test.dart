@@ -7,6 +7,7 @@ import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ringmaster_show/screens/admin/results/admin_results_entry_screen.dart';
+import 'package:ringmaster_show/services/results/result_status.dart';
 import 'package:ringmaster_show/theme/app_theme.dart';
 
 void main() {
@@ -259,13 +260,25 @@ void main() {
   }
 
   testWidgets(
-    'DQ - Weight saves a disqualification without placement or awards',
+    'Disqualified - Weight saves a disqualification without placement or awards',
     (tester) async {
       await openSheet(tester, placements: true, assignedJudge: true);
+      final statusMenu = tester.widget<DropdownButton<String>>(
+        find.descendant(
+          of: find.byType(DropdownButtonFormField<String>).at(1),
+          matching: find.byWidgetPredicate(
+            (widget) => widget is DropdownButton<String>,
+          ),
+        ),
+      );
+      expect(
+        statusMenu.items!.map((item) => (item.child as Text).data),
+        resultEntryStatuses.map((status) => status.label),
+      );
       await tester.tap(find.byType(DropdownButtonFormField<String>).at(1));
       await tester.pumpAndSettle();
-      await tester.ensureVisible(find.text('DQ - Weight').last);
-      await tester.tap(find.text('DQ - Weight').last);
+      await tester.ensureVisible(find.text('Disqualified - Weight').last);
+      await tester.tap(find.text('Disqualified - Weight').last);
       await tester.pumpAndSettle();
       expect(find.text('Disqualified - Overweight'), findsNothing);
       await tester.ensureVisible(find.text('Save'));
@@ -274,6 +287,7 @@ void main() {
       expect(saves.single['p_is_disqualified'], true);
       expect(saves.single['p_is_shown'], true);
       expect(saves.single['p_disqualified_reason'], 'Overweight');
+      expect(saves.single['p_result_status'], 'Disqualified - Overweight');
       expect(saves.single['p_placement'], '');
       expect(saves.single['p_awards'], isEmpty);
       expect(tester.takeException(), isNull);

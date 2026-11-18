@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as image;
 import 'package:ringmaster_show/screens/admin/results/control_sheet_scan_dialog.dart';
 import 'package:ringmaster_show/services/results/control_sheet_scan.dart';
+import 'package:ringmaster_show/services/results/result_status.dart';
 import 'package:ringmaster_show/theme/app_theme.dart';
 import 'package:uuid/uuid.dart';
 import 'package:zxing2/qrcode.dart' as qr;
@@ -756,10 +757,34 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('7 marked rows · 0 to review'), findsOneWidget);
       expect(find.text('7 good'), findsOneWidget);
+      final firstRow = find.byKey(
+        ValueKey('scan-review-${_page.entryIds.first}'),
+      );
+      final statusPicker = find.descendant(
+        of: firstRow,
+        matching: find.byWidgetPredicate(
+          (widget) => widget is DropdownButton<ResultStatus>,
+        ),
+      );
+      final statusMenu = tester.widget<DropdownButton<ResultStatus>>(
+        statusPicker,
+      );
+      expect(statusMenu.value, ResultStatus.shown);
+      expect(
+        statusMenu.items!.map((item) => (item.child as Text).data),
+        ResultStatus.values.map((status) => status.label),
+      );
+      expect(find.text('Clear outcome'), findsNothing);
+      await tester.ensureVisible(statusPicker);
+      await tester.tap(statusPicker);
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Unworthy of Award').last);
+      await tester.tap(find.text('Unworthy of Award').last);
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Check results'));
       await tester.pumpAndSettle();
       expect(checked?.map((change) => change.placement), [
-        '20',
+        null,
         '0',
         null,
         null,
@@ -768,10 +793,10 @@ void main() {
         '3',
       ]);
       expect(checked?.map((change) => change.outcome), [
+        ResultStatus.unworthy,
         null,
-        null,
-        ControlSheetOutcome.scratch,
-        ControlSheetOutcome.wrongTattoo,
+        ResultStatus.scratched,
+        ResultStatus.wrongTattoo,
         null,
         null,
         null,
