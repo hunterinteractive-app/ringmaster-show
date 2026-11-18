@@ -708,6 +708,23 @@ void main() {
       });
       await tester.pumpAndSettle();
       expect(find.text('7 marked rows · 2 to review'), findsOneWidget);
+      final previewToggle = find.widgetWithText(
+        FilterChip,
+        'Show scanned pages',
+      );
+      expect(tester.widget<FilterChip>(previewToggle).selected, isTrue);
+      final preview = find.byWidgetPredicate(
+        (widget) =>
+            widget is Image && widget.semanticLabel == 'Scanned control sheet',
+      );
+      expect(preview, findsOneWidget);
+      await tester.ensureVisible(previewToggle);
+      await tester.tap(previewToggle);
+      await tester.pumpAndSettle();
+      expect(preview, findsNothing);
+      await tester.tap(previewToggle);
+      await tester.pumpAndSettle();
+      expect(preview, findsOneWidget);
       expect(find.text('4 good'), findsOneWidget);
       expect(find.text('2 needs review'), findsOneWidget);
       expect(find.text('2 needs fixing'), findsOneWidget);

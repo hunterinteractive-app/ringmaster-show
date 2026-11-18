@@ -215,7 +215,7 @@ class _ControlSheetScanDialogState extends State<ControlSheetScanDialog> {
   var _issues = <String>[];
   bool _working = false;
   bool _showBlank = false;
-  bool _preview = false;
+  bool _preview = true;
 
   Iterable<_DraftRow> get _rows => _pages.expand((page) => page.rows);
 
