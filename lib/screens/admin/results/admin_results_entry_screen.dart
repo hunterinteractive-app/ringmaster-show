@@ -6351,6 +6351,7 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
         writerName: widget.writerName,
         writerPhone: widget.writerPhone,
         isQrEntryMode: widget.isQrEntryMode,
+        placementsOnly: widget.isQrEntryMode,
         isFurOrWoolClass: widget.isFurOrWoolClass,
         initialJudgeId: _currentJudgeId,
       ),
@@ -6686,6 +6687,10 @@ class ResultsEntrySheet extends StatefulWidget {
   final bool isQrEntryMode;
   final bool isFurOrWoolClass;
   final String? initialJudgeId;
+  final bool placementsOnly;
+  final bool awardsOnly;
+  final Set<String>? awardCodes;
+  final String? priorAwardsLabel;
 
   const ResultsEntrySheet({
     super.key,
@@ -6706,7 +6711,35 @@ class ResultsEntrySheet extends StatefulWidget {
     this.isQrEntryMode = false,
     required this.isFurOrWoolClass,
     this.initialJudgeId,
-  });
+    this.placementsOnly = false,
+  }) : awardsOnly = false,
+       awardCodes = null,
+       priorAwardsLabel = null;
+
+  const ResultsEntrySheet.qrAwards({
+    super.key,
+    required this.showId,
+    required this.entry,
+    required List<Map<String, dynamic>> breedEntries,
+    required this.judges,
+    required this.breedClassSystems,
+    required this.finalAwardMode,
+    required String this.writerName,
+    required String this.writerPhone,
+    this.awardCodes,
+    this.priorAwardsLabel,
+  }) : classEntries = breedEntries,
+       availablePlacements = const [],
+       shownCount = 0,
+       currentIndex = 0,
+       totalCount = 0,
+       showsByGroup = false,
+       showsByVariety = false,
+       isQrEntryMode = true,
+       isFurOrWoolClass = false,
+       initialJudgeId = null,
+       placementsOnly = false,
+       awardsOnly = true;
 
   @override
   State<ResultsEntrySheet> createState() => ResultsEntrySheetState();
@@ -6821,7 +6854,7 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
       }
     }
 
-    if (storedJudgeId.isEmpty) {
+    if (storedJudgeId.isEmpty && !widget.awardsOnly) {
       final classJudgeIds = widget.classEntries
           .map((e) => (e['judged_by_show_judge_id'] ?? '').toString().trim())
           .where((x) => x.isNotEmpty)
@@ -7053,6 +7086,13 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
     // Keep recorded awards available for correction if eligibility changes.
     for (final stored in _selectedAwards) {
       if (!awards.contains(stored)) awards.add(stored);
+    }
+    final awardCodes = widget.awardCodes;
+    if (awardCodes != null) {
+      awards.removeWhere(
+        (award) =>
+            !rules.normalizeStoredAwards([award]).any(awardCodes.contains),
+      );
     }
 
     return awards;
@@ -7501,20 +7541,29 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
     required String entryId,
     required String? judgeId,
   }) async {
-    if (!widget.isQrEntryMode) return;
+    if (!widget.isQrEntryMode ||
+        widget.awardsOnly ||
+        supabase.auth.currentSession == null) {
+      return;
+    }
 
     final normalizedJudgeId = (judgeId ?? '').trim();
     if (normalizedJudgeId.isEmpty) return;
 
-    await supabase.rpc(
-      'record_judging_session_entry',
-      params: {
-        'p_show_id': widget.showId,
-        'p_judge_id': normalizedJudgeId,
-        'p_entry_id': entryId,
-        'p_table_number': null,
-      },
-    );
+    try {
+      await supabase.rpc(
+        'record_judging_session_entry',
+        params: {
+          'p_show_id': widget.showId,
+          'p_judge_id': normalizedJudgeId,
+          'p_entry_id': entryId,
+          'p_table_number': null,
+        },
+      );
+    } catch (error) {
+      // The result and its judge are already saved. Session tracking is separate.
+      debugPrint('Judging session tracking failed: ${error.runtimeType}');
+    }
   }
 
   Future<void> _save({required bool goNext}) async {
@@ -7563,8 +7612,13 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
         );
       }
       final shouldClearPlacement = scratched || effectiveStatus != 'Shown';
+      final clearRecordedAwards =
+          widget.placementsOnly &&
+          (shouldClearPlacement || (_placement ?? '').trim() != '1');
 
-      final awardError = widget.isFurOrWoolClass ? null : _validateAwards();
+      final awardError = widget.isFurOrWoolClass || clearRecordedAwards
+          ? null
+          : _validateAwards();
       if (awardError != null) {
         setState(() {
           _saving = false;
@@ -7604,7 +7658,7 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
       final now = DateTime.now().toUtc().toIso8601String();
 
       final isFurOrWoolResult = _isFurOrWoolResultRow();
-      final awardsToSave = isFurOrWoolResult
+      final awardsToSave = isFurOrWoolResult || clearRecordedAwards
           ? <String>[]
           : (_rules.normalizeStoredAwards(_selectedAwards).toList()..sort());
 
@@ -7634,11 +7688,6 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
         if (updated == null) {
           throw Exception('Save returned no result.');
         }
-
-        await _recordJudgingSessionEntry(
-          entryId: entryId,
-          judgeId: normalizedJudgeId,
-        );
 
         widget.entry['placement'] = normalizedPlacement.isEmpty
             ? null
@@ -7686,11 +7735,6 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
           throw Exception('Save returned no result.');
         }
 
-        await _recordJudgingSessionEntry(
-          entryId: entryId,
-          judgeId: normalizedJudgeId,
-        );
-
         // Local update (same for all entries)
         widget.entry['placement'] = normalizedPlacement.isEmpty
             ? null
@@ -7715,6 +7759,11 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
             : awardsToSave;
       }
 
+      await _recordJudgingSessionEntry(
+        entryId: entryId,
+        judgeId: normalizedJudgeId,
+      );
+      if (!mounted) return;
       Navigator.pop(
         context,
         ResultsEntryOutcome(goNext: goNext, classComplete: goNext),
@@ -7761,7 +7810,9 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
         !scratched &&
         effectiveResultStatus == 'Shown' &&
         (_placement ?? '').trim() == '1';
-    final visibleAwards = _visibleAwardCodes;
+    final visibleAwards = widget.placementsOnly
+        ? const <String>[]
+        : _visibleAwardCodes;
 
     return Padding(
       padding: EdgeInsets.only(
@@ -7781,7 +7832,9 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
-                'Record Results (${widget.currentIndex + 1} of ${widget.totalCount})',
+                widget.awardsOnly
+                    ? 'Record Awards'
+                    : 'Record Results (${widget.currentIndex + 1} of ${widget.totalCount})',
                 style: Theme.of(
                   context,
                 ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
@@ -7830,6 +7883,10 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
                     : 'Ear #: ${tattoo.isEmpty ? '(No ear #)' : tattoo}',
                 style: const TextStyle(fontWeight: FontWeight.w600),
               ),
+              if (widget.priorAwardsLabel case final label?) ...[
+                const SizedBox(height: 4),
+                Text(label, style: const TextStyle(color: AppColors.text)),
+              ],
               if (scratched) ...[
                 const SizedBox(height: 8),
                 Container(
@@ -7860,80 +7917,21 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
                         : 'Fur / Wool unavailable: $_furEligibilityMessage',
                   ),
                 ),
-              const SizedBox(height: 14),
-              DropdownButtonFormField<String>(
-                isExpanded: true,
-                initialValue: _judgeId,
-                decoration: const InputDecoration(labelText: 'Judge'),
-                items: [
-                  const DropdownMenuItem<String>(
-                    value: '',
-                    child: Text('(Not set)'),
-                  ),
-                  ...widget.judges.map(
-                    (j) => DropdownMenuItem<String>(
-                      value: (j['id'] ?? '').toString(),
-                      child: Text((j['name'] ?? '').toString()),
-                    ),
-                  ),
-                ],
-                onChanged: _saving
-                    ? null
-                    : (v) {
-                        setState(() {
-                          _judgeId = (v == null || v.isEmpty) ? null : v;
-                        });
-                      },
-              ),
-              const SizedBox(height: 8),
-              DropdownButtonFormField<String>(
-                isExpanded: true,
-                initialValue: _resultStatus,
-                decoration: const InputDecoration(labelText: 'Result Status'),
-                items: kResultStatuses
-                    .map(
-                      (status) => DropdownMenuItem<String>(
-                        value: status,
-                        child: Text(resultStatusLabel(status)),
-                      ),
-                    )
-                    .toList(),
-                onChanged: scratched || _saving || AppSession.supportReadOnly
-                    ? null
-                    : (value) {
-                        if (value == null) return;
-                        setState(() {
-                          _resultStatus = value;
-
-                          if (_resultStatus != 'Shown') {
-                            _placement = null;
-                          }
-
-                          if (_resultStatus != 'Shown') {
-                            _selectedAwards.clear();
-                          }
-                        });
-                      },
-              ),
-              const SizedBox(height: 10),
-              if (canPlace)
+              if (!widget.awardsOnly) ...[
+                const SizedBox(height: 14),
                 DropdownButtonFormField<String>(
                   isExpanded: true,
-                  initialValue:
-                      (_placement != null &&
-                          placementOptions.contains(_placement))
-                      ? _placement
-                      : '',
-                  decoration: const InputDecoration(labelText: 'Placement'),
+                  initialValue: _judgeId,
+                  decoration: const InputDecoration(labelText: 'Judge'),
                   items: [
                     const DropdownMenuItem<String>(
                       value: '',
-                      child: Text('(Placement not selected)'),
+                      child: Text('(Not set)'),
                     ),
-                    ...placementOptions.map(
-                      (p) => DropdownMenuItem<String>(
-                        value: p,
-                        child: Text(p == '0' ? 'NP — No Placing' : p),
+                    ...widget.judges.map(
+                      (j) => DropdownMenuItem<String>(
+                        value: (j['id'] ?? '').toString(),
+                        child: Text((j['name'] ?? '').toString()),
                       ),
                     ),
                   ],
@@ -7941,18 +7939,93 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
                       ? null
                       : (v) {
                           setState(() {
-                            _placement = (v == null || v.trim().isEmpty)
-                                ? null
-                                : v.trim();
+                            _judgeId = (v == null || v.isEmpty) ? null : v;
+                          });
+                        },
+                ),
+                const SizedBox(height: 8),
+                DropdownButtonFormField<String>(
+                  isExpanded: true,
+                  initialValue: _resultStatus,
+                  decoration: const InputDecoration(labelText: 'Result Status'),
+                  items: kResultStatuses
+                      .map(
+                        (status) => DropdownMenuItem<String>(
+                          value: status,
+                          child: Text(resultStatusLabel(status)),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: scratched || _saving || AppSession.supportReadOnly
+                      ? null
+                      : (value) {
+                          if (value == null) return;
+                          setState(() {
+                            _resultStatus = value;
 
-                            if ((_placement ?? '').trim() != '1') {
+                            if (_resultStatus != 'Shown') {
+                              _placement = null;
+                            }
+
+                            if (_resultStatus != 'Shown' &&
+                                !widget.placementsOnly) {
                               _selectedAwards.clear();
                             }
                           });
                         },
                 ),
-              if (canPlace) const SizedBox(height: 16),
-              if (visibleAwards.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                if (canPlace)
+                  DropdownButtonFormField<String>(
+                    isExpanded: true,
+                    initialValue:
+                        (_placement != null &&
+                            placementOptions.contains(_placement))
+                        ? _placement
+                        : '',
+                    decoration: const InputDecoration(labelText: 'Placement'),
+                    items: [
+                      const DropdownMenuItem<String>(
+                        value: '',
+                        child: Text('(Placement not selected)'),
+                      ),
+                      ...placementOptions.map(
+                        (p) => DropdownMenuItem<String>(
+                          value: p,
+                          child: Text(p == '0' ? 'NP — No Placing' : p),
+                        ),
+                      ),
+                    ],
+                    onChanged: _saving
+                        ? null
+                        : (v) {
+                            setState(() {
+                              _placement = (v == null || v.trim().isEmpty)
+                                  ? null
+                                  : v.trim();
+
+                              if (!widget.placementsOnly &&
+                                  (_placement ?? '').trim() != '1') {
+                                _selectedAwards.clear();
+                              }
+                            });
+                          },
+                  ),
+                if (widget.placementsOnly &&
+                    !canAward &&
+                    _selectedAwards.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Saving this change will clear the recorded awards.',
+                  ),
+                ],
+              ],
+              if (widget.awardsOnly && visibleAwards.isEmpty) ...[
+                const SizedBox(height: 12),
+                const Text('No awards are available for this entry.'),
+              ],
+              if (!widget.awardsOnly && visibleAwards.isNotEmpty) ...[
+                const SizedBox(height: 16),
                 Text(
                   'Awards',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
@@ -7968,6 +8041,9 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
 
                 return CheckboxListTile(
                   dense: true,
+                  controlAffinity: widget.awardsOnly
+                      ? ListTileControlAffinity.leading
+                      : ListTileControlAffinity.platform,
                   contentPadding: EdgeInsets.zero,
                   value: checked,
                   title: Text(_awardDisplayLabel(award, widget.entry)),
@@ -8021,17 +8097,19 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
                       child: Text(_saving ? 'Saving…' : 'Save'),
                     ),
                   ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: FilledButton(
-                      style: FilledButton.styleFrom(
-                        backgroundColor: AppColors.primaryButton,
-                        foregroundColor: AppColors.primaryButtonText,
+                  if (!widget.awardsOnly) ...[
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: FilledButton(
+                        style: FilledButton.styleFrom(
+                          backgroundColor: AppColors.primaryButton,
+                          foregroundColor: AppColors.primaryButtonText,
+                        ),
+                        onPressed: _saving ? null : () => _save(goNext: true),
+                        child: const Text('Save & Next'),
                       ),
-                      onPressed: _saving ? null : () => _save(goNext: true),
-                      child: const Text('Save & Next'),
                     ),
-                  ),
+                  ],
                 ],
               ),
             ],

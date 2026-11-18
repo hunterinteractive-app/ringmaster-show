@@ -2,6 +2,9 @@ import 'package:ringmaster_show/screens/admin/closeout/data/results_entry_reader
 // lib/screens/admin/judging/mobile/qr_results_entry_screen.dart
 
 import 'package:flutter/material.dart';
+import 'package:ringmaster_show/services/results/results_rules.dart';
+import 'package:ringmaster_show/services/results/results_rules_router.dart';
+import 'package:ringmaster_show/services/results_award_configuration.dart';
 import 'package:ringmaster_show/theme/app_theme.dart';
 import 'package:ringmaster_show/utils/species_sex.dart';
 import 'package:ringmaster_show/services/ringmaster_backend.dart';
@@ -258,7 +261,7 @@ class _QrResultsEntryScreenState extends State<QrResultsEntryScreen> {
         .toString();
   }
 
-  Future<void> _loadEntries() async {
+  Future<List<Map<String, dynamic>>> _loadBreedEntries() async {
     final rows = await loadQrResultsEntryRows(
       supabase,
       showId: widget.showId,
@@ -266,14 +269,34 @@ class _QrResultsEntryScreenState extends State<QrResultsEntryScreen> {
       breed: widget.breedId,
     );
 
-    var entries = (rows as List)
-        .map((e) => Map<String, dynamic>.from(e as Map))
-        .toList();
-
-    entries = entries.where((e) {
+    final entries = rows.map((e) => Map<String, dynamic>.from(e)).where((e) {
       final breed = (e['breed'] ?? e['breed_name'] ?? '').toString().trim();
       return breed.toLowerCase() == widget.breedId.trim().toLowerCase();
     }).toList();
+
+    for (final e in entries) {
+      normalizeSpeciesSexPresentation(e);
+      e['id'] ??= e['entry_id'];
+      e['breed'] ??= e['breed_name'];
+      e['variety'] ??= e['variety_name'];
+      e['animal_name'] ??= '';
+      e['_awards'] ??= <String>[];
+
+      final group =
+          (e['group_name'] ??
+                  e['group_display_name'] ??
+                  e['group_label'] ??
+                  e['group'] ??
+                  e['group_code'])
+              ?.toString()
+              .trim();
+      e['group_name'] = group == null || group.isEmpty ? null : group;
+    }
+    return entries;
+  }
+
+  Future<void> _loadEntries() async {
+    var entries = await _loadBreedEntries();
 
     final groupKey = (widget.groupKey ?? '').trim();
     if (groupKey.isNotEmpty) {
@@ -303,37 +326,12 @@ class _QrResultsEntryScreenState extends State<QrResultsEntryScreen> {
       }).toList();
     }
 
-    for (final entry in entries) {
-      normalizeSpeciesSexPresentation(entry);
-    }
-
     final classSexLabel = (widget.classSexLabel ?? '').trim();
     if (classSexLabel.isNotEmpty) {
       entries = entries.where((e) {
         return _classSexLabelFromEntry(e).toLowerCase() ==
             classSexLabel.toLowerCase();
       }).toList();
-    }
-
-    for (final e in entries) {
-      e['id'] ??= e['entry_id'];
-      e['breed'] ??= e['breed_name'];
-      e['variety'] ??= e['variety_name'];
-      e['animal_name'] ??= '';
-      e['_awards'] ??= <String>[];
-
-      final normalizedGroup =
-          (e['group_name'] ??
-                  e['group_display_name'] ??
-                  e['group_label'] ??
-                  e['group'] ??
-                  e['group_code'])
-              ?.toString()
-              .trim();
-
-      e['group_name'] = (normalizedGroup == null || normalizedGroup.isEmpty)
-          ? null
-          : normalizedGroup;
     }
 
     _entries = entries;
@@ -565,6 +563,7 @@ class _QrResultsEntryScreenState extends State<QrResultsEntryScreen> {
       writerPhone: _writerPhone!,
       onBulkJudgeApply: _applyJudgeToEntries,
       onReloadEntries: _reloadEntriesForDrilldown,
+      onLoadBreedEntries: _loadBreedEntries,
     );
   }
 }
@@ -588,6 +587,7 @@ class _QrBreedDrilldownScreen extends StatefulWidget {
   )
   onBulkJudgeApply;
   final Future<List<Map<String, dynamic>>> Function() onReloadEntries;
+  final Future<List<Map<String, dynamic>>> Function() onLoadBreedEntries;
 
   const _QrBreedDrilldownScreen({
     required this.showId,
@@ -604,6 +604,7 @@ class _QrBreedDrilldownScreen extends StatefulWidget {
     required this.writerPhone,
     required this.onBulkJudgeApply,
     required this.onReloadEntries,
+    required this.onLoadBreedEntries,
   });
 
   @override
@@ -877,6 +878,87 @@ class _QrBreedDrilldownScreenState extends State<_QrBreedDrilldownScreen> {
     }
   }
 
+  Future<void> _openAwards(
+    _QrAwardLevel level, {
+    String? scopeLabel,
+    Set<String>? scopeKeys,
+  }) async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) => _QrAwardsScreen(
+          showId: widget.showId,
+          sectionLabel: widget.sectionLabel,
+          breed: widget.breed,
+          level: level,
+          scopeLabel: scopeLabel,
+          scopeKeys: scopeKeys,
+          judges: widget.judges,
+          breedClassSystems: widget.breedClassSystems,
+          finalAwardMode: widget.finalAwardMode,
+          writerName: widget.writerName,
+          writerPhone: widget.writerPhone,
+          loadEntries: widget.onLoadBreedEntries,
+          classLabel: _classSexLabelFromEntry,
+        ),
+      ),
+    );
+    if (mounted) await _refreshResults();
+  }
+
+  Widget? _classAwardsLink(
+    BuildContext context,
+    _QrAwardLevel level,
+    String title,
+    List<Map<String, dynamic>> entries,
+  ) {
+    final scopeKeys = <String>{};
+    for (final entry in entries) {
+      if (_qrAwardCodes(
+        entry,
+        level,
+        widget.breedClassSystems,
+        widget.finalAwardMode,
+      ).isEmpty) {
+        continue;
+      }
+      scopeKeys.add(level.scopeKey(rulesForEntry(entry), entry));
+    }
+    if (scopeKeys.isEmpty) return null;
+    return _awardLink(
+      context,
+      title: level.title,
+      onTap: () => _openAwards(level, scopeLabel: title, scopeKeys: scopeKeys),
+    );
+  }
+
+  Widget _awardLink(
+    BuildContext context, {
+    required String title,
+    String? subtitle,
+    required VoidCallback onTap,
+  }) {
+    return AppTheme.surfaceTextScope(
+      context,
+      child: Card(
+        elevation: 0,
+        margin: EdgeInsets.zero,
+        color: AppColors.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: ListTile(
+          contentPadding: const EdgeInsets.fromLTRB(18, 14, 18, 14),
+          leading: const Icon(Icons.emoji_events_outlined),
+          title: Text(
+            title,
+            style: const TextStyle(fontWeight: FontWeight.w800),
+          ),
+          subtitle: subtitle == null ? null : Text(subtitle),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: onTap,
+        ),
+      ),
+    );
+  }
+
   Future<void> _applyEntryCorrection({
     required String entryId,
     required String fieldName,
@@ -965,6 +1047,7 @@ class _QrBreedDrilldownScreenState extends State<_QrBreedDrilldownScreen> {
     required void Function(String label, List<Map<String, dynamic>> entries)
     onTap,
     String? judgeLabel,
+    Widget? footer,
   }) {
     final labels = grouped.keys.toList()
       ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
@@ -978,8 +1061,9 @@ class _QrBreedDrilldownScreenState extends State<_QrBreedDrilldownScreen> {
       ),
       body: ListView.builder(
         padding: const EdgeInsets.all(16),
-        itemCount: labels.length,
+        itemCount: labels.length + (footer == null ? 0 : 1),
         itemBuilder: (context, i) {
+          if (i == labels.length) return footer!;
           final label = labels[i];
           final rows = grouped[label] ?? const <Map<String, dynamic>>[];
           final completed = _completedCount(rows);
@@ -1049,18 +1133,28 @@ class _QrBreedDrilldownScreenState extends State<_QrBreedDrilldownScreen> {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => _buildList(
+                    builder: (context) => _buildList(
                       title: label,
                       grouped: byVariety,
                       judgeLabel: 'Judge for this variety',
+                      footer: _classAwardsLink(
+                        context,
+                        _QrAwardLevel.group,
+                        label,
+                        rows,
+                      ),
                       onTap: (varietyLabel, varietyRows) {
-                        _openClassList(varietyLabel, varietyRows);
+                        _openClassList(
+                          varietyLabel,
+                          varietyRows,
+                          _QrAwardLevel.variety,
+                        );
                       },
                     ),
                   ),
                 );
               } else {
-                _openClassList(label, rows);
+                _openClassList(label, rows, _QrAwardLevel.group);
               }
             },
           ),
@@ -1080,7 +1174,7 @@ class _QrBreedDrilldownScreenState extends State<_QrBreedDrilldownScreen> {
             grouped: grouped,
             judgeLabel: 'Judge for this variety',
             onTap: (label, rows) {
-              _openClassList(label, rows);
+              _openClassList(label, rows, _QrAwardLevel.variety);
             },
           ),
         ),
@@ -1091,22 +1185,37 @@ class _QrBreedDrilldownScreenState extends State<_QrBreedDrilldownScreen> {
     _openClassList(widget.breed, entries);
   }
 
-  void _openClassList(String title, List<Map<String, dynamic>> entries) {
-    final grouped = _groupBy(entries, _classSexLabelFromEntry);
+  void _openClassList(
+    String title,
+    List<Map<String, dynamic>> entries, [
+    _QrAwardLevel? level,
+  ]) {
+    final entryIds = entries.map((entry) => entry['entry_id']).toSet();
 
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => _buildList(
-          title: title,
-          grouped: grouped,
-          judgeLabel: 'Judge for this class',
-          onTap: (label, rows) {
-            _openClass(
-              label: label,
-              entries: rows,
-              showsByGroup: widget.showsByGroup,
-              showsByVariety: widget.showsByVariety,
+        builder: (_) => StatefulBuilder(
+          builder: (context, setListState) {
+            final currentEntries = _entries
+                .where((entry) => entryIds.contains(entry['entry_id']))
+                .toList();
+            return _buildList(
+              title: title,
+              grouped: _groupBy(currentEntries, _classSexLabelFromEntry),
+              judgeLabel: 'Judge for this class',
+              footer: level == null
+                  ? null
+                  : _classAwardsLink(context, level, title, currentEntries),
+              onTap: (label, rows) async {
+                await _openClass(
+                  label: label,
+                  entries: rows,
+                  showsByGroup: widget.showsByGroup,
+                  showsByVariety: widget.showsByVariety,
+                );
+                if (context.mounted) setListState(() {});
+              },
             );
           },
         ),
@@ -1147,6 +1256,10 @@ class _QrBreedDrilldownScreenState extends State<_QrBreedDrilldownScreen> {
       ),
     );
 
+    if (mounted) await _refreshResults();
+  }
+
+  Future<void> _refreshResults() async {
     try {
       final refreshedEntries = await widget.onReloadEntries();
 
@@ -1158,7 +1271,7 @@ class _QrBreedDrilldownScreenState extends State<_QrBreedDrilldownScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _msg = 'Results were saved, but the status could not be refreshed: $e';
+        _msg = 'Could not refresh results: $e';
       });
     }
   }
@@ -1255,19 +1368,40 @@ class _QrBreedDrilldownScreenState extends State<_QrBreedDrilldownScreen> {
                 child: Icon(_statusIcon(_entries), color: breedStatusColor),
               ),
               title: Text(
-                widget.breed,
+                'Class placements',
                 style: const TextStyle(fontWeight: FontWeight.w800),
               ),
               subtitle: Padding(
                 padding: const EdgeInsets.only(top: 6),
-                child: Text(
-                  '$completedCount/${_entries.length} entered • ${_statusLabel(_entries)}\nTap to choose group, variety, or class.',
-                ),
+                child: Text('Record placements and outcomes by class.'),
               ),
               trailing: const Icon(Icons.chevron_right),
               onTap: () => _openNextLevel(_entries),
             ),
           ),
+          const SizedBox(height: 12),
+          _awardLink(
+            context,
+            title: 'Breed Award',
+            subtitle: 'Best of Breed and Best Opposite Sex',
+            onTap: () => _openAwards(_QrAwardLevel.breed),
+          ),
+          for (final level in [_QrAwardLevel.breedAge, _QrAwardLevel.finals])
+            if (_entries.any(
+              (entry) => _eligibleQrAwardCodes(
+                entry,
+                level,
+                widget.breedClassSystems,
+                widget.finalAwardMode,
+              ).isNotEmpty,
+            )) ...[
+              const SizedBox(height: 12),
+              _awardLink(
+                context,
+                title: level.title,
+                onTap: () => _openAwards(level),
+              ),
+            ],
         ],
       ),
     );
@@ -1283,6 +1417,353 @@ class _QrBreedDrilldownScreenState extends State<_QrBreedDrilldownScreen> {
       child: Text(
         text,
         style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+      ),
+    );
+  }
+}
+
+class _QrAwardsScreen extends StatefulWidget {
+  const _QrAwardsScreen({
+    required this.showId,
+    required this.sectionLabel,
+    required this.breed,
+    required this.level,
+    this.scopeLabel,
+    this.scopeKeys,
+    required this.judges,
+    required this.breedClassSystems,
+    required this.finalAwardMode,
+    required this.writerName,
+    required this.writerPhone,
+    required this.loadEntries,
+    required this.classLabel,
+  });
+
+  final String showId;
+  final String sectionLabel;
+  final String breed;
+  final _QrAwardLevel level;
+  final String? scopeLabel;
+  final Set<String>? scopeKeys;
+  final List<Map<String, dynamic>> judges;
+  final Map<String, String> breedClassSystems;
+  final String finalAwardMode;
+  final String writerName;
+  final String writerPhone;
+  final Future<List<Map<String, dynamic>>> Function() loadEntries;
+  final String Function(Map<String, dynamic>) classLabel;
+
+  @override
+  State<_QrAwardsScreen> createState() => _QrAwardsScreenState();
+}
+
+enum _QrAwardLevel {
+  variety('Class awards'),
+  group('Class awards'),
+  breedAge('Breed age awards'),
+  breed('Breed Award'),
+  finals('Final awards');
+
+  const _QrAwardLevel(this.title);
+  final String title;
+
+  String scopeKey(ResultsRules rules, Map<String, dynamic> entry) =>
+      switch (this) {
+        variety => rules.varietyIdentity(entry).stableKey,
+        group => rules.groupIdentity(entry).stableKey,
+        _ => '',
+      };
+}
+
+Set<String> _qrAwardCodes(
+  Map<String, dynamic> entry,
+  _QrAwardLevel level,
+  Map<String, String> breedClassSystems,
+  String finalAwardMode,
+) {
+  if (entry['is_fur'] == true) return {};
+  try {
+    final rules = rulesForEntry(entry);
+    final options = rules.normalizeStoredAwards([
+      ...rules.buildAwardOptions(
+        entry: entry,
+        classSystem: _qrClassSystem(entry, breedClassSystems),
+        finalAwardMode: finalAwardMode,
+      ),
+      ...(entry['_awards'] as List),
+    ]);
+    return options.where((award) {
+      final awardLevel = switch (award) {
+        'BOV' || 'BOSV' || 'BJV' || 'BIV' || 'BSV' => _QrAwardLevel.variety,
+        'BOG' || 'BOSG' => _QrAwardLevel.group,
+        'BOB' || 'BOSB' => _QrAwardLevel.breed,
+        'BJB' || 'BIB' || 'BSB' => _QrAwardLevel.breedAge,
+        'Best Junior' || 'Best Intermediate' || 'Best Senior' =>
+          rules.usesVarietyLayer(entry)
+              ? _QrAwardLevel.variety
+              : _QrAwardLevel.breedAge,
+        _ => _QrAwardLevel.finals,
+      };
+      return awardLevel == level;
+    }).toSet();
+  } on UnsupportedResultsSpecies {
+    return {};
+  }
+}
+
+String _qrClassSystem(
+  Map<String, dynamic> entry,
+  Map<String, String> breedClassSystems,
+) =>
+    breedClassSystems[(entry['breed'] ?? '').toString().trim().toLowerCase()] ??
+    'four';
+
+Set<String> _eligibleQrAwardCodes(
+  Map<String, dynamic> entry,
+  _QrAwardLevel level,
+  Map<String, String> breedClassSystems,
+  String finalAwardMode,
+) {
+  if (entry['is_shown'] == false ||
+      entry['is_disqualified'] == true ||
+      (entry['scratched_at'] ?? '').toString().trim().isNotEmpty ||
+      entry['placement']?.toString().trim() != '1') {
+    return {};
+  }
+  final codes = _qrAwardCodes(entry, level, breedClassSystems, finalAwardMode);
+  if (codes.isEmpty) return codes;
+  final rules = rulesForEntry(entry);
+  final stored = rules.normalizeStoredAwards(entry['_awards'] as List);
+  final status = (entry['result_status'] ?? '').toString().trim();
+  return codes
+      .where(
+        (award) =>
+            stored.contains(award) ||
+            rules.canUseAward(
+              entry: entry,
+              award: award,
+              selectedAwards: stored,
+              effectiveStatus: status.isEmpty ? 'Shown' : status,
+              effectivePlacement: '1',
+              classSystem: _qrClassSystem(entry, breedClassSystems),
+              finalAwardMode: finalAwardMode,
+            ),
+      )
+      .toSet();
+}
+
+class _QrAwardsScreenState extends State<_QrAwardsScreen> {
+  late var _entries = widget.loadEntries();
+
+  Set<String> _candidateCodes(
+    Map<String, dynamic> entry,
+    Map<String, Map<String, dynamic>> breedWinners,
+  ) {
+    final codes = _eligibleQrAwardCodes(
+      entry,
+      widget.level,
+      widget.breedClassSystems,
+      widget.finalAwardMode,
+    );
+    if (codes.isEmpty) return codes;
+    final rules = rulesForEntry(entry);
+    final keys = widget.scopeKeys;
+    if (keys != null && !keys.contains(widget.level.scopeKey(rules, entry))) {
+      return {};
+    }
+    if (widget.level != _QrAwardLevel.breed) {
+      return _qrAwardCodes(
+        entry,
+        widget.level,
+        widget.breedClassSystems,
+        widget.finalAwardMode,
+      );
+    }
+
+    final stored = rules.normalizeStoredAwards(entry['_awards'] as List);
+    final sex = normalizeResultsRuleKey(entry['sex']);
+    return codes.where((award) {
+      if (stored.contains(award)) return true;
+      if (breedWinners.containsKey(award)) return false;
+      final other = breedWinners[award == 'BOB' ? 'BOSB' : 'BOB'];
+      final otherSex = normalizeResultsRuleKey(other?['sex']);
+      return sex.isEmpty || otherSex.isEmpty || sex != otherSex;
+    }).toSet();
+  }
+
+  Map<String, Map<String, dynamic>> _breedWinners(
+    List<Map<String, dynamic>> entries,
+  ) {
+    final winners = <String, Map<String, dynamic>>{};
+    if (widget.level != _QrAwardLevel.breed) return winners;
+    for (final entry in entries) {
+      final stored = (entry['_awards'] as List).map(canonicalResultsAwardCode);
+      for (final award in stored.where(const {'BOB', 'BOSB'}.contains)) {
+        winners[award] = entry;
+      }
+    }
+    return winners;
+  }
+
+  Future<void> _editAwards(
+    Map<String, dynamic> entry,
+    List<Map<String, dynamic>> breedEntries,
+    Set<String> awardCodes,
+    String? priorAwardsLabel,
+  ) async {
+    final saved = await showModalBottomSheet<ResultsEntryOutcome>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (context) => AppTheme.surfaceTextScope(
+        context,
+        child: ResultsEntrySheet.qrAwards(
+          showId: widget.showId,
+          entry: entry,
+          breedEntries: breedEntries,
+          judges: widget.judges,
+          breedClassSystems: widget.breedClassSystems,
+          finalAwardMode: widget.finalAwardMode,
+          writerName: widget.writerName,
+          writerPhone: widget.writerPhone,
+          awardCodes: awardCodes,
+          priorAwardsLabel: priorAwardsLabel,
+        ),
+      ),
+    );
+    if (mounted && saved != null) {
+      setState(() {});
+    }
+  }
+
+  String _classDescription(Map<String, dynamic> entry) => [
+    if ((entry['group_name'] ?? '').toString().isNotEmpty) entry['group_name'],
+    if ((entry['variety'] ?? '').toString().isNotEmpty) entry['variety'],
+    widget.classLabel(entry),
+  ].join(' • ');
+
+  Widget _candidateTile(
+    Map<String, dynamic> entry,
+    List<Map<String, dynamic>> breedEntries,
+    Set<String> codes,
+  ) {
+    final coop = (entry['coop_number'] ?? '').toString().trim();
+    final ear = (entry['tattoo'] ?? '').toString().trim();
+    final name = (entry['animal_name'] ?? '').toString().trim();
+    final entryId = (entry['entry_id'] ?? entry['id'] ?? '').toString();
+    final rules = rulesForEntry(entry);
+    final stored = rules.normalizeStoredAwards(entry['_awards'] as List);
+    final awards = stored.intersection(codes);
+    final priorAwardCodes = switch (widget.level) {
+      _QrAwardLevel.group => const {'BOV', 'BOSV'},
+      _QrAwardLevel.breed => {
+        ...rules.sourceAwardsForBreedAward(entry, 'BOB'),
+        ...rules.sourceAwardsForBreedAward(entry, 'BOSB'),
+      },
+      _ => const <String>{},
+    };
+    final priorAwards = priorAwardCodes.intersection(stored);
+    final priorAwardsLabel = priorAwards.isEmpty
+        ? null
+        : 'Already awarded: ${priorAwards.join(', ')}';
+    return AppTheme.surfaceTextScope(
+      context,
+      child: Card(
+        color: AppColors.surface,
+        child: ListTile(
+          title: Text(
+            [
+              if (coop.isNotEmpty) 'Coop #$coop',
+              if (ear.isNotEmpty) 'Ear #$ear',
+              if (coop.isEmpty && ear.isEmpty)
+                name.isNotEmpty ? name : 'Entry ${entryId.split('-').first}',
+            ].join(' • '),
+          ),
+          subtitle: Text(
+            [
+              _classDescription(entry),
+              if (priorAwardsLabel != null) priorAwardsLabel,
+              if (awards.isNotEmpty) awards.map(rules.awardLabel).join(', '),
+            ].join('\n'),
+          ),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () =>
+              _editAwards(entry, breedEntries, codes, priorAwardsLabel),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.bg,
+      appBar: AppBar(
+        backgroundColor: AppColors.header,
+        foregroundColor: AppColors.headerText,
+        title: Text(widget.level.title),
+      ),
+      body: AppTheme.gradientTextScope(
+        context,
+        child: FutureBuilder(
+          future: _entries,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState != ConnectionState.done) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            if (snapshot.hasError) {
+              return Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: FilledButton(
+                    onPressed: () =>
+                        setState(() => _entries = widget.loadEntries()),
+                    child: const Text('Couldn’t load entries. Try again'),
+                  ),
+                ),
+              );
+            }
+            final breedEntries = snapshot.data!;
+            final breedWinners = _breedWinners(breedEntries);
+            final candidates = [
+              for (final entry in breedEntries)
+                (entry: entry, codes: _candidateCodes(entry, breedWinners)),
+            ]..removeWhere((candidate) => candidate.codes.isEmpty);
+            candidates.sort(
+              (a, b) => _classDescription(a.entry).toLowerCase().compareTo(
+                _classDescription(b.entry).toLowerCase(),
+              ),
+            );
+            return ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: candidates.length + 1,
+              itemBuilder: (context, index) {
+                if (index == 0) {
+                  final scope = [
+                    widget.sectionLabel,
+                    widget.breed,
+                    if (widget.scopeLabel != null) widget.scopeLabel!,
+                  ].join(' • ');
+                  final emptyMessage = widget.level == _QrAwardLevel.breed
+                      ? 'No eligible animals for Best of Breed or Best Opposite Sex yet.'
+                      : 'No eligible animals for these awards yet.';
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Text(
+                      candidates.isEmpty ? '$scope\n$emptyMessage' : scope,
+                    ),
+                  );
+                }
+                final candidate = candidates[index - 1];
+                return _candidateTile(
+                  candidate.entry,
+                  breedEntries,
+                  candidate.codes,
+                );
+              },
+            );
+          },
+        ),
       ),
     );
   }

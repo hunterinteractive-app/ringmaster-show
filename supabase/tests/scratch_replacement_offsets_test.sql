@@ -1,0 +1,111 @@
+begin;
+set local search_path=public,extensions;
+select no_plan();
+select set_config('request.jwt.claims','{"sub":"00000000-0000-4000-8000-000000000001","role":"authenticated"}',true);
+create temporary table ids(k text primary key,id uuid default gen_random_uuid());
+insert into ids(k) values('show'),('A'),('B'),('person'),('other'),('cart'),('balance'),('oldA'),('oldB'),('newA'),('newB'),('extra'),('itemA'),('itemB');
+create function pg_temp.id(text) returns uuid language sql as $$select id from ids where k=$1$$;
+create function pg_temp.balance() returns jsonb language sql as $$select to_jsonb(b) from show_exhibitor_balances b where source='entries' and exhibitor_id=pg_temp.id('person')$$;
+create function pg_temp.due() returns integer language sql as $$select (pg_temp.balance()->>'balance_due_cents')::int$$;
+create function pg_temp.offset_cents() returns integer language sql as $$select (pg_temp.balance()->'fee_snapshot'->>'replacement_credit_cents')::int$$;
+update show_finances_private.replacement_policy set enabled_at=now()-interval '1 day';
+insert into shows(id,name,entry_close_at) values(pg_temp.id('show'),'Replacement fixture',now()-interval '2 days');
+insert into exhibitors(id,display_name) select id,k from ids where k in ('person','other');
+insert into show_sections(id,show_id,kind,letter,is_enabled,sort_order) select id,pg_temp.id('show'),'open',k,true,1 from ids where k in ('A','B');
+insert into show_fee_settings(show_id,currency) values(pg_temp.id('show'),'usd');
+insert into show_section_fee_settings(section_id,fee_per_entry,fur_fee,fee_per_show) select id,5,1,0 from ids where k in ('A','B');
+insert into entry_carts(id,show_id,status) values(pg_temp.id('cart'),pg_temp.id('show'),'submitted');
+insert into entry_cart_items(id,cart_id,section_id,exhibitor_id,is_fur) select pg_temp.id('item'||k),pg_temp.id('cart'),id,pg_temp.id('person'),false from ids where k in ('A','B');
+insert into show_exhibitor_balances(id,show_id,exhibitor_id,entry_cart_id,source,currency,entry_count,fur_count,
+ entries_subtotal_cents,fur_subtotal_cents,show_fee_subtotal_cents,subtotal_before_discount_cents,discount_cents,calculated_total_cents,
+ paid_online_cents,paid_manual_cents,refunded_cents,addons_subtotal_cents,balance_due_cents,section_breakdown)
+select pg_temp.id('balance'),pg_temp.id('show'),pg_temp.id('person'),pg_temp.id('cart'),'cart','usd',2,0,1000,0,0,1000,0,1000,1000,0,0,0,0,
+ jsonb_agg(jsonb_build_object('section_id',id,'entry_count',1,'fur_count',0,'entries_subtotal_cents',500,'fur_subtotal_cents',0,'show_fee_cents',0)) from ids where k in ('A','B');
+insert into show_payments(id,show_id,exhibitor_id,balance_id,cart_id,provider,payment_method,payment_type,status,amount_cents,total_cents,refunded_cents)
+ values(gen_random_uuid(),pg_temp.id('show'),pg_temp.id('person'),pg_temp.id('balance'),pg_temp.id('cart'),'stripe','stripe','entry','paid',1000,1000,0);
+create temporary table original_receipts as select to_jsonb(p) data from show_payments p;
+insert into entries(id,show_id,section_id,exhibitor_id,source_cart_id,source_cart_item_id,is_fur,status,species,tattoo,created_at)
+ select pg_temp.id('old'||k),pg_temp.id('show'),id,pg_temp.id('person'),pg_temp.id('cart'),pg_temp.id('item'||k),false,'entered','rabbit','OLD',now()-interval '3 days' from ids where k in ('A','B');
+select is(pg_temp.due(),0,'original entries are paid');
+update entries set scratched_at=now(),status='scratched' where id=pg_temp.id('oldA');
+select is(pg_temp.offset_cents(),0,'scratch alone is not a refund or a credit');
+insert into entries(id,show_id,section_id,exhibitor_id,is_fur,status,species,tattoo,created_at)
+ select pg_temp.id('new'||k),pg_temp.id('show'),id,pg_temp.id('person'),false,'entered','rabbit','NEW',now() from ids where k in ('A','B');
+select is(pg_temp.offset_cents(),500,'scratch then add offsets one section automatically');
+select is(pg_temp.due(),500,'other section still has two active paid/added entries');
+update entries set scratched_at=now()+interval '1 minute',status='scratched' where id=pg_temp.id('oldB');
+select is(pg_temp.due(),0,'add then scratch also clears both $5 replacements after close');
+select is(pg_temp.offset_cents(),1000,'exact $10 replacement offset');
+select is((pg_temp.balance()->>'paid_online_cents')::integer,1000,'offset does not fabricate a receipt');
+select ok(exists(select 1 from show_finances_private.events where details->>'replacement_credit_cents'='1000' and reason like 'Automatic scratch%'),'replacement links and reason recorded in audit history');
+select is(jsonb_array_length(pg_temp.balance()->'fee_snapshot'->'replacement_offsets'),2,'source and target entry IDs retained');
+select manual_entry_balances_private.refresh(pg_temp.id('show'),pg_temp.id('person'));
+select is(pg_temp.offset_cents(),1000,'refresh does not duplicate offsets');
+select is((select (r->>'balance_due_cents')::integer from report_show_exhibitor_balances_scoped(pg_temp.id('show'),array[pg_temp.id('A'),pg_temp.id('B')],false) r where r->>'exhibitor_id'=pg_temp.id('person')::text),0,'unpaid report agrees with finance balance');
+insert into entries(id,show_id,section_id,exhibitor_id,is_fur,status,species,created_at)
+ values(pg_temp.id('extra'),pg_temp.id('show'),pg_temp.id('A'),pg_temp.id('person'),false,'entered','rabbit',now()+interval '1 minute');
+select is(pg_temp.due(),500,'one scratch cannot cover two active additions');
+delete from entries where id=pg_temp.id('extra');
+update entries set scratched_at=null,status='entered' where id=pg_temp.id('oldA');
+select is(pg_temp.due(),500,'unscratching restores the charge when both animals are entered');
+update entries set scratched_at=now(),status='scratched' where id=pg_temp.id('oldA');
+select is(pg_temp.due(),0,'rescratch reapplies only the original offset');
+update entries set scratched_at=now(),status='scratched' where id=pg_temp.id('newA');
+select is(pg_temp.offset_cents(),500,'scratching replacement removes its derived offset');
+select is(pg_temp.due(),0,'scratching replacement does not create a negative balance');
+update entries set scratched_at=null,status='entered',species='cavy' where id=pg_temp.id('newA');
+select is(pg_temp.offset_cents(),500,'species cannot share a replacement credit');
+update entries set species='rabbit',is_fur=true where id=pg_temp.id('newA');
+select is(pg_temp.offset_cents(),500,'fur cannot consume a class entry payment');
+update entries set is_fur=false,is_commercial=true where id=pg_temp.id('newA');
+select is(pg_temp.offset_cents(),500,'commercial entries excluded from ordinary replacements');
+update entries set is_commercial=false,is_test=true where id=pg_temp.id('newA');
+select is(pg_temp.offset_cents(),500,'test entry excluded');
+update entries set is_test=false,created_at=now()-interval '2 days' where id=pg_temp.id('newA');
+select is(pg_temp.offset_cents(),500,'historical additions are not retroactively credited');
+update entries set created_at=now()-interval '20 minutes' where id=pg_temp.id('newA');
+select is(pg_temp.offset_cents(),500,'unrelated earlier addition outside editing window excluded');
+update entries set created_at=now(),exhibitor_id=pg_temp.id('other') where id=pg_temp.id('newA');
+select is(pg_temp.offset_cents(),500,'replacement cannot cross exhibitors');
+update entries set exhibitor_id=pg_temp.id('person'),section_id=pg_temp.id('B') where id=pg_temp.id('newA');
+select is(pg_temp.offset_cents(),500,'replacement cannot cross sections');
+update entries set section_id=pg_temp.id('A') where id=pg_temp.id('newA');
+select is(pg_temp.due(),0,'restoring eligible replacement restores correct balance');
+-- Allocate fractional discounts exactly across entries, without losing pennies.
+update show_exhibitor_balances set discount_cents=1,calculated_total_cents=999,paid_online_cents=999 where id=pg_temp.id('balance');
+select is(pg_temp.offset_cents(),999,'one-cent original discount is allocated exactly');
+select is(pg_temp.due(),1,'only the one-cent price difference remains');
+update show_exhibitor_balances set discount_cents=0,calculated_total_cents=1000,paid_online_cents=1000 where id=pg_temp.id('balance');
+insert into entry_discount_private.codes(id,discount_type,value,basis,enabled) values(pg_temp.id('extra'),'amount',0.01,'overall',true);
+insert into entry_discount_private.accepted_codes(code_id,show_id,exhibitor_id) values(pg_temp.id('extra'),pg_temp.id('show'),pg_temp.id('person'));
+select manual_entry_balances_private.refresh(pg_temp.id('show'),pg_temp.id('person'));
+select is(pg_temp.offset_cents(),999,'replacement discount is not credited a second time');
+select is(pg_temp.due(),0,'replacement discount cent rounding balances exactly');
+delete from entry_discount_private.accepted_codes where code_id=pg_temp.id('extra');
+select manual_entry_balances_private.refresh(pg_temp.id('show'),pg_temp.id('person'));
+update entries set scratched_at=now()-interval '2 days' where id=pg_temp.id('oldA');
+select is(pg_temp.offset_cents(),500,'pre-rollout scratches do not receive new automatic credits');
+update entries set scratched_at=now() where id=pg_temp.id('oldA');
+-- Frozen discounted original price limits the offset, regardless of current price.
+update show_exhibitor_balances set discount_cents=200,calculated_total_cents=800,paid_online_cents=800 where id=pg_temp.id('balance');
+select is(pg_temp.offset_cents(),800,'frozen original discount caps replacement credit');
+select is(pg_temp.due(),200,'only the higher replacement price is owed');
+update show_section_fee_settings set fee_per_entry=3 where section_id in (pg_temp.id('A'),pg_temp.id('B'));
+select manual_entry_balances_private.refresh(pg_temp.id('show'),pg_temp.id('person'));
+select is(pg_temp.offset_cents(),600,'lower-priced replacement cannot create excess credit');
+select is(pg_temp.due(),0,'lower-priced replacement has no extra fee');
+update show_section_fee_settings set fee_per_entry=5 where section_id in (pg_temp.id('A'),pg_temp.id('B'));
+update show_exhibitor_balances set paid_online_cents=500 where id=pg_temp.id('balance');
+select is(pg_temp.offset_cents(),0,'partial original payment requires review');
+update show_exhibitor_balances set paid_online_cents=800,refunded_cents=100 where id=pg_temp.id('balance');
+select is(pg_temp.offset_cents(),0,'refunded checkout cannot fund replacement');
+update show_exhibitor_balances set refunded_cents=0,fee_snapshot=jsonb_build_object('entry_refund_credit_cents',100) where id=pg_temp.id('balance');
+select is(pg_temp.offset_cents(),0,'refund-credit intermediate state cannot fund replacement');
+update show_exhibitor_balances set fee_snapshot='{}',discount_cents=0,calculated_total_cents=1000,paid_online_cents=1000 where id=pg_temp.id('balance');
+select is(pg_temp.due(),0,'eligible unrefunded original remains stable');
+select throws_ok(format('select credit_show_finance_balance(%L,%L,1000,%L,gen_random_uuid())',pg_temp.id('show'),pg_temp.id('person'),'Duplicate replacement credit'),'22023',null,'manual credit cannot duplicate automatic replacement credit');
+select is((select jsonb_agg(to_jsonb(p) order by id) from show_payments p),(select jsonb_agg(data order by data->>'id') from original_receipts),'original receipts remain byte-for-byte unchanged');
+select ok(not has_function_privilege('authenticated','show_finances_private.replacement_offsets(uuid,uuid,integer,integer)','EXECUTE'),'private calculator is not a client RPC');
+select ok(not has_table_privilege('authenticated','show_finances_private.replacement_policy','UPDATE'),'clients cannot change rollout boundary');
+select * from finish();
+rollback;

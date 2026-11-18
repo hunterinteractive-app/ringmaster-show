@@ -70,6 +70,37 @@ A database guard prevents clearing or replacing existing checkout links. The
 remove confirmation directs staff to Move when retaining an entry's payment.
 Do not run a blanket historical balance backfill: ambiguous transfers need review.
 
+## Automatic scratch/replacement offsets
+
+Migration `20261118030022_automatic_scratch_replacement_offsets.sql` automatically
+offsets a staff-added replacement against a fully paid, unrefunded checkout entry
+that was scratched. Matching stays within the same exhibitor, show section,
+species, and class/fur entry type. Each original covers at most one active
+replacement. It uses the lesser of the original discounted charge and the new
+discounted charge; original payment receipts and checkout links are retained.
+
+The migration records its activation time. Both the scratch and replacement
+addition must be after activation. A replacement can be added after the scratch,
+or up to 15 minutes before it to support add-then-scratch editing. Entry closing
+does not prevent staff replacements. These offsets do not retroactively alter
+historical balances or duplicate Trisha's separately authorized $10 credit.
+
+Unscratching the original restores the charge while both animals are active.
+Scratching/removing the replacement removes its offset. Pair IDs, amounts, and
+changes appear in the private financial audit. Refunded, partially paid,
+reassigned, malformed, test, and commercial originals are excluded; new online
+cart checkouts are not covered by this staff/manual-addition patch. A scratch by
+itself does not issue a refund or create spendable credit.
+
+Local verification on November 17: 170 checks passed (29 legacy, 69 finance,
+25 summary, 42 replacement, and five concurrent-write scenarios). This includes
+discount cent rounding, closed-show replacement editing, report agreement,
+payment preservation, duplicate-credit rejection, and simultaneous additions
+competing for one scratch. The fixture uses the production rabbit/cavy enum.
+Tests run in a disposable local database. Applied to production November 17, 2026
+at 10:00:22 PM Eastern (November 18 at 03:00:22 UTC). Before/after production
+balance totals were unchanged. The calculator is inaccessible to client roles.
+
 Post-deployment advisors: added exhibitor foreign-key indexes. Private tables
 intentionally have no client RLS policies or grants. Public finance RPCs use
 explicit show authorization before accessing the private ledger.

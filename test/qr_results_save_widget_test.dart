@@ -13,6 +13,7 @@ void main() {
   final saves = <Map<String, dynamic>>[];
   var expired = false;
   var furChecks = 0;
+  var sessionCalls = 0;
   setUpAll(() async {
     SharedPreferences.setMockInitialValues({});
     await Supabase.initialize(
@@ -44,6 +45,10 @@ void main() {
               {'id': 'entry', 'placement': 1, 'result_status': 'Shown'},
             ];
           }
+        } else if (path == 'record_judging_session_entry') {
+          sessionCalls++;
+          status = 403;
+          response = {'code': '42501', 'message': 'Permission denied'};
         } else if (path == 'get_qr_fur_eligibility') {
           furChecks++;
           expect(jsonDecode(request.body)['p_entry_id'], 'entry');
@@ -67,6 +72,7 @@ void main() {
     expired = false;
     saves.clear();
     furChecks = 0;
+    sessionCalls = 0;
   });
 
   Future<void> openSheet(
@@ -74,6 +80,8 @@ void main() {
     bool fur = false,
     bool cod = false,
     bool group = false,
+    bool placements = false,
+    bool assignedJudge = false,
   }) async {
     tester.view.physicalSize = const Size(430, 1000);
     tester.view.devicePixelRatio = 1;
@@ -95,6 +103,7 @@ void main() {
       'is_shown': true,
       'is_fur': fur,
       'tattoo': '67',
+      if (assignedJudge) 'judged_by_show_judge_id': 'judge',
       '_awards': <String>[if (cod) 'BOV'],
     };
     await tester.pumpWidget(
@@ -108,24 +117,44 @@ void main() {
                   onPressed: () => showModalBottomSheet<void>(
                     context: context,
                     isScrollControlled: true,
-                    builder: (context) => ResultsEntrySheet(
-                      showId: 'show',
-                      entry: entry,
-                      classEntries: [entry],
-                      judges: const [],
-                      availablePlacements: const ['1'],
-                      shownCount: 1,
-                      currentIndex: 0,
-                      totalCount: 1,
-                      breedClassSystems: const {'standard chinchilla': 'four'},
-                      finalAwardMode: 'bis_ris',
-                      showsByGroup: group,
-                      showsByVariety: cod,
-                      isFurOrWoolClass: fur,
-                      writerName: 'Test Writer',
-                      writerPhone: '3175550100',
-                      isQrEntryMode: true,
-                    ),
+                    builder: (context) => fur || placements
+                        ? ResultsEntrySheet(
+                            showId: 'show',
+                            entry: entry,
+                            classEntries: [entry],
+                            judges: [
+                              if (assignedJudge)
+                                {'id': 'judge', 'name': 'Synthetic Judge'},
+                            ],
+                            availablePlacements: const ['1'],
+                            shownCount: 1,
+                            currentIndex: 0,
+                            totalCount: 1,
+                            breedClassSystems: const {
+                              'standard chinchilla': 'four',
+                            },
+                            finalAwardMode: 'bis_ris',
+                            showsByGroup: group,
+                            showsByVariety: cod,
+                            isFurOrWoolClass: fur,
+                            writerName: 'Test Writer',
+                            writerPhone: '3175550100',
+                            isQrEntryMode: true,
+                            placementsOnly: true,
+                          )
+                        : ResultsEntrySheet.qrAwards(
+                            showId: 'show',
+                            entry: entry,
+                            breedEntries: [entry],
+                            judges: const [],
+                            breedClassSystems: const {
+                              'standard chinchilla': 'four',
+                            },
+                            finalAwardMode: 'bis_ris',
+                            writerName: 'Test Writer',
+                            writerPhone: '3175550100',
+                            awardCodes: const {'BOB', 'BOSB'},
+                          ),
                   ),
                   child: const Text('Open'),
                 ),
@@ -220,7 +249,7 @@ void main() {
           await tester.pumpAndSettle();
           expect(
             saves.last['p_awards'],
-            contains(award == 'Best of Breed' ? 'BOB' : 'BOSB'),
+            containsAll(['BOV', award == 'Best of Breed' ? 'BOB' : 'BOSB']),
           );
           expect(find.byType(ResultsEntrySheet), findsNothing);
           expect(tester.takeException(), isNull);
@@ -232,7 +261,7 @@ void main() {
   testWidgets(
     'DQ - Weight saves a disqualification without placement or awards',
     (tester) async {
-      await openSheet(tester);
+      await openSheet(tester, placements: true, assignedJudge: true);
       await tester.tap(find.byType(DropdownButtonFormField<String>).at(1));
       await tester.pumpAndSettle();
       await tester.ensureVisible(find.text('DQ - Weight').last);
@@ -262,6 +291,8 @@ void main() {
     expect(saves.last['p_is_qr_entry_mode'], true);
     expect(saves.last['p_result_entered_by_name'], 'Test Writer');
     expect(saves.last['p_result_entered_by_phone'], '3175550100');
+    expect(saves.last['p_placement'], '1');
+    expect(saves.last['p_result_status'], 'Shown');
     expect(saves.last['p_awards'], contains('BOB'));
     expect(find.byType(ResultsEntrySheet), findsNothing);
     expect(tester.takeException(), isNull);
@@ -288,13 +319,31 @@ void main() {
   testWidgets('fur QR uses public eligibility check and separate result save', (
     tester,
   ) async {
-    await openSheet(tester, fur: true);
+    await openSheet(tester, fur: true, assignedJudge: true);
     expect(furChecks, 1);
     await tester.ensureVisible(find.text('Save'));
     await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();
     expect(saves.last['p_is_qr_entry_mode'], true);
+    expect(saves.last['p_judged_by_show_judge_id'], 'judge');
     expect(saves.last['p_awards'], isEmpty);
+    expect(sessionCalls, 0);
+    expect(find.byType(ResultsEntrySheet), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('guest Save & Next saves the judge and preserves awards', (
+    tester,
+  ) async {
+    await openSheet(tester, cod: true, placements: true, assignedJudge: true);
+    expect(find.byType(CheckboxListTile), findsNothing);
+    await tester.ensureVisible(find.text('Save & Next'));
+    await tester.tap(find.text('Save & Next'));
+    await tester.pumpAndSettle();
+    expect(saves.single['p_placement'], '1');
+    expect(saves.single['p_judged_by_show_judge_id'], 'judge');
+    expect(saves.single['p_awards'], ['BOV']);
+    expect(sessionCalls, 0);
     expect(find.byType(ResultsEntrySheet), findsNothing);
     expect(tester.takeException(), isNull);
   });

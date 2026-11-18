@@ -8,9 +8,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ringmaster_show/screens/admin/judging/mobile/qr_results_entry_screen.dart';
 import 'package:ringmaster_show/screens/admin/results/admin_results_entry_screen.dart';
+import 'package:ringmaster_show/theme/app_theme.dart';
 
 void main() {
   var locked = false;
+  var groupedRabbit = false;
   final projection = [
     for (var i = 1; i <= 3; i++)
       <String, dynamic>{
@@ -31,6 +33,7 @@ void main() {
         'exhibitor_id': 'exhibitor',
         'is_shown': true,
         'result_status': 'Shown',
+        if (i != 2) 'placement': '1',
       },
   ];
   setUpAll(() async {
@@ -65,7 +68,29 @@ void main() {
           final params = jsonDecode(request.body) as Map;
           expect(params['p_section_id'], 'open');
           expect(params['p_breed'], 'American');
-          response = params['p_after_entry_id'] == null ? projection : [];
+          response = params['p_after_entry_id'] != null
+              ? []
+              : groupedRabbit
+              ? [
+                  for (final (index, group, variety, awards) in [
+                    (0, 'Dark', 'Black', ['BOV', 'BOG']),
+                    (2, 'Dark', 'Black', ['BOSV', 'BOSG']),
+                    (0, 'Light', 'Blue', ['BOV']),
+                  ])
+                    {
+                      ...projection[index],
+                      if (group == 'Light') ...{
+                        'entry_id': 'entry-other-group',
+                        'tattoo': 'OTHER',
+                      },
+                      '_awards': awards,
+                      'species': 'rabbit',
+                      'uses_group_awards': true,
+                      'group_name': group,
+                      'variety': variety,
+                    },
+                ]
+              : projection;
         } else {
           fail('QR must not query staff reports or private tables: $path');
         }
@@ -88,8 +113,9 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
       await tester.pumpWidget(
-        const MaterialApp(
-          home: QrResultsEntryScreen(
+        MaterialApp(
+          theme: AppTheme.lightTheme,
+          home: const QrResultsEntryScreen(
             showId: 'show',
             sectionId: 'open',
             breedId: 'American',
@@ -111,7 +137,7 @@ void main() {
       await tester.enterText(find.byType(TextFormField).at(1), '3175550100');
       await tester.tap(find.text('Continue to Results'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('American').last);
+      await tester.tap(find.text('Class placements'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Black').last);
       await tester.pumpAndSettle();
@@ -125,9 +151,162 @@ void main() {
       expect(screen.entries.map((e) => e['sex']), ['Boar', 'Boar']);
       expect(projection.first['sex'], 'Buck');
       expect(projection.last['sex'], 'Doe');
+      await tester.tap(find.textContaining('CAVY1').last);
+      await tester.pumpAndSettle();
+      expect(find.byType(ResultsEntrySheet), findsOneWidget);
+      expect(find.text('Placement'), findsOneWidget);
+      expect(find.byType(CheckboxListTile), findsNothing);
+
+      final navigator = tester.state<NavigatorState>(find.byType(Navigator));
+      projection[1]['placement'] = '2';
+      navigator.pop();
+      await tester.pumpAndSettle();
+      navigator.pop();
+      await tester.pumpAndSettle();
+      expect(find.textContaining('2/2 entered'), findsOneWidget);
+      projection.first['_awards'] = ['BOV'];
+      final classFooter = find.text('Class awards');
+      expect(
+        tester.getTopLeft(classFooter).dy,
+        greaterThan(tester.getBottomLeft(find.text('Senior Boar')).dy),
+      );
+      await tester.tap(classFooter);
+      await tester.pumpAndSettle();
+      expect(find.text('Ear #CAVY1'), findsOneWidget);
+      expect(find.text('Ear #CAVY2'), findsNothing);
+      expect(find.text('Ear #CAVY3'), findsOneWidget);
+      await tester.tap(find.text('Ear #CAVY1'));
+      await tester.pumpAndSettle();
+      expect(find.text('Record Awards'), findsOneWidget);
+      expect(find.text('Placement'), findsNothing);
+      expect(find.text('Save & Next'), findsNothing);
+      expect(find.byType(CheckboxListTile), findsWidgets);
+      expect(
+        find.widgetWithText(CheckboxListTile, 'Best of Breed'),
+        findsNothing,
+      );
+      navigator.pop();
+      await tester.pumpAndSettle();
+      navigator.pop();
+      await tester.pumpAndSettle();
+      navigator.pop();
+      await tester.pumpAndSettle();
+      navigator.pop();
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Breed Award'));
+      await tester.pumpAndSettle();
+      expect(find.text('Ear #CAVY3'), findsNothing);
+      expect(find.textContaining('Already awarded: BOV'), findsOneWidget);
+      await tester.tap(find.text('Ear #CAVY1'));
+      await tester.pumpAndSettle();
+      expect(
+        find.descendant(
+          of: find.byType(ResultsEntrySheet),
+          matching: find.text('Already awarded: BOV'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.widgetWithText(CheckboxListTile, 'Best of Breed'),
+        findsOneWidget,
+      );
+      expect(
+        find.widgetWithText(CheckboxListTile, 'Best of Variety'),
+        findsNothing,
+      );
+      tester.view.physicalSize = const Size(390, 844);
+      await tester.pumpAndSettle();
+      final awardsSheet = find.byType(ResultsEntrySheet);
+      final sheetTheme = Theme.of(tester.element(awardsSheet));
+      final foreground = sheetTheme.textTheme.bodyMedium!.color!;
+      final background = AppColors.surface;
+      final light = background.computeLuminance();
+      final dark = foreground.computeLuminance();
+      expect((light + .05) / (dark + .05), greaterThanOrEqualTo(4.5));
+      await tester.ensureVisible(find.text('Save'));
+      await tester.pumpAndSettle();
+      expect(tester.getRect(find.text('Save')).bottom, lessThanOrEqualTo(844));
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets('grouped rabbit award candidates show the preceding award', (
+    tester,
+  ) async {
+    groupedRabbit = true;
+    addTearDown(() => groupedRabbit = false);
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.lightTheme,
+        home: const QrResultsEntryScreen(
+          showId: 'show',
+          sectionId: 'open',
+          breedId: 'American',
+          token: '',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final writerForm = find.text('Continue to Results');
+    if (writerForm.evaluate().isNotEmpty) {
+      await tester.enterText(
+        find.byType(TextFormField).at(0),
+        'Synthetic Clerk',
+      );
+      await tester.enterText(find.byType(TextFormField).at(1), '3175550100');
+      await tester.tap(writerForm);
+      await tester.pumpAndSettle();
+    }
+    await tester.tap(find.text('Class placements'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Dark'));
+    await tester.pumpAndSettle();
+    final groupFooter = find.text('Class awards');
+    expect(
+      tester.getTopLeft(groupFooter).dy,
+      greaterThan(tester.getBottomLeft(find.text('Black')).dy),
+    );
+    await tester.tap(groupFooter);
+    await tester.pumpAndSettle();
+    Finder candidate(String ear) => find.widgetWithText(ListTile, 'Ear #$ear');
+    void expectPriorAward(String ear, String award) => expect(
+      find.descendant(
+        of: candidate(ear),
+        matching: find.textContaining('Already awarded: $award'),
+      ),
+      findsOneWidget,
+    );
+
+    expect(candidate('OTHER'), findsNothing);
+    expectPriorAward('CAVY1', 'BOV');
+    expectPriorAward('CAVY3', 'BOSV');
+    await tester.tap(find.text('Ear #CAVY1'));
+    await tester.pumpAndSettle();
+    expect(
+      find.widgetWithText(CheckboxListTile, 'Best of Rabbit Group'),
+      findsOneWidget,
+    );
+    expect(
+      find.widgetWithText(CheckboxListTile, 'Best of Variety'),
+      findsNothing,
+    );
+    final navigator = tester.state<NavigatorState>(find.byType(Navigator));
+    for (var i = 0; i < 4; i++) {
+      navigator.pop();
+      await tester.pumpAndSettle();
+    }
+    await tester.tap(find.text('Breed Award'));
+    await tester.pumpAndSettle();
+    expectPriorAward('CAVY1', 'BOG');
+    expectPriorAward('CAVY3', 'BOSG');
+    expect(candidate('OTHER'), findsNothing);
+    expect(find.textContaining('Already awarded: BOV'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('expired QR shows lock instead of writer form', (tester) async {
     locked = true;

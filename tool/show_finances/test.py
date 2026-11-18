@@ -16,6 +16,9 @@ try:
  alter table show_payments add primary key(id); alter table show_payments alter id set default gen_random_uuid();
  alter table show_payments alter created_at set default now();
  create function auth.uid() returns uuid language sql as $$select (auth.jwt()->>'sub')::uuid$$;
+ create type public.fixture_species as enum ('rabbit','cavy');
+ alter table entries alter species type public.fixture_species using species::public.fixture_species;
+ alter table entries add is_commercial boolean;
  alter table entry_cart_items add cart_id uuid, add exhibitor_id uuid, add is_fur boolean,
  add is_show_addon_carrier boolean,add is_checkin_fee_carrier boolean,add is_exhibitor_fee_carrier boolean;
  create table show_payment_sessions(id uuid,cart_id uuid,status text,quote_snapshot jsonb,created_at timestamptz default now());
@@ -30,6 +33,7 @@ try:
  sql((root/'supabase/migrations/20261114051711_index_show_finance_exhibitors.sql').read_text())
  sql((root/'supabase/migrations/20261114054901_show_finance_summary_and_name_sort.sql').read_text())
  sql((root/'supabase/migrations/20261114061750_show_finance_discount_total.sql').read_text())
+ sql((root/'supabase/migrations/20261118030022_automatic_scratch_replacement_offsets.sql').read_text())
  report=(root/'supabase/migrations/20260910213930_attribute_checkin_fees_to_report_sections.sql').read_text()
  marker='create or replace function public.report_show_exhibitor_balances_scoped('
  start=report.index(marker,report.index(marker)+len(marker));end=report.index('\n$$;',start)+len('\n$$;')
@@ -44,6 +48,8 @@ try:
  if 'not ok ' in output or '1..' not in output: raise RuntimeError('Tests failed')
  output=sql((root/'supabase/tests/show_finance_summary_test.sql').read_text());print(output)
  if 'not ok ' in output or '1..' not in output: raise RuntimeError('Summary tests failed')
+ output=sql((root/'supabase/tests/scratch_replacement_offsets_test.sql').read_text());print(output)
+ if 'not ok ' in output or '1..' not in output: raise RuntimeError('Replacement tests failed')
  from concurrency import run
  run(container,database)
 finally:
