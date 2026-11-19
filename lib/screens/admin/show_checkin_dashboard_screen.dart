@@ -8,6 +8,16 @@ import 'secretary_checkin_entry_review_screen.dart';
 import 'show_checkin_activity_screen.dart';
 import 'show_checkin_roster_screen.dart';
 
+Future<Map<String, dynamic>> loadShowCheckinDashboard(String showId) async {
+  final result = await retryTransient(
+    () => ringMasterClient.rpc(
+      'get_show_checkin_dashboard',
+      params: {'p_show_id': showId},
+    ),
+  );
+  return Map<String, dynamic>.from(result as Map);
+}
+
 class ShowCheckinDashboardScreen extends StatefulWidget {
   const ShowCheckinDashboardScreen({super.key, required this.showId});
 
@@ -37,14 +47,9 @@ class _ShowCheckinDashboardScreenState
       _error = null;
     });
     try {
-      final result = await retryTransient(
-        () => _db.rpc(
-          'get_show_checkin_dashboard',
-          params: {'p_show_id': widget.showId},
-        ),
-      );
+      final result = await loadShowCheckinDashboard(widget.showId);
       if (!mounted) return;
-      setState(() => _data = Map<String, dynamic>.from(result as Map));
+      setState(() => _data = result);
     } catch (_) {
       if (!mounted) return;
       setState(() => _error = 'We could not load the check-in dashboard.');

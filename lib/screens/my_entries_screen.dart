@@ -12,22 +12,28 @@ import 'admin/closeout/utils/report_entry_order.dart';
 import 'my_animals_screen.dart';
 import 'show_addon_registrations_screen.dart';
 import 'account_settings_screen.dart';
+import 'cart_screen.dart';
+import 'exhibitor_past_reports_screen.dart';
 import 'package:ringmaster_show/screens/admin/entries_by_breed_section_table.dart';
 import '../services/app_session.dart';
 import '../theme/app_theme.dart';
 import '../utils/date_time_utils.dart';
 import '../utils/entry_class_name.dart';
 import '../widgets/edit_entry_dialog.dart';
+import '../widgets/exhibitor_navigation.dart';
 import '../widgets/meat_pen_tattoos.dart';
 import '../utils/species_sex.dart';
 import '../widgets/rm_widgets.dart';
 import '../widgets/stripe_payment_confirmation_dialog.dart';
 import '../widgets/submitted_balance_payment.dart';
+import '../widgets/show_layout_scope.dart';
 
 SupabaseClient get supabase => ringMasterClient;
 
 class MyEntriesScreen extends StatefulWidget {
-  const MyEntriesScreen({super.key});
+  const MyEntriesScreen({super.key, this.showPastReports = false});
+
+  final bool showPastReports;
 
   @override
   State<MyEntriesScreen> createState() => _MyEntriesScreenState();
@@ -43,6 +49,70 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
 
   List<Map<String, dynamic>> _entries = [];
   final Set<String> _expandedShowIds = {};
+  late bool _showPastReports = widget.showPastReports;
+  Future<List<_DraftEntryCart>>? _draftCarts;
+  String? _draftOwner;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final owner = ShowLayoutScope.isUpdated(context)
+        ? AppSession.householdOwnerUserId
+        : null;
+    if (owner != _draftOwner) {
+      _draftOwner = owner;
+      _draftCarts = null;
+    }
+  }
+
+  Future<List<_DraftEntryCart>> _loadDraftCarts(String owner) async {
+    final rows = await supabase
+        .from('entry_carts')
+        .select('id,show_id,shows(name,start_date),entry_cart_items!inner(id)')
+        .eq('user_id', owner)
+        .eq('status', 'active')
+        .limit(1, referencedTable: 'entry_cart_items')
+        .order('created_at', ascending: false);
+    return [
+      for (final row in rows)
+        _DraftEntryCart(
+          id: row['id'] as String,
+          showId: row['show_id'] as String,
+          showName: (row['shows'] as Map?)?['name'] as String? ?? 'Show',
+          showDate: _parseTs((row['shows'] as Map?)?['start_date']),
+        ),
+    ];
+  }
+
+  void _reloadDraftCarts() {
+    setState(() => _draftCarts = null);
+  }
+
+  Future<List<_DraftEntryCart>>? get _draftFuture {
+    final owner = _draftOwner;
+    return owner == null ? null : (_draftCarts ??= _loadDraftCarts(owner));
+  }
+
+  Future<void> _resumeCheckout(_DraftEntryCart cart) async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) => CartScreen(
+          cartId: cart.id,
+          showId: cart.showId,
+          showName: cart.showName,
+        ),
+      ),
+    );
+    if (!mounted) return;
+    _reloadDraftCarts();
+    await _load();
+  }
+
+  void _openAddOns() {
+    Navigator.of(context).push<void>(
+      MaterialPageRoute(builder: (_) => const ShowAddonRegistrationsScreen()),
+    );
+  }
 
   void _handleStripeSuccessReturn() {
     final uri = Uri.base;
@@ -1033,6 +1103,7 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final updated = ShowLayoutScope.isUpdated(context);
     final grouped = _grouped();
 
     final visibleShowIds =
@@ -1057,26 +1128,26 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
       subtitle: 'My Entries',
       showBackButton: true,
       useScrollView: false,
+      bottomNavigationBar: updated
+          ? const ExhibitorNavigation(current: ExhibitorDestination.entries)
+          : null,
       actions: [
-        IconButton(
-          tooltip: 'Contests & Add-Ons',
-          icon: const Icon(Icons.confirmation_number_outlined),
-          onPressed: () => Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => const ShowAddonRegistrationsScreen(),
-            ),
+        if (!updated) ...[
+          IconButton(
+            tooltip: 'Contests & Add-Ons',
+            icon: const Icon(Icons.confirmation_number_outlined),
+            onPressed: _openAddOns,
           ),
-        ),
-        IconButton(
-          tooltip: AppSession.supportReadOnly
-              ? 'Animals disabled in support mode'
-              : 'Animals',
-          icon: const Icon(Icons.pets),
-          onPressed: AppSession.supportReadOnly
-              ? null
-              : () => _openAnimals(context),
-        ),
+          IconButton(
+            tooltip: AppSession.supportReadOnly
+                ? 'Animals disabled in support mode'
+                : 'Animals',
+            icon: const Icon(Icons.pets),
+            onPressed: AppSession.supportReadOnly
+                ? null
+                : () => _openAnimals(context),
+          ),
+        ],
         IconButton(
           tooltip: AppSession.supportReadOnly
               ? 'Account disabled in support mode'
@@ -1087,63 +1158,148 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
               : () => _openAccount(context),
         ),
       ],
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : visibleShowIds.isEmpty
-          ? const RMEmptyState(
-              title: 'No recent entries',
-              subtitle: 'Shows disappear here 48 hours after their show date.',
-              icon: Icons.receipt_long_outlined,
-            )
-          : ListView(
-              padding: const EdgeInsets.all(AppSpacing.lg),
+      body: updated
+          ? Column(
               children: [
-                if (AppSession.supportReadOnly)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: AppSpacing.md),
-                    child: RMCard(
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: const [
-                          Icon(Icons.lock_outline, color: Colors.orange),
-                          SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              'You are viewing this account in support mode. Entry editing is disabled until you exit support mode.',
-                              style: TextStyle(
-                                color: Colors.orange,
-                                fontWeight: FontWeight.w700,
-                              ),
+                RMCard(
+                  child: Wrap(
+                    spacing: AppSpacing.sm,
+                    runSpacing: AppSpacing.sm,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      ChoiceChip(
+                        label: const Text('Current'),
+                        selected: !_showPastReports,
+                        onSelected: (_) =>
+                            setState(() => _showPastReports = false),
+                      ),
+                      ChoiceChip(
+                        label: const Text('Past Reports'),
+                        selected: _showPastReports,
+                        onSelected: (_) =>
+                            setState(() => _showPastReports = true),
+                      ),
+                      TextButton(
+                        onPressed: _openAddOns,
+                        child: const Text('Contests & Add-Ons'),
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: _showPastReports
+                      ? const ExhibitorPastReportsScreen(embedded: true)
+                      : FutureBuilder<List<_DraftEntryCart>>(
+                          future: _draftFuture,
+                          builder: (context, draft) => _buildCurrentEntries(
+                            context,
+                            visibleShowIds,
+                            grouped,
+                            updated: true,
+                            draft: draft,
+                          ),
+                        ),
+                ),
+              ],
+            )
+          : _buildCurrentEntries(context, visibleShowIds, grouped),
+    );
+  }
+
+  Widget _buildCurrentEntries(
+    BuildContext context,
+    List<String> visibleShowIds,
+    Map<String, Map<String, List<Map<String, dynamic>>>> grouped, {
+    bool updated = false,
+    AsyncSnapshot<List<_DraftEntryCart>>? draft,
+  }) {
+    final carts = draft?.data ?? const <_DraftEntryCart>[];
+    final cartsByShow = <String, List<_DraftEntryCart>>{};
+    for (final cart in carts) {
+      cartsByShow.putIfAbsent(cart.showId, () => []).add(cart);
+    }
+    final showIds = {...visibleShowIds, ...cartsByShow.keys};
+    final loadingDrafts = draft?.connectionState == ConnectionState.waiting;
+    return _loading
+        ? const Center(child: CircularProgressIndicator())
+        : showIds.isEmpty &&
+              !loadingDrafts &&
+              draft?.hasError != true &&
+              (!updated || _msg == null)
+        ? const RMEmptyState(
+            title: 'No recent entries',
+            subtitle: 'Shows disappear here 48 hours after their show date.',
+            icon: Icons.receipt_long_outlined,
+          )
+        : ListView(
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            children: [
+              if (AppSession.supportReadOnly)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                  child: RMCard(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: const [
+                        Icon(Icons.lock_outline, color: Colors.orange),
+                        SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            'You are viewing this account in support mode. Entry editing is disabled until you exit support mode.',
+                            style: TextStyle(
+                              color: Colors.orange,
+                              fontWeight: FontWeight.w700,
                             ),
                           ),
-                        ],
-                      ),
-                    ),
-                  ),
-                if (_msg != null)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: AppSpacing.md),
-                    child: RMCard(
-                      child: Text(
-                        _msg!,
-                        style: TextStyle(
-                          color:
-                              _msg!.toLowerCase().contains('failed') ||
-                                  _msg!.toLowerCase().contains('error') ||
-                                  _msg!.toLowerCase().contains('required') ||
-                                  _msg!.toLowerCase().contains('locked') ||
-                                  _msg!.toLowerCase().contains('disabled')
-                              ? AppColors.danger
-                              : AppColors.success,
-                          fontWeight: FontWeight.w600,
                         ),
+                      ],
+                    ),
+                  ),
+                ),
+              if (_msg != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                  child: RMCard(
+                    child: Text(
+                      _msg!,
+                      style: TextStyle(
+                        color:
+                            _msg!.toLowerCase().contains('failed') ||
+                                _msg!.toLowerCase().contains('error') ||
+                                _msg!.toLowerCase().contains('required') ||
+                                _msg!.toLowerCase().contains('locked') ||
+                                _msg!.toLowerCase().contains('disabled')
+                            ? AppColors.danger
+                            : AppColors.success,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ),
-                for (final showId in visibleShowIds) ...[
+                ),
+              if (loadingDrafts && carts.isEmpty)
+                const LinearProgressIndicator(),
+              if (draft?.hasError == true)
+                RMCard(
+                  child: ListTile(
+                    title: const Text('Could not load draft carts.'),
+                    trailing: TextButton(
+                      onPressed: _reloadDraftCarts,
+                      child: const Text('Retry'),
+                    ),
+                  ),
+                ),
+              for (final showId in showIds) ...[
+                if (cartsByShow[showId] case final drafts?)
+                  for (final cart in drafts)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                      child: _buildDraftCard(cart),
+                    ),
+                if (visibleShowIds.contains(showId))
                   _ShowExpansionCard(
                     title: _showTitle(showId),
                     showId: showId,
+                    updated: updated,
                     onBreedCounts: _openBreedCounts,
                     onDownloadEntries: _downloadEntriesForShow,
                     onJudgeOrder: _openJudgeOrder,
@@ -1170,12 +1326,50 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
                       });
                     },
                   ),
-                  const SizedBox(height: AppSpacing.md),
-                ],
+                const SizedBox(height: AppSpacing.md),
               ],
-            ),
-    );
+            ],
+          );
   }
+
+  Widget _buildDraftCard(_DraftEntryCart cart) => RMCard(
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          cart.showName,
+          style: const TextStyle(fontWeight: FontWeight.w700),
+        ),
+        if (cart.showDate != null)
+          Text(
+            MaterialLocalizations.of(context).formatMediumDate(cart.showDate!),
+          ),
+        const Text('Draft cart · Awaiting submission'),
+        const SizedBox(height: AppSpacing.sm),
+        FilledButton.icon(
+          onPressed: AppSession.supportReadOnly
+              ? null
+              : () => _resumeCheckout(cart),
+          icon: const Icon(Icons.shopping_cart_checkout),
+          label: const Text('Resume checkout'),
+        ),
+      ],
+    ),
+  );
+}
+
+class _DraftEntryCart {
+  const _DraftEntryCart({
+    required this.id,
+    required this.showId,
+    required this.showName,
+    required this.showDate,
+  });
+
+  final String id;
+  final String showId;
+  final String showName;
+  final DateTime? showDate;
 }
 
 class _ShowExpansionCard extends StatelessWidget {
@@ -1198,6 +1392,7 @@ class _ShowExpansionCard extends StatelessWidget {
   final void Function(BuildContext context, String showId, String showName)
   onJudgeOrder;
   final bool judgeOrderPublished;
+  final bool updated;
 
   const _ShowExpansionCard({
     required this.title,
@@ -1217,6 +1412,7 @@ class _ShowExpansionCard extends StatelessWidget {
     required this.onRestore,
     required this.initiallyExpanded,
     required this.onExpandedChanged,
+    required this.updated,
   });
 
   String _safeLabel(dynamic value, String fallback) {
@@ -1312,7 +1508,9 @@ class _ShowExpansionCard extends StatelessWidget {
               runSpacing: AppSpacing.sm,
               children: [
                 RMBadge(
-                  text: '$totalEntries entr${totalEntries == 1 ? 'y' : 'ies'}',
+                  text: updated
+                      ? '$totalEntries submitted'
+                      : '$totalEntries entr${totalEntries == 1 ? 'y' : 'ies'}',
                   icon: Icons.receipt_long,
                 ),
                 RMBadge(
@@ -1332,6 +1530,7 @@ class _ShowExpansionCard extends StatelessWidget {
               key: ValueKey('$showId-${AppSession.impersonatedUserId}'),
               showId: showId,
               supportUserId: readOnly ? AppSession.impersonatedUserId : null,
+              showPaymentStatus: updated,
             ),
             Wrap(
               spacing: AppSpacing.sm,

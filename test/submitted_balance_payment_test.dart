@@ -1,39 +1,58 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ringmaster_show/widgets/submitted_balance_payment.dart';
+import 'package:ringmaster_show/theme/app_theme.dart';
 
 void main() {
   testWidgets('shows balance and requires confirmation before checkout', (
     tester,
   ) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
     var attempts = 0;
     await tester.pumpWidget(
       MaterialApp(
+        theme: AppTheme.lightTheme,
         home: Scaffold(
-          body: SubmittedBalancePayment(
-            showId: 'show',
-            loadBalances: () async => [
-              {
-                'cart_id': 'cart',
-                'exhibitors': 'Test Exhibitor',
-                'currency': 'usd',
-                'balance_due_cents': 2400,
-                'online_available': true,
-              },
-            ],
-            startCheckout: (id) async {
-              attempts++;
-              throw Exception('test provider unavailable');
-            },
+          body: Builder(
+            builder: (context) => AppTheme.surfaceTextScope(
+              context,
+              child: Material(
+                color: AppColors.surface,
+                child: SubmittedBalancePayment(
+                  showId: 'show',
+                  showPaymentStatus: true,
+                  loadBalances: () async => [
+                    {
+                      'cart_id': 'cart',
+                      'exhibitors': 'Test Exhibitor',
+                      'currency': 'usd',
+                      'balance_due_cents': 2400,
+                      'online_available': true,
+                    },
+                  ],
+                  startCheckout: (id) async {
+                    attempts++;
+                    throw Exception('test provider unavailable');
+                  },
+                ),
+              ),
+            ),
           ),
         ),
       ),
     );
     await tester.pumpAndSettle();
+    expect(find.text('Payment'), findsOneWidget);
     expect(find.text('Test Exhibitor — USD 24.00 outstanding'), findsOneWidget);
     await tester.tap(find.text('Pay outstanding balance'));
     await tester.pumpAndSettle();
     expect(attempts, 0);
+    final dialogTheme = Theme.of(tester.element(find.byType(AlertDialog)));
+    expect(dialogTheme.dialogTheme.backgroundColor, AppColors.surface);
+    expect(dialogTheme.dialogTheme.contentTextStyle?.color, AppColors.text);
     expect(
       find.textContaining('Your entries will remain submitted.'),
       findsOneWidget,

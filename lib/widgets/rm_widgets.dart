@@ -146,12 +146,14 @@ class RMBadge extends StatelessWidget {
             Icon(icon, size: 14, color: fg),
             const SizedBox(width: 6),
           ],
-          Text(
-            text,
-            style: TextStyle(
-              color: fg,
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
+          Flexible(
+            child: Text(
+              text,
+              style: TextStyle(
+                color: fg,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
         ],

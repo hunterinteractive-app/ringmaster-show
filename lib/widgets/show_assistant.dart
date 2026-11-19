@@ -8,6 +8,7 @@ import '../services/assistant_suggestions.dart';
 import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'show_layout_scope.dart';
 import 'package:flutter/services.dart';
 import 'package:ringmaster_show/services/ringmaster_backend.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -409,7 +410,11 @@ class _AssistantPanelState extends State<AssistantPanel> {
         widget.gateway.canAsk && assistantQuestionNeedsRecords(message);
     final prepared = resume || needsRecords
         ? null
-        : reviewed ?? assistantPreparedAnswer(message);
+        : reviewed ??
+              assistantPreparedAnswer(
+                message,
+                updatedLayout: ShowLayoutScope.isUpdated(context),
+              );
     if (prepared != null) {
       setState(() {
         _pendingQuestion = null;

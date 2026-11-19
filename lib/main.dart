@@ -33,8 +33,10 @@ import 'screens/account_profile_setup_screen.dart';
 
 import 'config/supabase_config.dart';
 import 'config/release_config.dart';
+import 'config/show_layout_rollout.dart';
 import 'theme/app_theme.dart';
 import 'services/app_init_service.dart';
+import 'widgets/show_layout_scope.dart';
 
 SupabaseClient get supabase => ringMasterClient;
 
@@ -217,8 +219,13 @@ class MyApp extends StatelessWidget {
                   ),
                 ),
               Expanded(
-                child: ShowAssistantOverlay(
-                  child: child ?? const SizedBox.shrink(),
+                child: ShowLayoutHost(
+                  rollout: initialDemoMode || _demoModeFromBrowser()
+                      ? ShowLayoutRollout.classic
+                      : ShowLayoutRollout.current,
+                  child: ShowAssistantOverlay(
+                    child: child ?? const SizedBox.shrink(),
+                  ),
                 ),
               ),
               const _BuildGenerationFooter(),
@@ -232,7 +239,9 @@ class MyApp extends StatelessWidget {
           }
           if (settings.name == '/assistant/reports') {
             return MaterialPageRoute(
-              builder: (_) => const ExhibitorPastReportsScreen(),
+              builder: (context) => ShowLayoutScope.isUpdated(context)
+                  ? const MyEntriesScreen(showPastReports: true)
+                  : const ExhibitorPastReportsScreen(),
             );
           }
           final assistantDestinations = <String, WidgetBuilder>{

@@ -13,7 +13,9 @@ import '../widgets/rm_widgets.dart';
 SupabaseClient get supabase => ringMasterClient;
 
 class ExhibitorPastReportsScreen extends StatefulWidget {
-  const ExhibitorPastReportsScreen({super.key});
+  const ExhibitorPastReportsScreen({super.key, this.embedded = false});
+
+  final bool embedded;
 
   @override
   State<ExhibitorPastReportsScreen> createState() =>
@@ -158,7 +160,81 @@ class _ExhibitorPastReportsScreenState
 
   @override
   Widget build(BuildContext context) {
-    ShowAssistantController.instance.register(context, 'Past Show Reports', null);
+    final body = Container(
+      decoration: const BoxDecoration(gradient: AppGradients.page),
+      child: FutureBuilder<List<_PastShowReport>>(
+        future: _future,
+        builder: (context, snap) {
+          if (snap.connectionState != ConnectionState.done) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          if (snap.hasError) {
+            return _ErrorState(
+              message: snap.error.toString(),
+              onRetry: _refresh,
+            );
+          }
+
+          final reports = snap.data ?? const <_PastShowReport>[];
+          final filteredReports = _filterReports(reports);
+          final grouped = _groupReportsByShow(filteredReports);
+
+          return RefreshIndicator(
+            onRefresh: _refresh,
+            child: ListView(
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              children: [
+                if (_isViewingAs) ...[
+                  const _SupportModeNotice(),
+                  const SizedBox(height: AppSpacing.md),
+                ],
+                Text(
+                  _introText,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: AppColors.headerForeground.withValues(alpha: .86),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.md),
+                _ReportsSearchField(
+                  controller: _searchController,
+                  onChanged: (value) {
+                    setState(() {
+                      _searchText = value.trim();
+                    });
+                  },
+                  onClear: () {
+                    _searchController.clear();
+                    setState(() {
+                      _searchText = '';
+                    });
+                  },
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                if (reports.isEmpty)
+                  _EmptyState(isViewingAs: _isViewingAs)
+                else if (filteredReports.isEmpty)
+                  _NoSearchResultsState(searchText: _searchText)
+                else
+                  for (final showReports in grouped)
+                    _PastShowReportCard(
+                      reports: showReports,
+                      downloadingArtifactIds: _downloadingArtifactIds,
+                      onDownload: _downloadReport,
+                    ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+    if (widget.embedded) return body;
+    ShowAssistantController.instance.register(
+      context,
+      'Past Show Reports',
+      null,
+    );
     return Scaffold(
       backgroundColor: AppColors.pageBackground,
       appBar: AppBar(
@@ -173,75 +249,7 @@ class _ExhibitorPastReportsScreenState
           ),
         ],
       ),
-      body: Container(
-        decoration: const BoxDecoration(gradient: AppGradients.page),
-        child: FutureBuilder<List<_PastShowReport>>(
-          future: _future,
-          builder: (context, snap) {
-            if (snap.connectionState != ConnectionState.done) {
-              return const Center(child: CircularProgressIndicator());
-            }
-
-            if (snap.hasError) {
-              return _ErrorState(
-                message: snap.error.toString(),
-                onRetry: _refresh,
-              );
-            }
-
-            final reports = snap.data ?? const <_PastShowReport>[];
-            final filteredReports = _filterReports(reports);
-            final grouped = _groupReportsByShow(filteredReports);
-
-            return RefreshIndicator(
-              onRefresh: _refresh,
-              child: ListView(
-                padding: const EdgeInsets.all(AppSpacing.lg),
-                children: [
-                  if (_isViewingAs) ...[
-                    const _SupportModeNotice(),
-                    const SizedBox(height: AppSpacing.md),
-                  ],
-                  Text(
-                    _introText,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: AppColors.headerForeground.withValues(alpha: .86),
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  _ReportsSearchField(
-                    controller: _searchController,
-                    onChanged: (value) {
-                      setState(() {
-                        _searchText = value.trim();
-                      });
-                    },
-                    onClear: () {
-                      _searchController.clear();
-                      setState(() {
-                        _searchText = '';
-                      });
-                    },
-                  ),
-                  const SizedBox(height: AppSpacing.lg),
-                  if (reports.isEmpty)
-                    _EmptyState(isViewingAs: _isViewingAs)
-                  else if (filteredReports.isEmpty)
-                    _NoSearchResultsState(searchText: _searchText)
-                  else
-                    for (final showReports in grouped)
-                      _PastShowReportCard(
-                        reports: showReports,
-                        downloadingArtifactIds: _downloadingArtifactIds,
-                        onDownload: _downloadReport,
-                      ),
-                ],
-              ),
-            );
-          },
-        ),
-      ),
+      body: body,
     );
   }
 

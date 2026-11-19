@@ -23,11 +23,13 @@ SupabaseClient get supabase => ringMasterClient;
 class AdminPrintPacksScreen extends StatefulWidget {
   final String showId;
   final String showName;
+  final bool controlSheetsOnly;
 
   const AdminPrintPacksScreen({
     super.key,
     required this.showId,
     required this.showName,
+    this.controlSheetsOnly = false,
   });
 
   @override
@@ -770,7 +772,9 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
     required String title,
     required String subtitle,
     required List<Widget> children,
+    bool visible = true,
   }) {
+    if (!visible) return const SizedBox.shrink();
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(16),
@@ -829,7 +833,9 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
 
     return RingMasterPageShell(
       title: 'RingMaster One Show',
-      subtitle: 'Print Show Sheets — ${widget.showName}',
+      subtitle: widget.controlSheetsOnly
+          ? 'Control Sheets — ${widget.showName}'
+          : 'Print Show Sheets — ${widget.showName}',
       showBackButton: true,
       showHomeButton: true,
       useScrollView: false,
@@ -1027,6 +1033,7 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
                 ),
 
                 _buildSectionCard(
+                  visible: !widget.controlSheetsOnly,
                   icon: Icons.checklist_outlined,
                   title: 'Check-In Sheets',
                   subtitle: 'Generate exhibitor check-in sheets as PDF files.',
@@ -1160,6 +1167,7 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
                 ),
 
                 _buildSectionCard(
+                  visible: !widget.controlSheetsOnly,
                   icon: Icons.sell_outlined,
                   title: 'Coop Cards',
                   subtitle:
@@ -1184,6 +1192,7 @@ class _AdminPrintPacksScreenState extends State<AdminPrintPacksScreen> {
                   ],
                 ),
                 _buildSectionCard(
+                  visible: !widget.controlSheetsOnly,
                   icon: Icons.rate_review_outlined,
                   title: 'Remark Cards',
                   subtitle:

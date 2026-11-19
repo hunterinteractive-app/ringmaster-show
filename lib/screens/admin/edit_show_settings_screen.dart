@@ -24,8 +24,11 @@ import 'show_judges_dialog.dart';
 import 'show_checkin_settings_dialog.dart';
 import 'show_wave_schedule_dialog.dart';
 import 'show_checkin_dashboard_screen.dart';
+import 'checkin_change_requests_screen.dart';
 import 'show_finances_screen.dart';
 import '../../widgets/rm_timezone_notice_banner.dart';
+import '../../widgets/rm_widgets.dart';
+import '../../widgets/show_layout_scope.dart';
 import '../../services/show_permissions_service.dart';
 import '../../services/stripe_connect_service.dart';
 
@@ -44,10 +47,57 @@ import '../../superintendent/superintendent_lineup_screen.dart';
 
 SupabaseClient get supabase => ringMasterClient;
 
+enum _ShowWorkspaceArea {
+  overview('Overview'),
+  setup('Setup'),
+  entries('Entries & Check-In'),
+  judging('Judging'),
+  finances('Finances'),
+  reports('Reports & Closeout');
+
+  const _ShowWorkspaceArea(this.label);
+
+  final String label;
+}
+
+enum _ShowTool {
+  judges,
+  balances,
+  entries,
+  breedCounts,
+  coopNumbers,
+  printPacks,
+  checkIn,
+  results,
+  legacyCloseout,
+  closeout,
+  lock,
+  export,
+  breeds,
+  sections,
+  sanctions,
+  fees,
+  waves,
+  contests,
+  addOns,
+  checkInSettings,
+  paybacks,
+  lineup,
+  roles,
+  audit,
+  controlSheets,
+  changeRequests,
+}
+
 class EditShowSettingsScreen extends StatefulWidget {
   final String showId;
+  final bool demoMode;
 
-  const EditShowSettingsScreen({super.key, required this.showId});
+  const EditShowSettingsScreen({
+    super.key,
+    required this.showId,
+    this.demoMode = false,
+  });
 
   @override
   State<EditShowSettingsScreen> createState() => _EditShowSettingsScreenState();
@@ -69,6 +119,8 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
   Map<String, dynamic>? _myStaffPin;
   bool _loadingPins = false;
   bool _regeneratingPins = false;
+  _ShowWorkspaceArea _workspaceArea = _ShowWorkspaceArea.overview;
+  Future<Map<String, dynamic>>? _checkinSummary;
   Future<void> _loadStaffPins() async {
     setState(() => _loadingPins = true);
 
@@ -613,6 +665,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
     setState(() {
       _loading = true;
       _msg = null;
+      _checkinSummary = null;
     });
 
     try {
@@ -997,13 +1050,14 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
     );
   }
 
-  void _openPrintPacks() {
+  void _openPrintPacks({bool controlSheetsOnly = false}) {
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => AdminPrintPacksScreen(
           showId: widget.showId,
           showName: _effectiveShowName(),
+          controlSheetsOnly: controlSheetsOnly,
         ),
       ),
     );
@@ -1036,7 +1090,10 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
     });
 
     try {
-      await downloadLockedShowDataExport(showId: widget.showId, showName: _effectiveShowName());
+      await downloadLockedShowDataExport(
+        showId: widget.showId,
+        showName: _effectiveShowName(),
+      );
 
       if (!mounted) return;
       setState(() {
@@ -1063,18 +1120,532 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
     );
   }
 
-  void _openShowCloseoutV2Preview({required bool canFinalizeShow}) {
-    if (!canFinalizeShow) return;
-    Navigator.of(context).push(
+  Future<void> _openReportsAndCloseout() async {
+    if (!_permissions.canFinalizeShow) return;
+    final updated = ShowLayoutScope.isUpdated(context);
+    await Navigator.of(context).push<void>(
       MaterialPageRoute(
         builder: (_) => ShowCloseoutV2PreviewPage(
           showId: widget.showId,
           showName: _effectiveShowName(),
-          canFinalizeShow: canFinalizeShow,
+          canFinalizeShow: _permissions.canFinalizeShow,
         ),
       ),
     );
+    if (mounted && updated) await _load();
   }
+
+  bool get _canOpenCheckin =>
+      _isCheckinPortalEnabled &&
+      (_permissions.canManageEntries || _permissions.canManageShowSettings);
+
+  Future<void> _openCheckinDashboard() async {
+    if (!_canOpenCheckin) return;
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) => ShowCheckinDashboardScreen(showId: widget.showId),
+      ),
+    );
+    if (mounted) setState(() => _checkinSummary = null);
+  }
+
+  Future<void> _openChangeRequests() async {
+    if (!_canOpenCheckin) return;
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) => CheckinChangeRequestsScreen(showId: widget.showId),
+      ),
+    );
+    if (mounted) setState(() => _checkinSummary = null);
+  }
+
+  Map<_ShowWorkspaceArea, List<_ShowTool>> _workspaceTools() {
+    final permissions = _permissions;
+    return {
+      _ShowWorkspaceArea.overview: const [],
+      _ShowWorkspaceArea.setup: [
+        if (permissions.canManageShowSettings) ...[
+          _ShowTool.sections,
+          _ShowTool.breeds,
+          _ShowTool.sanctions,
+          _ShowTool.roles,
+          _ShowTool.contests,
+          _ShowTool.addOns,
+          if (_canConfigureBestOpposite) _ShowTool.waves,
+          if (_canManageCheckinSettings) _ShowTool.checkInSettings,
+        ],
+      ],
+      if (permissions.canManageShow)
+        _ShowWorkspaceArea.entries: [
+          if (_canOpenCheckin) ...[_ShowTool.checkIn, _ShowTool.changeRequests],
+          if (permissions.canManageEntries) _ShowTool.entries,
+          _ShowTool.breedCounts,
+          if (permissions.canManageEntries) _ShowTool.coopNumbers,
+          _ShowTool.printPacks,
+        ],
+      if (permissions.canManageShow ||
+          permissions.canEnterResults ||
+          permissions.canManageJudges)
+        _ShowWorkspaceArea.judging: [
+          if (permissions.canManageJudges) _ShowTool.judges,
+          if (permissions.canManageShowSettings) _ShowTool.lineup,
+          if (permissions.canManageShow) _ShowTool.controlSheets,
+          if (permissions.canEnterResults) _ShowTool.results,
+          if (permissions.canManageShowSettings) _ShowTool.audit,
+        ],
+      if (permissions.canManageEntries || permissions.canManageShowSettings)
+        _ShowWorkspaceArea.finances: [
+          _ShowTool.balances,
+          if (permissions.canManageShowSettings) ...[
+            _ShowTool.fees,
+            _ShowTool.paybacks,
+          ],
+        ],
+      if (permissions.canFinalizeShow)
+        _ShowWorkspaceArea.reports: [_ShowTool.closeout],
+    };
+  }
+
+  Widget _buildWorkspaceBody({
+    required _ShowWorkspaceArea? selected,
+    required Iterable<_ShowWorkspaceArea> areas,
+    required Widget child,
+  }) {
+    final scroll = SingleChildScrollView(
+      key: selected == null ? null : ValueKey(selected),
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      child: selected == null
+          ? child
+          : Align(
+              alignment: Alignment.topCenter,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 960),
+                child: child,
+              ),
+            ),
+    );
+    if (selected == null) return scroll;
+    return Column(
+      children: [
+        _buildWorkspaceNavigation(areas, selected),
+        Expanded(child: scroll),
+      ],
+    );
+  }
+
+  Widget _buildWorkspaceNavigation(
+    Iterable<_ShowWorkspaceArea> areas,
+    _ShowWorkspaceArea selected,
+  ) => Material(
+    color: AppColors.surface,
+    child: AppTheme.surfaceTextScope(
+      context,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: Wrap(
+            spacing: AppSpacing.sm,
+            children: [
+              for (final area in areas)
+                ChoiceChip(
+                  label: Text(area.label),
+                  selected: selected == area,
+                  selectedColor: AppColors.primaryButton,
+                  labelStyle: const TextStyle(color: AppColors.text),
+                  onSelected: _saving
+                      ? null
+                      : (_) => setState(() => _workspaceArea = area),
+                ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+
+  Widget _buildWorkspaceOverview(
+    Map<_ShowWorkspaceArea, List<_ShowTool>> available,
+  ) {
+    final today = DateUtils.dateOnly(DateTime.now());
+    final finalDate = _endDate ?? _startDate;
+    final showEnded = finalDate != null && today.isAfter(finalDate);
+    final showStarted = _startDate != null && !today.isBefore(_startDate!);
+    final showDate = _startDate == null
+        ? 'Show date to be set'
+        : MaterialLocalizations.of(context).formatFullDate(_startDate!);
+    return FutureBuilder<Map<String, dynamic>>(
+      future: _canOpenCheckin
+          ? (_checkinSummary ??= loadShowCheckinDashboard(widget.showId))
+          : null,
+      builder: (context, snapshot) {
+        final data = snapshot.data;
+        final pending = (data?['pending_change_requests'] as num?)?.toInt();
+        final records = data?['records'] as Map?;
+        final waveName = data?['wave_name'] as String?;
+
+        final (actionTitle, actionIcon, VoidCallback onAction) = switch ((
+          _isReadOnly,
+          _published,
+          pending ?? 0,
+          showEnded,
+          showStarted,
+        )) {
+          (true, _, _, _, _)
+              when available.containsKey(_ShowWorkspaceArea.reports) =>
+            (
+              'Open Reports & Closeout',
+              Icons.archive_outlined,
+              _openReportsAndCloseout,
+            ),
+          (false, false, _, _, _) when _permissions.canManageShowSettings => (
+            'Continue show setup',
+            Icons.tune,
+            () => _selectWorkspaceArea(_ShowWorkspaceArea.setup),
+          ),
+          (false, _, > 0, _, _) => (
+            'Review change requests',
+            Icons.playlist_add_check,
+            _openChangeRequests,
+          ),
+          (_, _, _, true, _) when _permissions.canEnterResults => (
+            'Open Results Entry',
+            Icons.fact_check_outlined,
+            _openResultsEntry,
+          ),
+          (_, _, _, true, _)
+              when available.containsKey(_ShowWorkspaceArea.reports) =>
+            (
+              'Open Reports & Closeout',
+              Icons.archive_outlined,
+              _openReportsAndCloseout,
+            ),
+          (_, _, _, _, true) when _canOpenCheckin => (
+            'Open Check-In Dashboard',
+            Icons.how_to_reg,
+            _openCheckinDashboard,
+          ),
+          (_, _, _, _, true)
+              when available.containsKey(_ShowWorkspaceArea.judging) =>
+            (
+              'Open judging tools',
+              Icons.gavel,
+              () => _selectWorkspaceArea(_ShowWorkspaceArea.judging),
+            ),
+          _ => (
+            'Open entry tools',
+            Icons.list_alt,
+            () => _selectWorkspaceArea(_ShowWorkspaceArea.entries),
+          ),
+        };
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _buildSectionCard(
+              title: _effectiveShowName(),
+              subtitle: _location.text.trim().isEmpty
+                  ? showDate
+                  : '$showDate · ${_location.text.trim()}',
+              children: [
+                if (_entryCloseAt != null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                    child: Text(
+                      '${DateTime.now().isAfter(_entryCloseAt!) ? 'Entries closed' : 'Entries close'} ${_fmtDateTime(_entryCloseAt)}',
+                    ),
+                  ),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: FilledButton.icon(
+                    onPressed: _saving ? null : onAction,
+                    icon: Icon(actionIcon),
+                    label: Text(actionTitle),
+                  ),
+                ),
+              ],
+            ),
+            if (_canOpenCheckin)
+              _buildSectionCard(
+                title: waveName == null
+                    ? 'Check-In Status'
+                    : '$waveName Check-In',
+                children: [
+                  if (snapshot.connectionState == ConnectionState.waiting)
+                    const LinearProgressIndicator()
+                  else if (snapshot.hasError)
+                    Wrap(
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        const Text('Check-in status is unavailable.'),
+                        TextButton(
+                          onPressed: () =>
+                              setState(() => _checkinSummary = null),
+                          child: const Text('Retry'),
+                        ),
+                      ],
+                    )
+                  else
+                    Wrap(
+                      spacing: AppSpacing.sm,
+                      runSpacing: AppSpacing.sm,
+                      children: [
+                        RMBadge(
+                          icon: Icons.playlist_add_check,
+                          text: '${pending ?? 0} pending change requests',
+                        ),
+                        RMBadge(
+                          icon: Icons.how_to_reg,
+                          text:
+                              '${(records?['completed'] as num? ?? 0) + (records?['reviewed'] as num? ?? 0) + (records?['locked'] as num? ?? 0)} checked in',
+                        ),
+                        RMBadge(
+                          icon: Icons.payments_outlined,
+                          text:
+                              '${data?['unpaid_exhibitors'] ?? 0} exhibitors with balances due',
+                        ),
+                      ],
+                    ),
+                ],
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _selectWorkspaceArea(_ShowWorkspaceArea area) =>
+      setState(() => _workspaceArea = area);
+
+  Map<_ShowTool, Widget> _buildTools({required bool updated}) => {
+    _ShowTool.judges: _buildSettingsActionTile(
+      icon: Icons.gavel,
+      title: 'Judges',
+      subtitle: 'Select judges available for staff assignment',
+      onTap: (_saving || !_permissions.canManageJudges)
+          ? null
+          : () async {
+              final changed = await ShowJudgesDialog.open(
+                context,
+                showId: widget.showId,
+                showName: _showNameForTitle,
+              );
+              if (changed == true && mounted) {
+                setState(() => _msg = 'Judges updated.');
+              }
+            },
+    ),
+    _ShowTool.balances: _buildSettingsActionTile(
+      icon: Icons.account_balance_wallet_outlined,
+      title: updated ? 'Balances & Payment History' : 'Show Finances',
+      subtitle: 'Balances, payment history, external payments and credits',
+      onTap: _saving
+          ? null
+          : () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => ShowFinancesScreen(showId: widget.showId),
+              ),
+            ),
+    ),
+    _ShowTool.entries: _buildSettingsActionTile(
+      icon: Icons.edit_note,
+      title: 'Entry Management',
+      subtitle: 'Search, edit, scratch, move class, add notes',
+      onTap: _saving ? null : _openEntryManagement,
+    ),
+    _ShowTool.breedCounts: _buildSettingsActionTile(
+      icon: Icons.bar_chart,
+      title: 'Breed Counts',
+      subtitle: 'Totals by breed/show',
+      onTap: _saving ? null : _openShowReports,
+    ),
+    _ShowTool.coopNumbers: _buildSettingsActionTile(
+      icon: Icons.grid_on,
+      title: 'Coop Numbers',
+      subtitle: 'Generate, review, and manually edit coop assignments',
+      onTap: _saving ? null : _openCoopNumbers,
+    ),
+    _ShowTool.printPacks: _buildSettingsActionTile(
+      icon: Icons.print,
+      title: 'Print Packs',
+      subtitle: 'Check-In Sheets, Control Sheets, Coop Tags, Comment Cards',
+      onTap: _saving ? null : _openPrintPacks,
+    ),
+    _ShowTool.checkIn: _buildSettingsActionTile(
+      icon: Icons.fact_check_outlined,
+      title: 'Check-In Dashboard',
+      subtitle: 'Live check-in progress, balances, and exhibitor activity',
+      onTap: _saving ? null : _openCheckinDashboard,
+    ),
+    _ShowTool.results: _buildSettingsActionTile(
+      icon: Icons.fact_check,
+      title: 'Results Entry',
+      subtitle: 'Enter placements, DQs, and specials by class',
+      onTap: _saving ? null : _openResultsEntry,
+    ),
+    _ShowTool.legacyCloseout: _buildSettingsActionTile(
+      icon: Icons.archive,
+      title: 'Close Show/Reports',
+      subtitle: 'Finalize, send reports, and lock/download copy',
+      onTap: _saving ? null : _openShowCloseout,
+    ),
+    _ShowTool.closeout: _buildSettingsActionTile(
+      icon: Icons.archive_outlined,
+      title: updated ? 'Open Reports & Closeout' : 'Close Show/Reports V2',
+      subtitle: 'Finalize, send reports, and lock/download a copy',
+      onTap: _saving ? null : _openReportsAndCloseout,
+    ),
+    _ShowTool.lock: _buildSettingsActionTile(
+      icon: _isLocked ? Icons.lock_open : Icons.lock,
+      title: _isLocked ? 'Unlock Show' : 'Lock Show',
+      subtitle: _isFinalized
+          ? 'Finalized shows cannot be unlocked.'
+          : _isLocked
+          ? 'Allow setup changes again if corrections are needed'
+          : 'Prevent further setup changes before closeout',
+      onTap: (_saving || _isFinalized) ? null : _toggleShowLock,
+    ),
+    _ShowTool.export: _buildSettingsActionTile(
+      icon: Icons.download_for_offline,
+      title: 'Download Locked Show Data',
+      subtitle:
+          'Download a ZIP backup of this show’s entries, results, settings, and reports',
+      onTap: _saving ? null : _downloadLockedShowData,
+    ),
+    _ShowTool.breeds: _buildSettingsActionTile(
+      icon: Icons.pets,
+      title: 'Breed Settings',
+      subtitle: 'Manage allowed breeds and varieties for this show',
+      onTap: _saving ? null : _openBreedSettings,
+    ),
+    _ShowTool.sections: _buildSettingsActionTile(
+      icon: Icons.view_module,
+      title: updated ? 'Show Sections' : 'Modify Number of Shows',
+      subtitle: 'Open A/B, Youth A/B, and setup',
+      onTap: _saving
+          ? null
+          : () async {
+              await ShowSectionsDialog.open(
+                context,
+                showId: widget.showId,
+                showName: _effectiveShowName(),
+              );
+
+              if (!mounted) return;
+              await _load();
+            },
+    ),
+    _ShowTool.sanctions: _buildSettingsActionTile(
+      icon: Icons.confirmation_number,
+      title: 'Sanction Numbers',
+      subtitle: 'Add or edit ARBA and breed/club sanction numbers',
+      onTap: _saving ? null : _openSanctions,
+    ),
+    _ShowTool.fees: _buildSettingsActionTile(
+      icon: Icons.attach_money,
+      title: updated ? 'Fees & Payment Setup' : 'Show Fees & Payments',
+      subtitle:
+          'Per-animal fees, discounts, day-of-show, and online payment setup',
+      onTap: _saving ? null : _openFees,
+    ),
+    _ShowTool.waves: _buildSettingsActionTile(
+      icon: Icons.schedule,
+      title: 'Wave Schedule',
+      subtitle:
+          'Assign breeds to waves and schedule check-in, showing, check-out, and emails',
+      onTap: (_saving || _isReadOnly)
+          ? null
+          : () async {
+              await ShowWaveScheduleDialog.open(
+                context,
+                showId: widget.showId,
+                showName: _effectiveShowName(),
+              );
+              if (mounted) await _load();
+            },
+    ),
+    _ShowTool.contests: _buildSettingsActionTile(
+      icon: Icons.emoji_events_outlined,
+      title: 'Contest Settings',
+      subtitle:
+          'Enable contests, set entry fees, and choose registration fields',
+      onTap: (_saving || _isReadOnly)
+          ? null
+          : () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => ShowAddonSettingsScreen(
+                  showId: widget.showId,
+                  showName: _effectiveShowName(),
+                  kind: 'contest',
+                ),
+              ),
+            ),
+    ),
+    _ShowTool.addOns: _buildSettingsActionTile(
+      icon: Icons.confirmation_number_outlined,
+      title: 'Show Add-Ons',
+      subtitle:
+          'Offer extra coops, parking passes, banquet tickets, tours, and custom items',
+      onTap: (_saving || _isReadOnly)
+          ? null
+          : () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => ShowAddonSettingsScreen(
+                  showId: widget.showId,
+                  showName: _effectiveShowName(),
+                  kind: 'extra',
+                ),
+              ),
+            ),
+    ),
+    _ShowTool.checkInSettings: _buildSettingsActionTile(
+      icon: Icons.qr_code_2,
+      title: 'Check-In Settings',
+      subtitle:
+          'Portal availability, QR code, confirmations, and entry-change permissions',
+      onTap: (_saving || _isReadOnly) ? null : _openCheckinSettings,
+    ),
+    _ShowTool.paybacks: _buildSettingsActionTile(
+      icon: Icons.payments_outlined,
+      title: 'Payback Settings',
+      subtitle:
+          'Enter class payback schedules and special money by show letter',
+      onTap: (_saving || _isReadOnly) ? null : _openPaybacks,
+    ),
+    _ShowTool.lineup: _buildSettingsActionTile(
+      icon: Icons.visibility_outlined,
+      title: updated ? 'Superintendent Lineup' : 'View Superintendent Layout',
+      subtitle:
+          'View the judging line-up for this show; superintendent changes are disabled',
+      onTap: _openSuperintendentLayout,
+    ),
+    _ShowTool.roles: _buildSettingsActionTile(
+      icon: Icons.manage_accounts,
+      title: 'Role Assignments',
+      subtitle: 'Assign Show Superintendent, and Other Staff Roles',
+      onTap: _saving ? null : _openRoleAssignments,
+    ),
+    _ShowTool.audit: _buildSettingsActionTile(
+      icon: Icons.history,
+      title: updated ? 'Judging Activity' : 'Audit Log Table',
+      subtitle: 'Review QR overrides and writer activity for this show',
+      onTap: _saving ? null : _openAuditLogTable,
+    ),
+    _ShowTool.controlSheets: _buildSettingsActionTile(
+      icon: Icons.description_outlined,
+      title: 'Control Sheets',
+      subtitle: 'Print judging control sheets in table and breed order',
+      onTap: _saving ? null : () => _openPrintPacks(controlSheetsOnly: true),
+    ),
+    _ShowTool.changeRequests: _buildSettingsActionTile(
+      icon: Icons.playlist_add_check,
+      title: 'Check-In Change Requests',
+      subtitle: 'Review exhibitor corrections and requests',
+      onTap: _saving ? null : _openChangeRequests,
+    ),
+  };
 
   Widget _buildSectionCard({
     required String title,
@@ -1092,17 +1663,30 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
           BoxShadow(color: Colors.black.withValues(alpha: .05), blurRadius: 12),
         ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title, style: Theme.of(context).textTheme.titleMedium),
-          if (subtitle != null) ...[
-            const SizedBox(height: 4),
-            Text(subtitle, style: Theme.of(context).textTheme.bodySmall),
+      child: AppTheme.surfaceTextScope(
+        context,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(color: AppColors.text),
+            ),
+            if (subtitle != null) ...[
+              const SizedBox(height: 4),
+              Text(
+                subtitle,
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: AppColors.muted),
+              ),
+            ],
+            const SizedBox(height: 12),
+            ...children,
           ],
-          const SizedBox(height: 12),
-          ...children,
-        ],
+        ),
       ),
     );
   }
@@ -1156,7 +1740,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
     );
   }
 
-  Widget _buildStatusBanner() {
+  Widget _buildStatusBanner({required bool updated}) {
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.only(bottom: 16),
@@ -1173,19 +1757,21 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
           _statusBadge(
             text: _published ? 'Published' : 'Draft',
             icon: _published ? Icons.public : Icons.edit_note,
-            color: _published ? Colors.green : Colors.grey,
+            color: updated
+                ? (_published ? AppColors.success : AppColors.muted)
+                : (_published ? Colors.green : Colors.grey),
           ),
           if (_isFinalized)
             _statusBadge(
               text: 'Finalized',
               icon: Icons.verified,
-              color: Colors.green,
+              color: updated ? AppColors.success : Colors.green,
             )
           else if (_isLocked)
             _statusBadge(
               text: 'Locked',
               icon: Icons.lock,
-              color: Colors.orange,
+              color: updated ? AppColors.warning : Colors.orange,
             ),
         ],
       ),
@@ -1379,19 +1965,26 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    ShowAssistantController.instance.register(context, 'Show Settings', widget.showId);
-    final canManageShow =
-        _permissions.canManageShow;
-    final canManageShowSettings =
-        _permissions.canManageShowSettings;
-    final canManageEntries =
-        _permissions.canManageEntries;
-    final canManageJudges =
-        _permissions.canManageJudges;
-    final canEnterResults =
-        _permissions.canEnterResults;
-    final canFinalizeShow =
-        _permissions.canFinalizeShow;
+    final updated = !widget.demoMode && ShowLayoutScope.isUpdated(context);
+    final available = _workspaceTools();
+    final selected = available.containsKey(_workspaceArea)
+        ? _workspaceArea
+        : _ShowWorkspaceArea.overview;
+    final showingSetup = !updated || selected == _ShowWorkspaceArea.setup;
+    final pageTitle = updated
+        ? '$_showNameForTitle · ${selected.label}'
+        : 'Show Settings — $_showNameForTitle';
+    final tools = _buildTools(updated: updated);
+    ShowAssistantController.instance.register(
+      context,
+      updated ? 'Show Workspace · ${selected.label}' : pageTitle,
+      widget.showId,
+    );
+    final canManageShow = _permissions.canManageShow;
+    final canManageShowSettings = _permissions.canManageShowSettings;
+    final canManageEntries = _permissions.canManageEntries;
+    final canEnterResults = _permissions.canEnterResults;
+    final canFinalizeShow = _permissions.canFinalizeShow;
 
     return Scaffold(
       appBar: AppBar(
@@ -1400,15 +1993,17 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
         title: Row(
           children: [
             const SizedBox(width: 12),
-            Image.asset(
-              'assets/images/RingMaster_One_Show_Transparent.png',
-              excludeFromSemantics: true,
-              height: 42,
-            ),
-            const SizedBox(width: 12),
+            if (!updated || MediaQuery.sizeOf(context).width >= 600) ...[
+              Image.asset(
+                'assets/images/RingMaster_One_Show_Transparent.png',
+                excludeFromSemantics: true,
+                height: 42,
+              ),
+              const SizedBox(width: 12),
+            ],
             Expanded(
               child: Text(
-                'Show Settings — $_showNameForTitle',
+                pageTitle,
                 style: const TextStyle(
                   fontWeight: FontWeight.w600,
                   fontSize: 18,
@@ -1420,7 +2015,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
         ),
         actions: [
           IconButton(
-            tooltip: 'Home',
+            tooltip: updated ? 'Exhibitor home' : 'Home',
             icon: const Icon(Icons.home_outlined),
             onPressed: _saving
                 ? null
@@ -1442,7 +2037,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
             onPressed: () => showDialog<void>(
               context: context,
               builder: (_) => HelpReportDialog(
-                pageTitle: 'Show Settings — $_showNameForTitle',
+                pageTitle: pageTitle,
                 pageRoute: ModalRoute.of(context)?.settings.name,
                 showId: widget.showId,
               ),
@@ -1472,14 +2067,19 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                       top: Radius.circular(24),
                     ),
                   ),
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(16),
+                  child: _buildWorkspaceBody(
+                    selected: updated ? selected : null,
+                    areas: available.keys,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         const RMTimezoneNoticeBanner(),
-                        _buildStatusBanner(),
-                        if (canManageShowSettings)
+                        if (!updated || selected == _ShowWorkspaceArea.overview)
+                          _buildStatusBanner(updated: updated),
+                        if (canManageShowSettings &&
+                            (!updated ||
+                                selected == _ShowWorkspaceArea.overview ||
+                                selected == _ShowWorkspaceArea.finances))
                           _buildStripeAdminWarningBanner(),
                         if (AppSession.supportReadOnly)
                           Container(
@@ -1571,7 +2171,10 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                             ),
                           ),
 
-                        if (canManageShow || canEnterResults || canFinalizeShow)
+                        if (showingSetup &&
+                            (canManageShow ||
+                                canEnterResults ||
+                                canFinalizeShow))
                           _buildSectionCard(
                             title: 'Staff Approval PINs',
                             subtitle:
@@ -1652,7 +2255,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                             ],
                           ),
 
-                        if (canManageShow)
+                        if (showingSetup && canManageShow)
                           _buildSectionCard(
                             title: 'Basic Show Info',
                             children: [
@@ -1775,7 +2378,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                             ],
                           ),
 
-                        if (canManageShowSettings)
+                        if (showingSetup && canManageShowSettings)
                           _buildSectionCard(
                             title: 'Show Date',
                             children: [
@@ -1811,7 +2414,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                               ),
                             ],
                           ),
-                        if (canManageShowSettings)
+                        if (showingSetup && canManageShowSettings)
                           _buildSectionCard(
                             title: 'Entry Window',
                             subtitle:
@@ -1870,7 +2473,7 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                               ),
                             ],
                           ),
-                        if (canManageShowSettings)
+                        if (showingSetup && canManageShowSettings)
                           _buildSectionCard(
                             title: 'Publication & Awards',
                             children: [
@@ -2010,322 +2613,91 @@ class _EditShowSettingsScreenState extends State<EditShowSettingsScreen> {
                             ],
                           ),
 
-                        _buildSectionCard(
-                          title: 'Admin Operations (Pre-show)',
-                          children: [
-                            _buildSettingsActionTile(
-                              icon: Icons.gavel,
-                              title: 'Judges',
-                              subtitle:
-                                  'Select judges available for staff assignment',
-                              onTap: (_saving || !canManageJudges)
-                                  ? null
-                                  : () async {
-                                      final changed =
-                                          await ShowJudgesDialog.open(
-                                            context,
-                                            showId: widget.showId,
-                                            showName: _showNameForTitle,
-                                          );
-                                      if (changed == true && mounted) {
-                                        setState(
-                                          () => _msg = 'Judges updated.',
-                                        );
-                                      }
-                                    },
-                            ),
-                            if (canManageEntries || canManageShowSettings)
-                              _buildSettingsActionTile(
-                                icon: Icons.account_balance_wallet_outlined,
-                                title: 'Show Finances',
-                                subtitle:
-                                    'Balances, payment history, external payments and credits',
-                                onTap: _saving
-                                    ? null
-                                    : () => Navigator.of(context).push(
-                                        MaterialPageRoute(
-                                          builder: (_) => ShowFinancesScreen(
-                                            showId: widget.showId,
-                                          ),
-                                        ),
-                                      ),
-                              ),
-                            if (canManageEntries)
-                              _buildSettingsActionTile(
-                                icon: Icons.edit_note,
-                                title: 'Entry Management',
-                                subtitle:
-                                    'Search, edit, scratch, move class, add notes',
-                                onTap: _saving ? null : _openEntryManagement,
-                              ),
-                            if (canManageShow)
-                              _buildSettingsActionTile(
-                                icon: Icons.bar_chart,
-                                title: 'Breed Counts',
-                                subtitle: 'Totals by breed/show',
-                                onTap: _saving ? null : _openShowReports,
-                              ),
-                            if (canManageEntries)
-                              _buildSettingsActionTile(
-                                icon: Icons.grid_on,
-                                title: 'Coop Numbers',
-                                subtitle:
-                                    'Generate, review, and manually edit coop assignments',
-                                onTap: _saving ? null : _openCoopNumbers,
-                              ),
-                            if (canManageShow)
-                              _buildSettingsActionTile(
-                                icon: Icons.print,
-                                title: 'Print Packs',
-                                subtitle:
-                                    'Check-In Sheets, Control Sheets, Coop Tags, Comment Cards',
-                                onTap: _saving ? null : _openPrintPacks,
-                              ),
-                            if (_isCheckinPortalEnabled &&
-                                (canManageEntries || canManageShowSettings))
-                              _buildSettingsActionTile(
-                                icon: Icons.fact_check_outlined,
-                                title: 'Check-In Dashboard',
-                                subtitle:
-                                    'Live check-in progress, balances, and exhibitor activity',
-                                onTap: _saving
-                                    ? null
-                                    : () => Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (_) =>
-                                              ShowCheckinDashboardScreen(
-                                                showId: widget.showId,
-                                              ),
-                                        ),
-                                      ),
-                              ),
-                          ],
-                        ),
-
-                        if (canEnterResults ||
-                            canFinalizeShow ||
-                            canManageShowSettings)
+                        if (!updated) ...[
                           _buildSectionCard(
-                            title: 'Post-Show Operations',
+                            title: 'Admin Operations (Pre-show)',
                             children: [
-                              if (canEnterResults)
-                                _buildSettingsActionTile(
-                                  icon: Icons.fact_check,
-                                  title: 'Results Entry',
-                                  subtitle:
-                                      'Enter placements, DQs, and specials by class',
-                                  onTap: _saving ? null : _openResultsEntry,
-                                ),
-                              if (_showLegacyCloseoutActions && canFinalizeShow)
-                                _buildSettingsActionTile(
-                                  icon: Icons.archive,
-                                  title: 'Close Show/Reports',
-                                  subtitle:
-                                      'Finalize, send reports, and lock/download copy',
-                                  onTap: _saving ? null : _openShowCloseout,
-                                ),
-                              if (canFinalizeShow)
-                                _buildSettingsActionTile(
-                                  icon: Icons.archive_outlined,
-                                  title: 'Close Show/Reports V2',
-                                  subtitle:
-                                      'Finalize, send reports, and lock/download a copy',
-                                  onTap: _saving
-                                      ? null
-                                      : () => _openShowCloseoutV2Preview(
-                                          canFinalizeShow: canFinalizeShow,
-                                        ),
-                                ),
-                              if (_showLegacyCloseoutActions &&
-                                  canManageShowSettings)
-                                _buildSettingsActionTile(
-                                  icon: _isLocked
-                                      ? Icons.lock_open
-                                      : Icons.lock,
-                                  title: _isLocked
-                                      ? 'Unlock Show'
-                                      : 'Lock Show',
-                                  subtitle: _isFinalized
-                                      ? 'Finalized shows cannot be unlocked.'
-                                      : _isLocked
-                                      ? 'Allow setup changes again if corrections are needed'
-                                      : 'Prevent further setup changes before closeout',
-                                  onTap: (_saving || _isFinalized)
-                                      ? null
-                                      : _toggleShowLock,
-                                ),
-                              if (_showLegacyCloseoutActions &&
-                                  _isLocked &&
-                                  canManageShowSettings)
-                                _buildSettingsActionTile(
-                                  icon: Icons.download_for_offline,
-                                  title: 'Download Locked Show Data',
-                                  subtitle:
-                                      'Download a ZIP backup of this show’s entries, results, settings, and reports',
-                                  onTap: _saving
-                                      ? null
-                                      : _downloadLockedShowData,
-                                ),
+                              tools[_ShowTool.judges]!,
+                              if (canManageEntries || canManageShowSettings)
+                                tools[_ShowTool.balances]!,
+                              if (canManageEntries) tools[_ShowTool.entries]!,
+                              if (canManageShow) tools[_ShowTool.breedCounts]!,
+                              if (canManageEntries)
+                                tools[_ShowTool.coopNumbers]!,
+                              if (canManageShow) tools[_ShowTool.printPacks]!,
+                              if (_isCheckinPortalEnabled &&
+                                  (canManageEntries || canManageShowSettings))
+                                tools[_ShowTool.checkIn]!,
                             ],
                           ),
 
-                        if (canManageShowSettings)
-                          _buildSectionCard(
-                            title: 'Show Settings',
-                            children: [
-                              _buildSettingsActionTile(
-                                icon: Icons.pets,
-                                title: 'Breed Settings',
-                                subtitle:
-                                    'Manage allowed breeds and varieties for this show',
-                                onTap: _saving ? null : _openBreedSettings,
-                              ),
-                              _buildSettingsActionTile(
-                                icon: Icons.view_module,
-                                title: 'Modify Number of Shows',
-                                subtitle: 'Open A/B, Youth A/B, and setup',
-                                onTap: _saving
-                                    ? null
-                                    : () async {
-                                        await ShowSectionsDialog.open(
-                                          context,
-                                          showId: widget.showId,
-                                          showName: _effectiveShowName(),
-                                        );
-
-                                        if (!mounted) return;
-                                        await _load();
-                                      },
-                              ),
-                              _buildSettingsActionTile(
-                                icon: Icons.confirmation_number,
-                                title: 'Sanction Numbers',
-                                subtitle:
-                                    'Add or edit ARBA and breed/club sanction numbers',
-                                onTap: _saving ? null : _openSanctions,
-                              ),
-                              _buildSettingsActionTile(
-                                icon: Icons.attach_money,
-                                title: 'Show Fees & Payments',
-                                subtitle:
-                                    'Per-animal fees, discounts, day-of-show, and online payment setup',
-                                onTap: _saving ? null : _openFees,
-                              ),
-                              if (_canConfigureBestOpposite)
-                                _buildSettingsActionTile(
-                                  icon: Icons.schedule,
-                                  title: 'Wave Schedule',
-                                  subtitle:
-                                      'Assign breeds to waves and schedule check-in, showing, check-out, and emails',
-                                  onTap: (_saving || _isReadOnly)
-                                      ? null
-                                      : () async {
-                                          await ShowWaveScheduleDialog.open(
-                                            context,
-                                            showId: widget.showId,
-                                            showName: _effectiveShowName(),
-                                          );
-                                          if (mounted) await _load();
-                                        },
-                                ),
-                              if (canManageShowSettings) ...[
-                                _buildSettingsActionTile(
-                                  icon: Icons.emoji_events_outlined,
-                                  title: 'Contest Settings',
-                                  subtitle:
-                                      'Enable contests, set entry fees, and choose registration fields',
-                                  onTap: (_saving || _isReadOnly)
-                                      ? null
-                                      : () => Navigator.push(
-                                          context,
-                                          MaterialPageRoute(
-                                            builder: (_) =>
-                                                ShowAddonSettingsScreen(
-                                                  showId: widget.showId,
-                                                  showName:
-                                                      _effectiveShowName(),
-                                                  kind: 'contest',
-                                                ),
-                                          ),
-                                        ),
-                                ),
-                                _buildSettingsActionTile(
-                                  icon: Icons.confirmation_number_outlined,
-                                  title: 'Show Add-Ons',
-                                  subtitle:
-                                      'Offer extra coops, parking passes, banquet tickets, tours, and custom items',
-                                  onTap: (_saving || _isReadOnly)
-                                      ? null
-                                      : () => Navigator.push(
-                                          context,
-                                          MaterialPageRoute(
-                                            builder: (_) =>
-                                                ShowAddonSettingsScreen(
-                                                  showId: widget.showId,
-                                                  showName:
-                                                      _effectiveShowName(),
-                                                  kind: 'extra',
-                                                ),
-                                          ),
-                                        ),
-                                ),
+                          if (canEnterResults ||
+                              canFinalizeShow ||
+                              canManageShowSettings)
+                            _buildSectionCard(
+                              title: 'Post-Show Operations',
+                              children: [
+                                if (canEnterResults) tools[_ShowTool.results]!,
+                                if (_showLegacyCloseoutActions &&
+                                    canFinalizeShow)
+                                  tools[_ShowTool.legacyCloseout]!,
+                                if (canFinalizeShow) tools[_ShowTool.closeout]!,
+                                if (_showLegacyCloseoutActions &&
+                                    canManageShowSettings)
+                                  tools[_ShowTool.lock]!,
+                                if (_showLegacyCloseoutActions &&
+                                    _isLocked &&
+                                    canManageShowSettings)
+                                  tools[_ShowTool.export]!,
                               ],
-                              if (_canManageCheckinSettings)
-                                _buildSettingsActionTile(
-                                  icon: Icons.qr_code_2,
-                                  title: 'Check-In Settings',
-                                  subtitle:
-                                      'Portal availability, QR code, confirmations, and entry-change permissions',
-                                  onTap: (_saving || _isReadOnly)
-                                      ? null
-                                      : _openCheckinSettings,
-                                ),
-                              _buildSettingsActionTile(
-                                icon: Icons.payments_outlined,
-                                title: 'Payback Settings',
-                                subtitle:
-                                    'Enter class payback schedules and special money by show letter',
-                                onTap: (_saving || _isReadOnly)
-                                    ? null
-                                    : _openPaybacks,
-                              ),
-                              _buildSettingsActionTile(
-                                icon: Icons.visibility_outlined,
-                                title: 'View Superintendent Layout',
-                                subtitle:
-                                    'View the judging line-up for this show; superintendent changes are disabled',
-                                onTap: _openSuperintendentLayout,
-                              ),
-                              if (canManageShowSettings)
-                                _buildSettingsActionTile(
-                                  icon: Icons.manage_accounts,
-                                  title: 'Role Assignments',
-                                  subtitle:
-                                      'Assign Show Superintendent, and Other Staff Roles',
-                                  onTap: _saving ? null : _openRoleAssignments,
-                                ),
-                              if (canManageShowSettings)
-                                _buildSettingsActionTile(
-                                  icon: Icons.history,
-                                  title: 'Audit Log Table',
-                                  subtitle:
-                                      'Review QR overrides and writer activity for this show',
-                                  onTap: _saving ? null : _openAuditLogTable,
-                                ),
-                              //                               _buildSettingsActionTile(
-                              //                                 icon: Icons.rule,
-                              //                                 title: 'Show Rules',
-                              //                                 subtitle:
-                              //                                     'Validations like tattoo required, limits, and required fields',
-                              //                                 onTap: (_saving || _isReadOnly) ? null : _openRules,
-                              //                               ),
+                            ),
+
+                          if (canManageShowSettings)
+                            _buildSectionCard(
+                              title: 'Show Settings',
+                              children: [
+                                tools[_ShowTool.breeds]!,
+                                tools[_ShowTool.sections]!,
+                                tools[_ShowTool.sanctions]!,
+                                tools[_ShowTool.fees]!,
+                                if (_canConfigureBestOpposite)
+                                  tools[_ShowTool.waves]!,
+                                if (canManageShowSettings) ...[
+                                  tools[_ShowTool.contests]!,
+                                  tools[_ShowTool.addOns]!,
+                                ],
+                                if (_canManageCheckinSettings)
+                                  tools[_ShowTool.checkInSettings]!,
+                                tools[_ShowTool.paybacks]!,
+                                tools[_ShowTool.lineup]!,
+                                if (canManageShowSettings)
+                                  tools[_ShowTool.roles]!,
+                                if (canManageShowSettings)
+                                  tools[_ShowTool.audit]!,
+                              ],
+                            ),
+                        ] else if (selected == _ShowWorkspaceArea.overview)
+                          _buildWorkspaceOverview(available)
+                        else if (selected != _ShowWorkspaceArea.setup)
+                          _buildSectionCard(
+                            title: selected.label,
+                            children: [
+                              for (final tool in available[selected]!)
+                                tools[tool]!,
+                            ],
+                          )
+                        else if (available[selected]!.isNotEmpty)
+                          _buildSectionCard(
+                            title: 'Configuration',
+                            children: [
+                              for (final tool in available[selected]!)
+                                tools[tool]!,
                             ],
                           ),
 
                         const SizedBox(height: 8),
 
-                        if (canManageShowSettings)
+                        if (showingSetup && canManageShowSettings)
                           FilledButton(
                             style: FilledButton.styleFrom(
                               backgroundColor: AppColors.primaryButton,

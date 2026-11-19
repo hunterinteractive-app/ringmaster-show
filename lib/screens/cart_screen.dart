@@ -21,6 +21,8 @@ import '../services/payment_quote_preview_service.dart';
 import '../services/entry_discount_service.dart';
 import '../widgets/discounts/cart_discount_codes.dart';
 import '../widgets/cart_registration_requirements_dialog.dart';
+import '../widgets/rm_widgets.dart';
+import '../widgets/show_layout_scope.dart';
 import '../services/exhibitor_fee_service.dart';
 import '../services/show_addon_service.dart';
 import '../models/show_addon.dart';
@@ -1416,6 +1418,7 @@ class _CartScreenState extends State<CartScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final updated = ShowLayoutScope.isUpdated(context);
     final overallFee = _calculateFeesForItems(_items);
     final currency = overallFee['currency'] as String;
     final onlinePaymentFee = _selectedPaymentTiming == 'online'
@@ -1487,6 +1490,17 @@ class _CartScreenState extends State<CartScreen> {
           ? const Center(child: CircularProgressIndicator())
           : ListView(
               children: [
+                if (updated && !_cartLocked && _hasCheckoutItems)
+                  const Padding(
+                    padding: EdgeInsets.all(AppSpacing.lg),
+                    child: RMCard(
+                      child: RMSectionHeader(
+                        title: 'Review & Submit',
+                        subtitle:
+                            'Your cart is a draft until you confirm registration or complete online payment.',
+                      ),
+                    ),
+                  ),
                 if (_cartLocked)
                   Padding(
                     padding: const EdgeInsets.all(16),

@@ -2,7 +2,9 @@
 /// No record queries or AI calls are needed to display these.
 List<String> assistantSuggestions(String title) {
   final page = title.toLowerCase();
-  if (page.contains('show finances') || page.contains('entry mgmt')) {
+  if (page.contains('show finances') ||
+      page.contains('workspace · finances') ||
+      page.contains('entry mgmt')) {
     return const [
       'How do I record a PayPal, Venmo or Zelle payment?',
       'How do I correct a balance without recording a payment?',
@@ -47,6 +49,7 @@ List<String> assistantSuggestions(String title) {
     ];
   }
   if (page.contains('show settings') ||
+      page.contains('show workspace') ||
       page.contains('show sections') ||
       page.contains('create show') ||
       page.contains('manage shows')) {
@@ -77,7 +80,7 @@ List<String> assistantSuggestions(String title) {
       'How do I correct my animal’s information?',
     ];
   }
-  if (page.contains('upcoming shows')) {
+  if (page.contains('upcoming shows') || page.contains('open for entry')) {
     return const [
       'How do I enter a show?',
       'How do I find a show’s entry deadline?',
@@ -167,7 +170,23 @@ const assistantPreparedAnswers = <String, String>{
       'Open My Entries, expand the show, and review the animals and sections listed for your exhibitor. Check your household selection if something is missing. Saving an animal or leaving it in the cart does not submit an entry.',
 };
 
-String? assistantPreparedAnswer(String question) {
+String? assistantPreparedAnswer(String question, {bool updatedLayout = false}) {
+  String? forLayout(String? answer) {
+    if (!updatedLayout || answer == null) return answer;
+    return answer
+        .replaceAll(
+          'Manage / Show Settings page, then Show Finances under Admin Operations',
+          'Manage Show workspace, then Finances → Balances & Payment History',
+        )
+        .replaceAll(
+          'Show Settings → Show Finances',
+          'Manage Show → Finances → Balances & Payment History',
+        )
+        .replaceAll('Close Show/Reports', 'Reports & Closeout')
+        .replaceAll('Past Show Reports', 'My Entries → Past Reports')
+        .replaceAll('Upcoming Shows', 'Open for Entry');
+  }
+
   final normalized = question
       .trim()
       .toLowerCase()
@@ -178,7 +197,9 @@ String? assistantPreparedAnswer(String question) {
         r'\b(payment|payments|paid|paypal|venmo|zelle)\b',
       ).hasMatch(normalized) &&
       RegExp(r'\b(how|where)\b').hasMatch(normalized)) {
-    return assistantPreparedAnswers['How do I record a PayPal, Venmo or Zelle payment?'];
+    return forLayout(
+      assistantPreparedAnswers['How do I record a PayPal, Venmo or Zelle payment?'],
+    );
   }
   for (final entry in assistantPreparedAnswers.entries) {
     if (entry.key
@@ -186,7 +207,7 @@ String? assistantPreparedAnswer(String question) {
             .replaceAll('’', "'")
             .replaceAll(RegExp(r'[?!.]+$'), '') ==
         normalized) {
-      return entry.value;
+      return forLayout(entry.value);
     }
   }
   return null;

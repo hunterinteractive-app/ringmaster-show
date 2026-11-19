@@ -16,6 +16,7 @@ import '../../screens/account_settings_screen.dart';
 import '../../theme/app_theme.dart';
 import '../../services/app_session.dart';
 import '../../widgets/rm_widgets.dart';
+import '../../widgets/show_layout_scope.dart';
 
 SupabaseClient get supabase => ringMasterClient;
 
@@ -517,7 +518,10 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
   Future<void> _openEditShow(String showId) async {
     await Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => EditShowSettingsScreen(showId: showId)),
+      MaterialPageRoute(
+        builder: (_) =>
+            EditShowSettingsScreen(showId: showId, demoMode: _isDemoMode),
+      ),
     );
     if (mounted) {
       await _reload();
@@ -633,8 +637,9 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
 
   Widget _buildShowCard(
     Map<String, dynamic> show,
-    Future<_ShowEntryCounts?> countsFuture,
-  ) {
+    Future<_ShowEntryCounts?> countsFuture, {
+    required bool updated,
+  }) {
     final showId = show['id'].toString();
     final name = (show['name'] ?? '').toString();
     final start = _fmtDate((show['start_date'] ?? '').toString());
@@ -650,7 +655,7 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.md),
       child: RMCard(
-        onTap: () => _openEditShow(showId),
+        onTap: updated ? null : () => _openEditShow(showId),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -731,6 +736,17 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
                 );
               },
             ),
+            if (updated) ...[
+              const SizedBox(height: AppSpacing.sm),
+              Align(
+                alignment: Alignment.centerRight,
+                child: FilledButton.icon(
+                  onPressed: () => _openEditShow(showId),
+                  icon: const Icon(Icons.arrow_forward, size: 18),
+                  label: const Text('Manage Show'),
+                ),
+              ),
+            ],
           ],
         ),
       ),
@@ -739,6 +755,7 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final updated = !_isDemoMode && ShowLayoutScope.isUpdated(context);
     ShowAssistantController.instance.register(context, 'Manage Shows', null);
     return FutureBuilder<_AdminShowsPageData>(
       future: _pageFuture,
@@ -764,6 +781,7 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
                 license.canCreate &&
                 snap.connectionState != ConnectionState.waiting,
             demoMode: _isDemoMode,
+            updated: updated,
             onShows: _openShows,
             onAnimals: _openAnimals,
             onEntries: _openEntries,
@@ -807,91 +825,103 @@ class _AdminShowsScreenState extends State<AdminShowsScreen> {
                         ),
                       ),
                     )
-                  : Padding(
-                      padding: const EdgeInsets.all(AppSpacing.lg),
-                      child: Column(
-                        children: [
-                          _buildLicenseBanner(license),
-                          if (AppSession.isSupportMode) ...[
-                            const SizedBox(height: AppSpacing.md),
-                            RMCard(
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Icon(
-                                    Icons.support_agent,
-                                    color: Colors.orange,
-                                  ),
-                                  const SizedBox(width: AppSpacing.md),
-                                  Expanded(
-                                    child: Text(
-                                      AppSession.supportReadOnly ? 'Support preview — creating shows is disabled.' : 'New shows belong to ${AppSession.impersonatedUserEmail} and use that account’s license.',
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.w700,
+                  : Align(
+                      alignment: Alignment.topCenter,
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(
+                          maxWidth: updated ? 1050 : double.infinity,
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(AppSpacing.lg),
+                          child: Column(
+                            children: [
+                              _buildLicenseBanner(license),
+                              if (AppSession.isSupportMode) ...[
+                                const SizedBox(height: AppSpacing.md),
+                                RMCard(
+                                  child: Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      const Icon(
+                                        Icons.support_agent,
+                                        color: Colors.orange,
                                       ),
-                                    ),
+                                      const SizedBox(width: AppSpacing.md),
+                                      Expanded(
+                                        child: Text(
+                                          AppSession.supportReadOnly
+                                              ? 'Support preview — creating shows is disabled.'
+                                              : 'New shows belong to ${AppSession.impersonatedUserEmail} and use that account’s license.',
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
                                   ),
-                                ],
+                                ),
+                              ],
+                              const SizedBox(height: AppSpacing.md),
+                              RMCard(
+                                child: TextField(
+                                  controller: _searchController,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Search shows',
+                                    hintText:
+                                        'Show name, location, date, published, draft...',
+                                    prefixIcon: Icon(Icons.search),
+                                    border: OutlineInputBorder(),
+                                  ),
+                                ),
                               ),
-                            ),
-                          ],
-                          const SizedBox(height: AppSpacing.md),
-                          RMCard(
-                            child: TextField(
-                              controller: _searchController,
-                              decoration: const InputDecoration(
-                                labelText: 'Search shows',
-                                hintText:
-                                    'Show name, location, date, published, draft...',
-                                prefixIcon: Icon(Icons.search),
-                                border: OutlineInputBorder(),
-                              ),
-                            ),
+                              const SizedBox(height: AppSpacing.md),
+                              if (page?.hasAdminAccess != true)
+                                const Expanded(
+                                  child: RMEmptyState(
+                                    title: 'No show secretary access yet',
+                                    subtitle:
+                                        'You do not currently have access to manage any shows.',
+                                    icon: Icons.assignment_ind_outlined,
+                                  ),
+                                )
+                              else if ((page?.shows ?? []).isEmpty)
+                                const Expanded(
+                                  child: RMEmptyState(
+                                    title: 'No shows available',
+                                    subtitle:
+                                        'No shows were found for your current admin access.',
+                                    icon: Icons.event_busy_outlined,
+                                  ),
+                                )
+                              else if (shows.isEmpty)
+                                const Expanded(
+                                  child: RMEmptyState(
+                                    title: 'No matching shows',
+                                    subtitle: 'Try a different search term.',
+                                    icon: Icons.search_off,
+                                  ),
+                                )
+                              else
+                                Expanded(
+                                  child: ListView(
+                                    children: [
+                                      for (final section in showSections) ...[
+                                        _buildSectionHeader(section.group),
+                                        for (final show in section.shows)
+                                          _buildShowCard(
+                                            show,
+                                            page!.entryCounts[show['id']
+                                                .toString()]!,
+                                            updated: updated,
+                                          ),
+                                      ],
+                                    ],
+                                  ),
+                                ),
+                            ],
                           ),
-                          const SizedBox(height: AppSpacing.md),
-                          if (page?.hasAdminAccess != true)
-                            const Expanded(
-                              child: RMEmptyState(
-                                title: 'No show secretary access yet',
-                                subtitle:
-                                    'You do not currently have access to manage any shows.',
-                                icon: Icons.assignment_ind_outlined,
-                              ),
-                            )
-                          else if ((page?.shows ?? []).isEmpty)
-                            const Expanded(
-                              child: RMEmptyState(
-                                title: 'No shows available',
-                                subtitle:
-                                    'No shows were found for your current admin access.',
-                                icon: Icons.event_busy_outlined,
-                              ),
-                            )
-                          else if (shows.isEmpty)
-                            const Expanded(
-                              child: RMEmptyState(
-                                title: 'No matching shows',
-                                subtitle: 'Try a different search term.',
-                                icon: Icons.search_off,
-                              ),
-                            )
-                          else
-                            Expanded(
-                              child: ListView(
-                                children: [
-                                  for (final section in showSections) ...[
-                                    _buildSectionHeader(section.group),
-                                    for (final show in section.shows)
-                                      _buildShowCard(
-                                        show,
-                                        page!.entryCounts[show['id']
-                                            .toString()]!,
-                                      ),
-                                  ],
-                                ],
-                              ),
-                            ),
-                        ],
+                        ),
                       ),
                     ),
             ),
@@ -912,6 +942,7 @@ class _AdminShowsAppBar extends StatelessWidget implements PreferredSizeWidget {
   final VoidCallback? onCreate;
   final bool canCreate;
   final bool demoMode;
+  final bool updated;
 
   const _AdminShowsAppBar({
     required this.onShows,
@@ -923,14 +954,62 @@ class _AdminShowsAppBar extends StatelessWidget implements PreferredSizeWidget {
     required this.onCreate,
     required this.canCreate,
     required this.demoMode,
+    required this.updated,
   });
 
   @override
-  Size get preferredSize => const Size.fromHeight(92);
+  Size get preferredSize => Size.fromHeight(updated ? 64 : 92);
 
   @override
   Widget build(BuildContext context) {
     final width = MediaQuery.of(context).size.width;
+    if (updated) {
+      return AppBar(
+        toolbarHeight: preferredSize.height,
+        title: const Text('Show Secretary'),
+        actions: [
+          if (canCreate && width >= 520)
+            Padding(
+              padding: const EdgeInsets.only(right: AppSpacing.sm),
+              child: FilledButton.icon(
+                onPressed: onCreate,
+                icon: const Icon(Icons.add),
+                label: const Text('Create Show'),
+              ),
+            ),
+          _TopBarOverflowMenu(
+            actions: [
+              if (canCreate && width < 520)
+                _TopBarActionData(
+                  icon: Icons.add,
+                  label: 'Create Show',
+                  onTap: onCreate,
+                ),
+              _TopBarActionData(
+                icon: Icons.refresh,
+                label: 'Reload',
+                onTap: onReload,
+              ),
+              _TopBarActionData(
+                icon: Icons.perm_media_outlined,
+                label: 'Secretary Resources',
+                onTap: onResources,
+              ),
+              _TopBarActionData(
+                icon: Icons.event,
+                label: 'Exhibitor Home',
+                onTap: onShows,
+              ),
+              _TopBarActionData(
+                icon: Icons.manage_accounts,
+                label: 'Account Settings',
+                onTap: onAccount,
+              ),
+            ],
+          ),
+        ],
+      );
+    }
     final actionItems = demoMode
         ? [
             _TopBarActionData(

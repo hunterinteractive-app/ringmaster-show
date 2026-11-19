@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - test/ada-accessibility
+  workflow_dispatch:
 
 jobs:
   build-and-deploy:
@@ -46,8 +47,20 @@ jobs:
       - name: Verify exhibitor award counts and mobile breed layouts
         run: flutter test test/exhibitor_award_populations_test.dart test/exhibitor_report_pdf_layout_test.dart test/breed_counts_mobile_layout_test.dart
 
+      - name: Verify staged Show layouts
+        run: |
+          flutter test test/show_layout_rollout_test.dart test/submitted_balance_payment_test.dart
+          flutter test --platform chrome test/show_layout_navigation_widget_test.dart
+
       - name: Build Flutter Web
-        run: flutter build web --release --pwa-strategy=none
+        run: |
+          case "$SHOW_LAYOUT_ROLLOUT" in
+            classic|super_admin_preview|opt_in|launched) ;;
+            *) echo "Unknown SHOW_LAYOUT_ROLLOUT value" >&2; exit 1 ;;
+          esac
+          flutter build web --release --pwa-strategy=none --dart-define="SHOW_LAYOUT_ROLLOUT=$SHOW_LAYOUT_ROLLOUT"
+        env:
+          SHOW_LAYOUT_ROLLOUT: ${{ vars.SHOW_LAYOUT_ROLLOUT || 'super_admin_preview' }}
 
       - name: Deploy to Cloudflare Pages
         run: |

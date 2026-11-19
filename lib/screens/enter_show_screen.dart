@@ -7,6 +7,7 @@ import 'package:ringmaster_show/reporting_core/network/transient_retry.dart';
 
 import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
+import '../widgets/show_layout_scope.dart';
 import 'package:ringmaster_show/services/ringmaster_backend.dart';
 import 'package:ringmaster_show/theme/app_theme.dart';
 import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
@@ -2577,6 +2578,7 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final updated = ShowLayoutScope.isUpdated(context);
     return FutureBuilder<_EnterShowLoadBundle>(
       future: _loadFuture,
       builder: (context, snap) {
@@ -2650,6 +2652,27 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
                             ownerId: AppSession.householdOwnerUserId,
                             onRefreshed: _reloadAll,
                           ),
+                          if (updated && _hasUnsubmittedCart)
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                              child: AppTheme.surfaceTextScope(
+                                context,
+                                child: Card(
+                                  color: AppColors.surface,
+                                  child: ListTile(
+                                    leading: const Icon(
+                                      Icons.shopping_cart_outlined,
+                                    ),
+                                    title: const Text('Draft cart'),
+                                    subtitle: const Text(
+                                      'Review and submit to complete your registration.',
+                                    ),
+                                    trailing: const Icon(Icons.chevron_right),
+                                    onTap: _submitting ? null : _viewCart,
+                                  ),
+                                ),
+                              ),
+                            ),
                           if (_hasShowAddons)
                             Padding(
                               padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),

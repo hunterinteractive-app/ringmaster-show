@@ -24,6 +24,7 @@ import 'package:ringmaster_show/screens/admin/closeout/data/loaders/breed_awards
 import 'package:ringmaster_show/screens/admin/closeout/pdf/builders/breed_awards_overview_pdf.dart';
 
 import 'package:flutter/material.dart';
+import '../../widgets/show_layout_scope.dart';
 import 'package:ringmaster_show/theme/app_theme.dart';
 import 'package:ringmaster_show/reporting_core/assets/flutter_report_asset_loader.dart';
 import 'package:ringmaster_show/screens/admin/closeout/csv/builders/michelles_special_report_csv.dart';
@@ -383,7 +384,13 @@ class _ShowCloseoutV2PreviewPageState extends State<ShowCloseoutV2PreviewPage> {
     }
 
     return Scaffold(
-      appBar: AppBar(title: Text('${widget.showName} • Close Show/Reports V2')),
+      appBar: AppBar(
+        title: Text(
+          ShowLayoutScope.isUpdated(context)
+              ? '${widget.showName} • Reports & Closeout'
+              : '${widget.showName} • Close Show/Reports V2',
+        ),
+      ),
       body: ListView(
         controller: _pageScrollController,
         key: PageStorageKey<String>('closeout-v2-${widget.showId}'),

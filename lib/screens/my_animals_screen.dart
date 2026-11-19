@@ -2,6 +2,8 @@ import '../widgets/animal_sync_panel.dart';
 // lib/screens/my_animals_screen.dart
 
 import 'package:flutter/material.dart';
+import '../widgets/exhibitor_navigation.dart';
+import '../widgets/show_layout_scope.dart';
 import 'package:ringmaster_show/services/ringmaster_backend.dart';
 
 import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
@@ -169,6 +171,7 @@ class _MyAnimalsScreenState extends State<MyAnimalsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final updated = ShowLayoutScope.isUpdated(context);
     if (_animalsOwnerId != AppSession.householdOwnerUserId) {
       _animalsOwnerId = AppSession.householdOwnerUserId;
       _animalsFuture = _loadAnimals();
@@ -177,13 +180,17 @@ class _MyAnimalsScreenState extends State<MyAnimalsScreen> {
       title: 'RingMaster Show',
       subtitle: 'My Animals',
       showBackButton: true,
+      bottomNavigationBar: updated
+          ? const ExhibitorNavigation(current: ExhibitorDestination.animals)
+          : null,
       useScrollView: false,
       actions: [
-        IconButton(
-          tooltip: 'Entries',
-          icon: const Icon(Icons.receipt_long),
-          onPressed: () => _openEntries(context),
-        ),
+        if (!updated)
+          IconButton(
+            tooltip: 'Entries',
+            icon: const Icon(Icons.receipt_long),
+            onPressed: () => _openEntries(context),
+          ),
         IconButton(
           tooltip: AppSession.supportReadOnly
               ? 'Account disabled in support mode'

@@ -10,6 +10,8 @@ import 'package:ringmaster_show/reporting_core/network/transient_retry.dart';
 // ignore_for_file: deprecated_member_use
 
 import 'package:flutter/material.dart';
+import '../widgets/exhibitor_navigation.dart';
+import '../widgets/show_layout_scope.dart';
 import '../widgets/convention_sale_banner.dart';
 import 'package:ringmaster_show/services/ringmaster_backend.dart';
 
@@ -210,6 +212,7 @@ class _ShowListScreenState extends State<ShowListScreen> {
   String _sortMode = 'date';
   String _stateFilter = 'All';
   bool _showSearchFilters = true;
+  bool _showUpdatedFilters = false;
   bool _checkingLegal = true;
   String? _legalError;
   bool _canAccessAdmin = false;
@@ -1281,7 +1284,10 @@ class _ShowListScreenState extends State<ShowListScreen> {
   }
 
   Future<void> _logout(BuildContext context) async {
-    if (AppSession.isSupportMode) { await _exitSupportMode(); return; }
+    if (AppSession.isSupportMode) {
+      await _exitSupportMode();
+      return;
+    }
     await supabase.auth.signOut();
     if (!context.mounted) return;
     Navigator.of(context).pushAndRemoveUntil(
@@ -1431,6 +1437,7 @@ class _ShowListScreenState extends State<ShowListScreen> {
     String showId,
     String showName,
   ) async {
+    final updated = ShowLayoutScope.isUpdated(context);
     showDialog<void>(
       context: context,
       barrierDismissible: false,
@@ -1450,6 +1457,7 @@ class _ShowListScreenState extends State<ShowListScreen> {
     );
 
     bool payOnline = false;
+    bool payAtShow = false;
     String? cartId;
     bool hasCartItems = false;
     String? error;
@@ -1459,6 +1467,7 @@ class _ShowListScreenState extends State<ShowListScreen> {
       // account rows are manager-only, so querying account status here made
       // the payment indicator disagree with what exhibitors can check out.
       final configuration = await ShowPaymentConfigurationService.load(showId);
+      payAtShow = configuration.allowAtShow;
       payOnline =
           configuration.allowOnline &&
           configuration.providers.any(
@@ -1492,89 +1501,118 @@ class _ShowListScreenState extends State<ShowListScreen> {
     Navigator.of(context, rootNavigator: true).pop();
 
     if (!context.mounted) return;
+    final paymentLabel = updated
+        ? switch ((error != null, payOnline, payAtShow)) {
+            (true, _, _) => 'Payment options unavailable',
+            (false, true, true) => 'Pay online or at the show',
+            (false, true, false) => 'Pay online',
+            (false, false, true) => 'Pay at the show',
+            _ => 'Payment options unavailable',
+          }
+        : payOnline
+        ? 'Payment: Pay Online'
+        : 'Payment: Paid at Show';
     showDialog<void>(
       context: context,
-      builder: (_) => AlertDialog(
-        title: Text(showName),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+      builder: (dialogContext) {
+        final baseTheme = Theme.of(dialogContext);
+        final theme = updated
+            ? AppTheme.surfaceDialogTheme(baseTheme)
+            : baseTheme;
+        return Theme(
+          data: theme,
+          child: AlertDialog(
+            title: Text(showName),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(
-                  payOnline ? Icons.credit_card : Icons.payments_outlined,
-                  color: payOnline
-                      ? Colors.green
-                      : Theme.of(context).colorScheme.primary,
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    payOnline ? 'Payment: Pay Online' : 'Payment: Paid at Show',
-                    style: const TextStyle(fontWeight: FontWeight.w700),
-                  ),
-                ),
-              ],
-            ),
-            if (error != null) ...[
-              const SizedBox(height: AppSpacing.sm),
-              Text(
-                'Online payment not setup, so this show is paid at show.',
-                style: Theme.of(
-                  context,
-                ).textTheme.bodySmall?.copyWith(color: AppColors.muted),
-              ),
-            ],
-            if (payOnline) ...[
-              const SizedBox(height: AppSpacing.sm),
-              Text(
-                hasCartItems
-                    ? 'Your active cart is ready to review and check out.'
-                    : 'Add entries before checking out online.',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            ],
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
-          ),
-          if (payOnline)
-            FilledButton.icon(
-              onPressed: () {
-                Navigator.pop(context);
-                if (hasCartItems && cartId != null) {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => CartScreen(
-                        cartId: cartId!,
-                        showId: showId,
-                        showName: showName,
+                Row(
+                  children: [
+                    Icon(
+                      payOnline ? Icons.credit_card : Icons.payments_outlined,
+                      color: payOnline
+                          ? Colors.green
+                          : Theme.of(context).colorScheme.primary,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        paymentLabel,
+                        style: const TextStyle(fontWeight: FontWeight.w700),
                       ),
                     ),
-                  );
-                } else {
-                  _openEnterShow(context, showId, showName);
-                }
-              },
-              icon: Icon(
-                hasCartItems
-                    ? Icons.shopping_cart_checkout
-                    : Icons.add_circle_outline,
-              ),
-              label: Text(hasCartItems ? 'Go to checkout' : 'Add entries'),
+                  ],
+                ),
+                if (error != null) ...[
+                  const SizedBox(height: AppSpacing.sm),
+                  Text(
+                    updated
+                        ? 'Try again later or contact the show secretary.'
+                        : 'Online payment not setup, so this show is paid at show.',
+                    style: updated
+                        ? theme.textTheme.bodySmall
+                        : Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: AppColors.muted,
+                          ),
+                  ),
+                ],
+                if (payOnline) ...[
+                  const SizedBox(height: AppSpacing.sm),
+                  Text(
+                    hasCartItems
+                        ? 'Your active cart is ready to review and check out.'
+                        : 'Add entries before checking out online.',
+                    style: updated
+                        ? theme.textTheme.bodySmall
+                        : Theme.of(context).textTheme.bodySmall,
+                  ),
+                ],
+              ],
             ),
-        ],
-      ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Close'),
+              ),
+              if (payOnline)
+                FilledButton.icon(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    if (hasCartItems && cartId != null) {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => CartScreen(
+                            cartId: cartId!,
+                            showId: showId,
+                            showName: showName,
+                          ),
+                        ),
+                      );
+                    } else {
+                      _openEnterShow(context, showId, showName);
+                    }
+                  },
+                  icon: Icon(
+                    hasCartItems
+                        ? Icons.shopping_cart_checkout
+                        : Icons.add_circle_outline,
+                  ),
+                  label: Text(hasCartItems ? 'Go to checkout' : 'Add entries'),
+                ),
+            ],
+          ),
+        );
+      },
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    ShowAssistantController.instance.register(context, 'Upcoming Shows', null);
+    final updated = !widget.demoMode && ShowLayoutScope.isUpdated(context);
+    final pageTitle = updated ? 'Open for Entry' : 'Upcoming Shows';
+    final filtersExpanded = updated ? _showUpdatedFilters : _showSearchFilters;
+    ShowAssistantController.instance.register(context, pageTitle, null);
     if (_checkingLegal) {
       return Scaffold(
         body: Center(
@@ -1605,10 +1643,9 @@ class _ShowListScreenState extends State<ShowListScreen> {
 
         return Scaffold(
           appBar: _ResponsiveShowAppBar(
-            headerHeight: ShowListHeader.heightFor(
-              context,
-              demoMode: widget.demoMode,
-            ),
+            headerHeight: updated
+                ? 60
+                : ShowListHeader.heightFor(context, demoMode: widget.demoMode),
             bundle: bundle,
             showAdmin:
                 !_loadingAdminAccess &&
@@ -1669,25 +1706,37 @@ class _ShowListScreenState extends State<ShowListScreen> {
               builder: (_) => HelpReportDialog(
                 pageTitle: widget.demoMode
                     ? 'Demo Mode — RingMaster Show'
-                    : 'Upcoming Shows',
+                    : pageTitle,
                 pageRoute: ModalRoute.of(context)?.settings.name,
               ),
             ),
             onLogout: () => _logout(context),
             demoMode: widget.demoMode,
+            updated: updated,
           ),
-          bottomNavigationBar: _adminAccessError == null
+          bottomNavigationBar: !updated && _adminAccessError == null
               ? null
-              : SafeArea(
-                  child: MaterialBanner(
-                    content: Text(_adminAccessError!),
-                    actions: [
-                      TextButton(
-                        onPressed: _loadAdminAccess,
-                        child: const Text('Retry staff access'),
+              : Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (_adminAccessError != null)
+                      SafeArea(
+                        bottom: !updated,
+                        child: MaterialBanner(
+                          content: Text(_adminAccessError!),
+                          actions: [
+                            TextButton(
+                              onPressed: _loadAdminAccess,
+                              child: const Text('Retry staff access'),
+                            ),
+                          ],
+                        ),
                       ),
-                    ],
-                  ),
+                    if (updated)
+                      const ExhibitorNavigation(
+                        current: ExhibitorDestination.shows,
+                      ),
+                  ],
                 ),
           body: Container(
             decoration: const BoxDecoration(gradient: AppGradients.page),
@@ -1709,6 +1758,7 @@ class _ShowListScreenState extends State<ShowListScreen> {
 
                     if (allShows.isEmpty) {
                       content = _UpcomingShowsEmptyState(
+                        updated: updated,
                         showAdminButton:
                             !_loadingAdminAccess &&
                             (_canAccessAdmin || bundle.canSeeAdminButton),
@@ -1784,7 +1834,9 @@ class _ShowListScreenState extends State<ShowListScreen> {
                                           children: [
                                             Expanded(
                                               child: Text(
-                                                'Search Shows',
+                                                updated
+                                                    ? pageTitle
+                                                    : 'Search Shows',
                                                 style: Theme.of(context)
                                                     .textTheme
                                                     .titleSmall
@@ -1798,24 +1850,31 @@ class _ShowListScreenState extends State<ShowListScreen> {
                                             TextButton.icon(
                                               onPressed: () {
                                                 setState(() {
-                                                  _showSearchFilters =
-                                                      !_showSearchFilters;
+                                                  if (updated) {
+                                                    _showUpdatedFilters =
+                                                        !_showUpdatedFilters;
+                                                  } else {
+                                                    _showSearchFilters =
+                                                        !_showSearchFilters;
+                                                  }
                                                 });
                                               },
                                               icon: Icon(
-                                                _showSearchFilters
+                                                filtersExpanded
                                                     ? Icons.expand_less
                                                     : Icons.expand_more,
                                               ),
                                               label: Text(
-                                                _showSearchFilters
-                                                    ? 'Hide'
-                                                    : 'Show',
+                                                updated
+                                                    ? 'Filters'
+                                                    : (filtersExpanded
+                                                          ? 'Hide'
+                                                          : 'Show'),
                                               ),
                                             ),
                                           ],
                                         ),
-                                        if (_showSearchFilters) ...[
+                                        if (updated || filtersExpanded) ...[
                                           const SizedBox(height: AppSpacing.sm),
                                           TextField(
                                             controller: _searchController,
@@ -1833,6 +1892,8 @@ class _ShowListScreenState extends State<ShowListScreen> {
                                               });
                                             },
                                           ),
+                                        ],
+                                        if (filtersExpanded) ...[
                                           const SizedBox(height: AppSpacing.md),
                                           Wrap(
                                             spacing: AppSpacing.md,
@@ -1932,6 +1993,13 @@ class _ShowListScreenState extends State<ShowListScreen> {
                                     ),
                                   ),
                                 ),
+                                if (updated && shows.isEmpty)
+                                  const Padding(
+                                    padding: EdgeInsets.all(AppSpacing.xl),
+                                    child: Text(
+                                      'No shows match your search and filters.',
+                                    ),
+                                  ),
                                 ListView.builder(
                                   shrinkWrap: true,
                                   physics: const NeverScrollableScrollPhysics(),
@@ -1978,11 +2046,13 @@ class _ShowListScreenState extends State<ShowListScreen> {
                                         bottom: AppSpacing.md,
                                       ),
                                       child: RMCard(
-                                        onTap: () => _openEnterShow(
-                                          context,
-                                          showId,
-                                          showName,
-                                        ),
+                                        onTap: updated
+                                            ? null
+                                            : () => _openEnterShow(
+                                                context,
+                                                showId,
+                                                showName,
+                                              ),
                                         child: LayoutBuilder(
                                           builder: (context, cardConstraints) {
                                             // The action row needs considerably
@@ -1991,7 +2061,8 @@ class _ShowListScreenState extends State<ShowListScreen> {
                                             // widths collapses the details into
                                             // a nearly unreadable strip.
                                             final compactCard =
-                                                cardConstraints.maxWidth < 960;
+                                                cardConstraints.maxWidth <
+                                                (updated ? 660 : 960);
 
                                             final showInfo = Column(
                                               crossAxisAlignment:
@@ -2073,35 +2144,109 @@ class _ShowListScreenState extends State<ShowListScreen> {
                                                   ? WrapAlignment.start
                                                   : WrapAlignment.end,
                                               children: [
-                                                OutlinedButton.icon(
-                                                  onPressed: () =>
-                                                      _openBreedsAndSanctions(
-                                                        context,
-                                                        showId,
-                                                        showName,
+                                                if (updated)
+                                                  PopupMenuButton<
+                                                    _ShowCardAction
+                                                  >(
+                                                    tooltip: 'Show details',
+                                                    onSelected: (action) {
+                                                      switch (action) {
+                                                        case _ShowCardAction
+                                                            .counts:
+                                                          _openBreedsAndSanctions(
+                                                            context,
+                                                            showId,
+                                                            showName,
+                                                          );
+                                                        case _ShowCardAction
+                                                            .payment:
+                                                          _showPaymentInfo(
+                                                            context,
+                                                            showId,
+                                                            showName,
+                                                          );
+                                                        case _ShowCardAction
+                                                            .manage:
+                                                          _openEditShow(
+                                                            context,
+                                                            showId,
+                                                          );
+                                                      }
+                                                    },
+                                                    itemBuilder: (_) => [
+                                                      const PopupMenuItem(
+                                                        value: _ShowCardAction
+                                                            .counts,
+                                                        child: Text(
+                                                          'Sanctions and Counts',
+                                                        ),
                                                       ),
-                                                  icon: const Icon(
-                                                    Icons.fact_check_outlined,
-                                                    size: 18,
-                                                  ),
-                                                  label: const Text(
-                                                    'Sanctions and Counts',
-                                                  ),
-                                                ),
-                                                OutlinedButton.icon(
-                                                  onPressed: () =>
-                                                      _showPaymentInfo(
-                                                        context,
-                                                        showId,
-                                                        showName,
+                                                      const PopupMenuItem(
+                                                        value: _ShowCardAction
+                                                            .payment,
+                                                        child: Text(
+                                                          'Payment options',
+                                                        ),
                                                       ),
-                                                  icon: const Icon(
-                                                    Icons.payments_outlined,
-                                                    size: 18,
+                                                      if (isAdminForShow)
+                                                        const PopupMenuItem(
+                                                          value: _ShowCardAction
+                                                              .manage,
+                                                          child: Text(
+                                                            'Manage Show',
+                                                          ),
+                                                        ),
+                                                    ],
+                                                    child: const Padding(
+                                                      padding:
+                                                          EdgeInsets.symmetric(
+                                                            horizontal: 12,
+                                                            vertical: 13,
+                                                          ),
+                                                      child: Text(
+                                                        'Show details',
+                                                        style: TextStyle(
+                                                          color: AppColors
+                                                              .secondaryButton,
+                                                          fontWeight:
+                                                              FontWeight.w600,
+                                                        ),
+                                                      ),
+                                                    ),
                                                   ),
-                                                  label: const Text('Payment'),
-                                                ),
-                                                if (isAdminForShow)
+                                                if (!updated)
+                                                  OutlinedButton.icon(
+                                                    onPressed: () =>
+                                                        _openBreedsAndSanctions(
+                                                          context,
+                                                          showId,
+                                                          showName,
+                                                        ),
+                                                    icon: const Icon(
+                                                      Icons.fact_check_outlined,
+                                                      size: 18,
+                                                    ),
+                                                    label: const Text(
+                                                      'Sanctions and Counts',
+                                                    ),
+                                                  ),
+                                                if (!updated)
+                                                  OutlinedButton.icon(
+                                                    onPressed: () =>
+                                                        _showPaymentInfo(
+                                                          context,
+                                                          showId,
+                                                          showName,
+                                                        ),
+                                                    icon: const Icon(
+                                                      Icons.payments_outlined,
+                                                      size: 18,
+                                                    ),
+                                                    label: const Text(
+                                                      'Payment',
+                                                    ),
+                                                  ),
+                                                if (!updated && isAdminForShow)
                                                   OutlinedButton.icon(
                                                     onPressed: () =>
                                                         _openEditShow(
@@ -2242,7 +2387,22 @@ class _ShowListScreenState extends State<ShowListScreen> {
                         ),
                         child: RMTimezoneNoticeBanner(),
                       ),
-                      Expanded(child: content),
+                      Expanded(
+                        child: updated
+                            ? Center(
+                                child: ConstrainedBox(
+                                  constraints: const BoxConstraints(
+                                    maxWidth: 1050,
+                                  ),
+                                  child: SizedBox(
+                                    width: double.infinity,
+                                    height: double.infinity,
+                                    child: content,
+                                  ),
+                                ),
+                              )
+                            : content,
+                      ),
                     ],
                   );
                 },
@@ -2254,6 +2414,8 @@ class _ShowListScreenState extends State<ShowListScreen> {
     );
   }
 }
+
+enum _ShowCardAction { counts, payment, manage }
 
 class _ResponsiveShowAppBar extends StatelessWidget
     implements PreferredSizeWidget {
@@ -2271,6 +2433,7 @@ class _ResponsiveShowAppBar extends StatelessWidget
   final VoidCallback onHelp;
   final VoidCallback onLogout;
   final bool demoMode;
+  final bool updated;
 
   const _ResponsiveShowAppBar({
     required this.headerHeight,
@@ -2287,6 +2450,7 @@ class _ResponsiveShowAppBar extends StatelessWidget
     required this.onHelp,
     required this.onLogout,
     this.demoMode = false,
+    this.updated = false,
   });
 
   @override
@@ -2307,15 +2471,15 @@ class _ResponsiveShowAppBar extends StatelessWidget
           label: 'Superintendent',
           onTap: onSuperintendent!,
         ),
-      if (!demoMode)
+      if (!demoMode && !updated)
         _TopBarActionData(icon: Icons.pets, label: 'Animals', onTap: onAnimals),
-      if (!demoMode)
+      if (!demoMode && !updated)
         _TopBarActionData(
           icon: Icons.receipt_long,
           label: 'Entries',
           onTap: onEntries,
         ),
-      if (!demoMode)
+      if (!demoMode && !updated)
         _TopBarActionData(
           icon: Icons.description_outlined,
           label: 'Past Show Reports',
@@ -2350,6 +2514,33 @@ class _ResponsiveShowAppBar extends StatelessWidget
       if (!demoMode)
         _TopBarActionData(icon: Icons.logout, label: 'Logout', onTap: onLogout),
     ];
+    if (updated) {
+      return AppBar(
+        toolbarHeight: headerHeight,
+        title: const Text('RingMaster Show'),
+        actions: [
+          if (showAdmin &&
+              onAdmin != null &&
+              MediaQuery.sizeOf(context).width >= 560)
+            _TopBarAction(
+              icon: Icons.admin_panel_settings,
+              label: 'Show Secretary',
+              showLabel: true,
+              onTap: onAdmin!,
+            ),
+          _TopBarOverflowMenu(
+            tooltip: 'Account and staff tools',
+            actions: actionItems
+                .where(
+                  (action) =>
+                      action.label != 'Show Secretary' ||
+                      MediaQuery.sizeOf(context).width < 560,
+                )
+                .toList(),
+          ),
+        ],
+      );
+    }
     final hasOverflow = actionItems.length > _TopBarActionData.maxVisibleIcons;
     final directCount = hasOverflow
         ? _TopBarActionData.maxVisibleIcons - 1
@@ -2395,15 +2586,16 @@ class _TopBarActionData {
 
 class _TopBarOverflowMenu extends StatelessWidget {
   final List<_TopBarActionData> actions;
+  final String tooltip;
 
-  const _TopBarOverflowMenu({required this.actions});
+  const _TopBarOverflowMenu({required this.actions, this.tooltip = 'More'});
 
   @override
   Widget build(BuildContext context) {
     return Theme(
       data: AppTheme.menuFocusTheme(Theme.of(context)),
       child: PopupMenuButton<int>(
-        tooltip: 'More',
+        tooltip: tooltip,
         icon: const Icon(
           Icons.more_vert,
           color: AppColors.headerText,
@@ -2483,10 +2675,12 @@ class _TopBarAction extends StatelessWidget {
 class _UpcomingShowsEmptyState extends StatelessWidget {
   final bool showAdminButton;
   final VoidCallback onAdmin;
+  final bool updated;
 
   const _UpcomingShowsEmptyState({
     required this.showAdminButton,
     required this.onAdmin,
+    required this.updated,
   });
 
   @override
@@ -2507,13 +2701,15 @@ class _UpcomingShowsEmptyState extends StatelessWidget {
                 ),
                 const SizedBox(height: AppSpacing.md),
                 Text(
-                  'No upcoming shows yet',
+                  updated ? 'No shows open for entry' : 'No upcoming shows yet',
                   style: Theme.of(context).textTheme.titleMedium,
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: AppSpacing.sm),
                 Text(
-                  showAdminButton
+                  updated
+                      ? 'Published shows appear here when their entry window opens.'
+                      : showAdminButton
                       ? 'Published shows will appear here once they are available. If you are a show secretary, open Show Secretary to create or manage shows.'
                       : 'Published shows will appear here once they are available.',
                   style: Theme.of(context).textTheme.bodySmall,

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:ringmaster_show/services/ringmaster_backend.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../services/stripe_connect_service.dart';
+import '../theme/app_theme.dart';
 
 /// Existing submissions stay registered while their outstanding fees are paid.
 class SubmittedBalancePayment extends StatefulWidget {
@@ -11,9 +12,11 @@ class SubmittedBalancePayment extends StatefulWidget {
     this.supportUserId,
     this.loadBalances,
     this.startCheckout,
+    this.showPaymentStatus = false,
   });
   final String showId;
   final String? supportUserId;
+  final bool showPaymentStatus;
   bool get readOnly => supportUserId != null;
   final Future<List<Map<String, dynamic>>> Function()? loadBalances;
   final Future<String> Function(String cartId)? startCheckout;
@@ -26,6 +29,7 @@ class _SubmittedBalancePaymentState extends State<SubmittedBalancePayment> {
   List<Map<String, dynamic>> _balances = [];
   String? _error;
   bool _busy = false;
+  bool _loaded = false;
   @override
   void initState() {
     super.initState();
@@ -48,6 +52,7 @@ class _SubmittedBalancePaymentState extends State<SubmittedBalancePayment> {
       if (!mounted) return;
       setState(() {
         _balances = List<Map<String, dynamic>>.from(rows as List);
+        _loaded = true;
         _error = null;
       });
     } catch (_) {
@@ -61,21 +66,24 @@ class _SubmittedBalancePaymentState extends State<SubmittedBalancePayment> {
     if (widget.readOnly) return;
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Pay outstanding balance'),
-        content: const Text(
-          'Your entries will remain submitted. Stripe will show the current total, including any online payment fee, for you to review before paying. Do not enter your animals again.',
+      builder: (context) => Theme(
+        data: AppTheme.surfaceDialogTheme(Theme.of(context)),
+        child: AlertDialog(
+          title: const Text('Pay outstanding balance'),
+          content: const Text(
+            'Your entries will remain submitted. Stripe will show the current total, including any online payment fee, for you to review before paying. Do not enter your animals again.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Continue to secure payment'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Continue to secure payment'),
-          ),
-        ],
       ),
     );
     if (confirmed != true || !mounted || widget.readOnly) return;
@@ -107,6 +115,14 @@ class _SubmittedBalancePaymentState extends State<SubmittedBalancePayment> {
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
+      if (widget.showPaymentStatus) ...[
+        const Text('Payment', style: TextStyle(fontWeight: FontWeight.w700)),
+        if (_loaded && _error == null && _balances.isEmpty)
+          const Padding(
+            padding: EdgeInsets.only(bottom: 12),
+            child: Text('No outstanding cart balance shown.'),
+          ),
+      ],
       if (_error != null)
         Row(
           children: [

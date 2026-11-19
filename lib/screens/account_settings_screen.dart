@@ -4,6 +4,7 @@ import 'household_access_screen.dart';
 // lib/screens/account_settings_screen.dart
 
 import 'package:flutter/material.dart';
+import '../widgets/show_layout_scope.dart';
 import 'package:ringmaster_show/services/ringmaster_backend.dart';
 import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
 
@@ -285,6 +286,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
   // ------------------------------
   @override
   Widget build(BuildContext context) {
+    final layout = ShowLayoutScope.of(context);
     return RingMasterPageShell(
       title: 'RingMaster Show',
       subtitle: 'Account Settings',
@@ -321,6 +323,36 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
           ? const Center(child: CircularProgressIndicator())
           : Column(
               children: [
+                if (layout?.canChoose == true)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                    child: AppTheme.surfaceTextScope(
+                      context,
+                      child: Card(
+                        color: AppColors.surface,
+                        child: SwitchListTile(
+                          title: const Text('Use updated layout'),
+                          subtitle: const Text(
+                            'Applies to Shows, My Entries, and Show Secretary on this device.',
+                          ),
+                          value: layout!.updated,
+                          onChanged: layout.saving
+                              ? null
+                              : (value) async {
+                                  final saved = await layout.onChoose(value);
+                                  if (!context.mounted || saved) return;
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text(
+                                        'Could not save the layout preference. Try again.',
+                                      ),
+                                    ),
+                                  );
+                                },
+                        ),
+                      ),
+                    ),
+                  ),
                 StreamBuilder<AuthState>(
                   stream: supabase.auth.onAuthStateChange,
                   builder: (context, snapshot) => Wrap(

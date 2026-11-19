@@ -246,6 +246,7 @@ class AppTheme {
   static ThemeData get lightTheme {
     final base = ThemeData(
       useMaterial3: true,
+      fontFamily: 'Roboto',
       colorScheme: ColorScheme.fromSeed(
         seedColor: AppColors.secondaryButton,
         brightness: Brightness.light,

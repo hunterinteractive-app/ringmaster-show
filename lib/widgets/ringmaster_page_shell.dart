@@ -18,6 +18,7 @@ class RingMasterPageShell extends StatelessWidget {
   final List<Widget>? actions;
   final Widget? leading;
   final Widget? logo;
+  final Widget? bottomNavigationBar;
 
   final bool useScrollView;
   final EdgeInsetsGeometry bodyPadding;
@@ -40,6 +41,7 @@ class RingMasterPageShell extends StatelessWidget {
     this.actions,
     this.leading,
     this.logo,
+    this.bottomNavigationBar,
     this.useScrollView = false,
     this.bodyPadding = const EdgeInsets.all(16),
     this.backgroundColor,
@@ -128,7 +130,7 @@ class RingMasterPageShell extends StatelessWidget {
 
     final resolvedActions = <Widget>[
       ...(actions ?? const []),
-      if (showHomeButton)
+      if (showHomeButton && bottomNavigationBar == null)
         IconButton(
           tooltip: 'Home',
           icon: const Icon(Icons.home_outlined),
@@ -152,6 +154,7 @@ class RingMasterPageShell extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: topColor,
+      bottomNavigationBar: bottomNavigationBar,
       floatingActionButton: floatingActionButton,
       floatingActionButtonLocation: floatingActionButtonLocation,
       body: SafeArea(
