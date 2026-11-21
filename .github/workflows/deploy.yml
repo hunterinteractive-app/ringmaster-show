@@ -39,7 +39,7 @@ jobs:
       - name: Verify COD awards and recognition boundaries
         run: |
           flutter test test/cod_award_eligibility_test.dart test/recognition_timeline_test.dart test/rabbit_results_rules_test.dart test/cavy_results_rules_test.dart test/report_population_regression_test.dart test/class_population_test.dart test/sweepstakes_cod_population_test.dart
-          flutter test --platform chrome test/qr_results_save_widget_test.dart test/qr_results_species_widget_test.dart test/support_user_search_widget_test.dart
+          flutter test --platform chrome test/qr_results_save_widget_test.dart test/qr_results_species_widget_test.dart test/himalayan_awards_widget_test.dart test/support_user_search_widget_test.dart
 
       - name: Verify independent operational report PDFs
         run: flutter test test/operational_closeout_reports_test.dart test/club_report_grouping_test.dart test/state_club_email_package_test.dart test/report_email_confirmation_test.dart

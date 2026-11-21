@@ -326,77 +326,74 @@ void main() {
     );
   });
 
-  test(
-    'Himalayan specialty awards use breed-level junior and senior awards',
-    () {
-      final senior = rabbit(
-        breed: 'Himalayan',
-        usesGroups: false,
-        usesVarieties: true,
-        className: 'Senior Doe',
-      );
-      final junior = rabbit(
-        breed: 'Himalayan',
-        usesGroups: false,
-        usesVarieties: true,
-        className: 'Junior Buck',
-      );
+  test('Himalayan ordinary shows offer both variety and breed age awards', () {
+    final senior = rabbit(
+      breed: 'Himalayan',
+      usesGroups: false,
+      usesVarieties: true,
+      className: 'Senior Doe',
+    );
+    final junior = rabbit(
+      breed: 'Himalayan',
+      usesGroups: false,
+      usesVarieties: true,
+      className: 'Junior Buck',
+    );
 
-      final seniorOptions = rules.buildAwardOptions(
+    final seniorOptions = rules.buildAwardOptions(
+      entry: senior,
+      classSystem: 'four',
+      finalAwardMode: 'bis_ris',
+    );
+    final juniorOptions = rules.buildAwardOptions(
+      entry: junior,
+      classSystem: 'four',
+      finalAwardMode: 'bis_ris',
+    );
+    expect(seniorOptions, contains('BSB'));
+    expect(seniorOptions, contains('BSV'));
+    expect(juniorOptions, contains('BJB'));
+    expect(juniorOptions, contains('BJV'));
+    expect(
+      rules.canUseAward(
         entry: senior,
+        award: 'BSB',
+        selectedAwards: const {},
+        effectiveStatus: 'Shown',
+        effectivePlacement: '1',
         classSystem: 'four',
         finalAwardMode: 'bis_ris',
-      );
-      final juniorOptions = rules.buildAwardOptions(
-        entry: junior,
-        classSystem: 'four',
-        finalAwardMode: 'bis_ris',
-      );
-      expect(seniorOptions, contains('BSB'));
-      expect(seniorOptions, isNot(contains('BSV')));
-      expect(juniorOptions, contains('BJB'));
-      expect(juniorOptions, isNot(contains('BJV')));
-      expect(
-        rules.canUseAward(
-          entry: senior,
-          award: 'BSB',
-          selectedAwards: const {},
-          effectiveStatus: 'Shown',
-          effectivePlacement: '1',
-          classSystem: 'four',
-          finalAwardMode: 'bis_ris',
-        ),
-        isTrue,
-      );
+      ),
+      isTrue,
+    );
 
-      final nationalSenior = {...senior, 'is_national_show': true};
-      final nationalJunior = {...junior, 'is_national_show': true};
-      final nationalOptions = rules.buildAwardOptions(
+    final nationalSenior = {...senior, 'is_national_show': true};
+    final nationalJunior = {...junior, 'is_national_show': true};
+    final nationalOptions = rules.buildAwardOptions(
+      entry: nationalSenior,
+      classSystem: 'four',
+      finalAwardMode: 'bis_ris',
+    );
+    final nationalJuniorOptions = rules.buildAwardOptions(
+      entry: nationalJunior,
+      classSystem: 'four',
+      finalAwardMode: 'bis_ris',
+    );
+    expect(nationalOptions, containsAll(['BSV', 'BSB']));
+    expect(nationalJuniorOptions, containsAll(['BJV', 'BJB']));
+    expect(
+      rules.canUseAward(
         entry: nationalSenior,
+        award: 'BSB',
+        selectedAwards: const {},
+        effectiveStatus: 'Shown',
+        effectivePlacement: '1',
         classSystem: 'four',
         finalAwardMode: 'bis_ris',
-      );
-      final nationalJuniorOptions = rules.buildAwardOptions(
-        entry: nationalJunior,
-        classSystem: 'four',
-        finalAwardMode: 'bis_ris',
-      );
-      expect(nationalOptions, containsAll(['BSV', 'BSB']));
-      expect(nationalJuniorOptions, containsAll(['BJV', 'BJB']));
-      expect(
-        rules.canUseAward(
-          entry: nationalSenior,
-          award: 'BSB',
-          selectedAwards: const {},
-          effectiveStatus: 'Shown',
-          effectivePlacement: '1',
-          classSystem: 'four',
-          finalAwardMode: 'bis_ris',
-        ),
-        isTrue,
-      );
-    },
-  );
+      ),
+      isTrue,
+    );
+  });
 
   test('rabbit age awards follow breed, age, and national-show rules', () {
     const ageAwards = {
@@ -413,7 +410,17 @@ void main() {
     final cases = [
       (rabbit(), 'four', <String>{}),
       (rabbit(isNationalShow: true), 'four', <String>{}),
-      (rabbit(breed: 'Himalayan'), 'four', {'BSB'}),
+      (rabbit(breed: 'Himalayan'), 'four', {'BSV', 'BSB'}),
+      (
+        rabbit(breed: 'Himalayan', className: 'Junior Buck'),
+        'four',
+        {'BJV', 'BJB'},
+      ),
+      (
+        rabbit(breed: 'Himalayan', className: 'Pre-Junior Buck'),
+        'four',
+        <String>{},
+      ),
       (
         rabbit(breed: 'Himalayan', isNationalShow: true),
         'four',

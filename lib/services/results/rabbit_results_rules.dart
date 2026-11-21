@@ -156,12 +156,11 @@ class RabbitResultsRules implements ResultsRules {
       'checkered giant',
     }.contains(breed);
     final isHimalayan = breed == 'himalayan';
-    final isNationalShow = entry['is_national_show'] == true;
     final awards = <String>[
       if (usesVarietyLayer(entry)) ...[
-        // Himalayan specialty shows award Best Junior/Senior of Breed. Their
-        // Best Junior/Senior of Variety awards are a national-show rule.
-        if (isHimalayan && isNationalShow) ...[
+        // Himalayans award Junior/Senior at both variety and breed level,
+        // including ordinary shows (not only national shows).
+        if (isHimalayan) ...[
           if (className.contains('junior') && !className.contains('pre')) 'BJV',
           if (className.contains('senior')) 'BSV',
         ],

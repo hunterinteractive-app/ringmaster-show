@@ -57,8 +57,10 @@ const List<String> kBestAgeAwardCodes = [
   'Best Senior',
 ];
 
-/// Himalayan specialty shows award these at breed level. National shows keep
-/// the corresponding variety-level awards instead.
+/// Himalayan age awards are offered at both variety and breed level.
+const List<String> kVarietyBestAgeAwardCodes = ['BJV', 'BIV', 'BSV'];
+
+/// Breed-level age awards remain separate from the variety winners.
 const List<String> kBreedBestAgeAwardCodes = ['BJB', 'BIB', 'BSB'];
 
 bool _isFurEntry(Map<String, dynamic> row) {
@@ -119,15 +121,15 @@ bool _bestAgeAwardMatchesClass({
   required String classSystem,
 }) {
   final c = className.trim().toLowerCase();
-  if (award == 'Best Junior' || award == 'BJB') {
+  if (award == 'Best Junior' || award == 'BJB' || award == 'BJV') {
     return c.contains('junior') && !_isPreJuniorClassName(className);
   }
 
-  if (award == 'Best Senior' || award == 'BSB') {
+  if (award == 'Best Senior' || award == 'BSB' || award == 'BSV') {
     return c.contains('senior');
   }
 
-  if (award == 'Best Intermediate' || award == 'BIB') {
+  if (award == 'Best Intermediate' || award == 'BIB' || award == 'BIV') {
     return classSystem == 'six' && c.contains('intermediate');
   }
 
@@ -1943,6 +1945,9 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
         switch (award) {
           case 'BOV':
           case 'BOSV':
+          case 'BJV':
+          case 'BIV':
+          case 'BSV':
             final key =
                 '${sectionId(e)}|$award|${species(e)}|${breed(e).toLowerCase()}|${variety(e).toLowerCase()}';
             awardBuckets.putIfAbsent(key, () => <Map<String, dynamic>>[]);
@@ -1976,6 +1981,9 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
             break;
           case 'BOB':
           case 'BOSB':
+          case 'BJB':
+          case 'BIB':
+          case 'BSB':
             final key =
                 '${sectionId(e)}|$award|${species(e)}|${breed(e).toLowerCase()}';
             awardBuckets.putIfAbsent(key, () => <Map<String, dynamic>>[]);
@@ -5443,7 +5451,11 @@ class ResultsAnimalsScreenState extends State<ResultsAnimalsScreen> {
       }
     }
 
-    for (final award in [...kBestAgeAwardCodes, ...kBreedBestAgeAwardCodes]) {
+    for (final award in [
+      ...kBestAgeAwardCodes,
+      ...kVarietyBestAgeAwardCodes,
+      ...kBreedBestAgeAwardCodes,
+    ]) {
       if (!awards.contains(award)) continue;
 
       final isBreedLevelAward = kBreedBestAgeAwardCodes.contains(award);
@@ -7374,7 +7386,11 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
       }
     }
 
-    for (final award in [...kBestAgeAwardCodes, ...kBreedBestAgeAwardCodes]) {
+    for (final award in [
+      ...kBestAgeAwardCodes,
+      ...kVarietyBestAgeAwardCodes,
+      ...kBreedBestAgeAwardCodes,
+    ]) {
       if (!_hasAward(award)) continue;
 
       final isBreedLevelAward = kBreedBestAgeAwardCodes.contains(award);

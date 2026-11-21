@@ -21,6 +21,40 @@ Map<String, dynamic> row(
 };
 
 void main() {
+  for (final age in ['Junior', 'Senior']) {
+    test('Himalayan $age report counts distinguish variety from breed', () {
+      Map<String, dynamic> him(
+        String id,
+        String exhibitor, [
+        Map<String, dynamic> overrides = const {},
+      ]) => row(id, exhibitor, {
+        'breed_name': 'Himalayan',
+        'uses_group_awards': false,
+        'class_name': age,
+        ...overrides,
+      });
+      final winner = him('winner', 'one');
+      final code = age == 'Junior' ? 'BJ' : 'BS';
+      final counts = ExhibitorAwardPopulations([
+        winner,
+        him('doe', 'two', {'sex': 'Doe'}),
+        him('blue', 'three', {'variety_name': 'Blue'}),
+        him('other-age', 'four', {
+          'class_name': age == 'Junior' ? 'Senior' : 'Junior',
+        }),
+        him('youth', 'five', {'section_id': 'youth-a'}),
+        him('fur', 'six', {'is_fur': true}),
+      ]).forEntry(winner, {'${code}V', '${code}B'});
+      expect(
+        [counts['${code}V']!.animals, counts['${code}V']!.exhibitors],
+        [2, 2],
+      );
+      expect(
+        [counts['${code}B']!.animals, counts['${code}B']!.exhibitors],
+        [3, 3],
+      );
+    });
+  }
   test(
     'special populations isolate section, breed, group, variety and sex',
     () {
