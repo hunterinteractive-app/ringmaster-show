@@ -119,6 +119,10 @@ void main() {
   Future<void> select(WidgetTester tester, String label) async {
     final tile = find.widgetWithText(CheckboxListTile, label);
     expect(tile, findsOneWidget);
+    expect(
+      Theme.of(tester.element(tile)).textTheme.bodyMedium!.color,
+      AppColors.text,
+    );
     await tester.ensureVisible(tile);
     await tester.tap(tile);
     await tester.pumpAndSettle();

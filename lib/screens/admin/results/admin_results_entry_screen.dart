@@ -7782,7 +7782,12 @@ class ResultsEntrySheetState extends State<ResultsEntrySheet> {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => AppTheme.surfaceTextScope(
+    context,
+    child: Builder(builder: _buildSurface),
+  );
+
+  Widget _buildSurface(BuildContext context) {
     final coopNumber = (widget.entry['coop_number'] ?? '').toString().trim();
     final animalName = (widget.entry['animal_name'] ?? '').toString().trim();
     final tattoo = (widget.entry['tattoo'] ?? '').toString().trim();
