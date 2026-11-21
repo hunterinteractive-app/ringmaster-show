@@ -8,6 +8,7 @@ import 'package:ringmaster_show/reporting_core/network/transient_retry.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 import '../widgets/show_layout_scope.dart';
+import '../widgets/show_registration_notice.dart';
 import 'package:ringmaster_show/services/ringmaster_backend.dart';
 import 'package:ringmaster_show/theme/app_theme.dart';
 import 'package:ringmaster_show/widgets/ringmaster_page_shell.dart';
@@ -2652,6 +2653,7 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
                             ownerId: AppSession.householdOwnerUserId,
                             onRefreshed: _reloadAll,
                           ),
+                          ShowRegistrationNotice(showId: widget.showId),
                           if (updated && _hasUnsubmittedCart)
                             Padding(
                               padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
