@@ -170,6 +170,10 @@ void main() {
     expect((b + .05) / (a + .05), greaterThanOrEqualTo(4.5));
     expect(tester.takeException(), isNull);
     expect(writes, isEmpty);
+    await tester.enterText(
+      find.descendant(of: dialog, matching: find.byType(TextField)),
+      'Secretary note alone is not a resend.',
+    );
     await tester.tap(find.text('Send Email'));
     for (var i = 0; i < 20; i++) {
       await tester.runAsync(
@@ -200,6 +204,8 @@ void main() {
       'Synthetic Show - State Club Reports - All Shows',
     );
     expect(writes.single['to'], 'state@example.test');
+    expect(writes.single['force_resend'], isFalse);
+    expect(writes.single['message'], 'Secretary note alone is not a resend.');
     expect(find.text('Reports sent to state@example.test.'), findsOneWidget);
     await tester.pumpWidget(const SizedBox.shrink());
   });

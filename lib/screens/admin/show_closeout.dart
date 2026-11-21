@@ -1,3 +1,4 @@
+import 'closeout/widgets/report_email_confirmation.dart';
 import '../../services/show_assistant_service.dart';
 import 'package:ringmaster_show/reporting_core/network/transient_retry.dart';
 // lib/screens/admin/show_closeout.dart
@@ -2343,6 +2344,8 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
     String? subject,
     String? message,
     bool allowLegs = false, // 👈 Leg Change
+    bool forceResend = false,
+    bool bulkResend = false,
   }) async {
     if (artifacts.isEmpty) {
       throw Exception('No reports provided for exhibitor email send.');
@@ -2358,6 +2361,8 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
           subject: subject,
           message: message,
           allowLegs: allowLegs,
+          forceResend: forceResend,
+          bulkResend: bulkResend,
         )
         .timeout(
           const Duration(seconds: 45),
@@ -3651,6 +3656,16 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
     if (!ready) return;
     if (!mounted) return;
 
+    final confirmation = await showReportEmailConfirmation(
+      context,
+      title: 'Send Exhibitor Reports?',
+      description:
+          'Send generated exhibitor reports and earned legs to all exhibitors.',
+      sendLabel: 'Send Reports',
+      bulk: true,
+    );
+    if (confirmation == null || !mounted) return;
+
     setState(() {
       _generatingReport = true;
       _sendingExhibitorReports = true;
@@ -3726,10 +3741,12 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
             to: exhibitor.email,
             subject: '${widget.showName} - Exhibitor Reports',
             message:
-                'Attached are your exhibitor reports and any earned legs from ${widget.showName}.',
+                'Attached are your exhibitor reports and any earned legs from ${widget.showName}.\n\n${confirmation.message}',
+            forceResend: confirmation.forceResend,
+            bulkResend: true,
             allowLegs: true,
           );
-          if (sendResult.skipped) {
+          if (sendResult.skipped || sendResult.alreadySent) {
             skippedCount++;
           } else {
             sentCount++;
@@ -3867,40 +3884,24 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
   }
 
   Future<void> _promptAndSendClubReports() async {
-    final noteController = TextEditingController();
-    final additionalMessage = await showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Send Club Reports'),
-        content: TextField(
-          controller: noteController,
-          maxLines: 5,
-          textCapitalization: TextCapitalization.sentences,
-          decoration: const InputDecoration(
-            labelText: 'Additional delivery note (optional)',
-            hintText: 'Add a note to every club email in this send.',
-            alignLabelWithHint: true,
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancel'),
-          ),
-          FilledButton.icon(
-            onPressed: () => Navigator.of(context).pop(noteController.text),
-            icon: const Icon(Icons.send_outlined),
-            label: const Text('Send Reports'),
-          ),
-        ],
-      ),
+    final confirmation = await showReportEmailConfirmation(
+      context,
+      title: 'Send Club Reports',
+      description: 'Send generated report packages to all clubs.',
+      sendLabel: 'Send Reports',
+      bulk: true,
     );
-    noteController.dispose();
-    if (additionalMessage == null) return;
-    await _sendAllClubReports(additionalMessage: additionalMessage);
+    if (confirmation == null) return;
+    await _sendAllClubReports(
+      additionalMessage: confirmation.message,
+      forceResend: confirmation.forceResend,
+    );
   }
 
-  Future<void> _sendAllClubReports({String additionalMessage = ''}) async {
+  Future<void> _sendAllClubReports({
+    String additionalMessage = '',
+    bool forceResend = false,
+  }) async {
     if (await _blockedBySupportModeForEmailSend('Club')) return;
     if (!_canSendClubReports) {
       if (!mounted) return;
@@ -4061,6 +4062,8 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
       if (deliveryRequests.isNotEmpty) {
         final batchResult = await ReportEmailService()
             .sendClubReportBatch(
+              forceResend: forceResend,
+              resendMessage: additionalMessage,
               showId: widget.showId,
               deliveries: deliveryRequests,
             )
@@ -4228,7 +4231,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
                 'Attached are your earned ARBA legs from ${widget.showName}.',
             allowLegs: true,
           );
-          if (sendResult.skipped) {
+          if (sendResult.skipped || sendResult.alreadySent) {
             skippedCount++;
           } else {
             sentCount++;
@@ -6908,7 +6911,7 @@ class _ShowCloseoutPageState extends State<ShowCloseoutPage>
           subject: '${widget.showName} - ARBA Show Report',
           message:
               'Attached ${list.length == 1 ? 'is the ARBA show report' : 'are the ARBA show reports'} for ${widget.showName}.',
-          forceResend: true,
+          forceResend: false,
         );
 
         if (!mounted) return;

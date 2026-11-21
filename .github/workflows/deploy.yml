@@ -42,7 +42,7 @@ jobs:
           flutter test --platform chrome test/qr_results_save_widget_test.dart test/qr_results_species_widget_test.dart test/support_user_search_widget_test.dart
 
       - name: Verify independent operational report PDFs
-        run: flutter test test/operational_closeout_reports_test.dart test/club_report_grouping_test.dart test/state_club_email_package_test.dart
+        run: flutter test test/operational_closeout_reports_test.dart test/club_report_grouping_test.dart test/state_club_email_package_test.dart test/report_email_confirmation_test.dart
 
       - name: Verify exhibitor award counts and mobile breed layouts
         run: flutter test test/exhibitor_award_populations_test.dart test/exhibitor_report_pdf_layout_test.dart test/breed_counts_mobile_layout_test.dart test/show_registration_notice_test.dart
@@ -51,6 +51,9 @@ jobs:
         run: |
           flutter test test/show_layout_rollout_test.dart test/submitted_balance_payment_test.dart
           flutter test --platform chrome test/show_layout_navigation_widget_test.dart
+
+      - name: Verify report email duplicate protection
+        run: npx --yes deno@2.9.6 test --allow-env supabase/functions/send-report-email/handler_test.ts supabase/functions/send-club-report-batch/handler_test.ts
 
       - name: Build Flutter Web
         run: |

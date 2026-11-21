@@ -1,3 +1,4 @@
+import 'closeout/widgets/report_email_confirmation.dart';
 import 'closeout/data/loaders/ribbon_payout_report_loader.dart';
 import 'closeout/pdf/builders/ribbon_payout_report_pdf.dart';
 import 'closeout/data/loaders/payback_report_loader.dart';
@@ -25,7 +26,6 @@ import 'package:ringmaster_show/screens/admin/closeout/pdf/builders/breed_awards
 
 import 'package:flutter/material.dart';
 import '../../widgets/show_layout_scope.dart';
-import 'package:ringmaster_show/theme/app_theme.dart';
 import 'package:ringmaster_show/reporting_core/assets/flutter_report_asset_loader.dart';
 import 'package:ringmaster_show/screens/admin/closeout/csv/builders/michelles_special_report_csv.dart';
 import 'package:ringmaster_show/screens/admin/closeout/csv/builders/other_reports_csv.dart';
@@ -2896,28 +2896,17 @@ class _PublishResultsPanelState extends State<_PublishResultsPanel> {
     }
     final groups = _deliveryGroups(eligible, clubs: clubs);
     final recipientCount = groups.length;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Send ${clubs ? 'Club' : 'Exhibitor'} Reports?'),
-        content: Text(
-          clubs
-              ? 'This will send one email to each of $recipientCount club ${recipientCount == 1 ? 'recipient' : 'recipients'}. Each email includes that club\'s generated report package.'
-              : 'This will send one email to each of $recipientCount exhibitor ${recipientCount == 1 ? 'recipient' : 'recipients'}, including their generated reports.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Send Reports'),
-          ),
-        ],
-      ),
+    final confirmation = await showReportEmailConfirmation(
+      context,
+      title: 'Send ${clubs ? 'Club' : 'Exhibitor'} Reports?',
+      description: clubs
+          ? 'This will send one email to each of $recipientCount club ${recipientCount == 1 ? 'recipient' : 'recipients'}. Each email includes that club\'s generated report package.'
+          : 'This will send one email to each of $recipientCount exhibitor ${recipientCount == 1 ? 'recipient' : 'recipients'}, including their generated reports.',
+      sendLabel: 'Send Reports',
+      initialMessage: additionalMessage,
+      bulk: true,
     );
-    if (confirmed != true || !mounted) return;
+    if (confirmation == null || !mounted) return;
     setState(() => _sending = true);
     _activeDeliveryProgress.value = _ActiveDeliveryProgress(
       recipientType: clubs ? 'club' : 'exhibitor',
@@ -2937,27 +2926,28 @@ class _PublishResultsPanelState extends State<_PublishResultsPanel> {
         var skippedEmail = false;
         try {
           if (clubs) {
-            await emailService.sendClubReportEmail(
+            final result = await emailService.sendClubReportEmail(
               showId: widget.showId,
               artifactIds: entry.value.map((artifact) => artifact.id).toList(),
               to: recipient,
               subject: '${widget.showName} - Club Reports',
-              message: additionalMessage,
-              // A secretary note changes the content of a prior package, so it
-              // must not be absorbed by the recipient/subject duplicate check.
-              forceResend: additionalMessage.isNotEmpty,
+              message: confirmation.message,
+              forceResend: confirmation.forceResend,
+              bulkResend: true,
             );
+            skippedEmail = result.alreadySent || result.skipped;
           } else {
             final result = await emailService.sendExhibitorReportEmail(
               showId: widget.showId,
               artifactIds: entry.value.map((artifact) => artifact.id).toList(),
               to: recipient,
               subject: '${widget.showName} - Exhibitor Reports',
-              message: additionalMessage,
+              message: confirmation.message,
               allowLegs: true,
-              forceResend: additionalMessage.isNotEmpty,
+              forceResend: confirmation.forceResend,
+              bulkResend: true,
             );
-            skippedEmail = result.skipped;
+            skippedEmail = result.alreadySent || result.skipped;
           }
           if (skippedEmail) {
             skipped++;
@@ -5661,36 +5651,19 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
               .toList()
             ..sort())
         : const <String>[];
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => Theme(
-        data: AppTheme.surfaceDialogTheme(Theme.of(context)),
-        child: AlertDialog(
-          title: Text(allShows ? 'Email All Shows?' : 'Email This Show?'),
-          content: SingleChildScrollView(
-            child: Text(
-              'This will send ${artifacts.length} generated report file${artifacts.length == 1 ? '' : 's'} to $recipient.'
-              '${fullStatePackage ? '\n\nState club package across Open and Youth shows:\n${packageDetails.join('\n')}' : ''}',
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Send Email'),
-            ),
-          ],
-        ),
-      ),
+    final confirmation = await showReportEmailConfirmation(
+      context,
+      title: allShows ? 'Email All Shows?' : 'Email This Show?',
+      description:
+          'This will send ${artifacts.length} generated report file${artifacts.length == 1 ? '' : 's'} to $recipient.'
+          '${fullStatePackage ? '\n\nState club package across Open and Youth shows:\n${packageDetails.join('\n')}' : ''}',
+      initialMessage: _additionalMessageController.text.trim(),
     );
-    if (confirmed != true || !mounted) return;
+    if (confirmation == null || !mounted) return;
 
     setState(() => _sendingSelectedReport = true);
     try {
-      final message = _additionalMessageController.text.trim();
+      final message = confirmation.message;
       final service = ReportEmailService();
       final result = _groupFor(source.reportName) == 'exhibitor'
           ? await service.sendExhibitorReportEmail(
@@ -5705,8 +5678,7 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
               ),
               message: message,
               allowLegs: includeLegs,
-              forceResend:
-                  source.reportName == 'checkin_sheet' || message.isNotEmpty,
+              forceResend: confirmation.forceResend,
             )
           : await service.sendClubReportEmail(
               showId: widget.showId,
@@ -5719,7 +5691,7 @@ class _LiveReportDownloadsState extends State<_LiveReportDownloads> {
                 includeLegs: includeLegs,
               ),
               message: message,
-              forceResend: message.isNotEmpty,
+              forceResend: confirmation.forceResend,
             );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

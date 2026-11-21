@@ -34,10 +34,17 @@ class ReportEmailService {
   Future<ReportEmailBatchSendResult> sendClubReportBatch({
     required String showId,
     required List<Map<String, dynamic>> deliveries,
+    bool forceResend = false,
+    String resendMessage = '',
   }) async {
     final response = await supabase.functions.invoke(
       'send-club-report-batch',
-      body: {'show_id': showId, 'deliveries': deliveries},
+      body: {
+        'show_id': showId,
+        'deliveries': deliveries,
+        'force_resend': forceResend,
+        'resend_message': resendMessage,
+      },
     );
 
     final data = response.data is Map
@@ -65,6 +72,7 @@ class ReportEmailService {
     String? message,
     String? replyTo,
     bool forceResend = false,
+    bool bulkResend = false,
   }) async {
     final resp = await supabase.functions.invoke(
       'send-report-email',
@@ -76,6 +84,7 @@ class ReportEmailService {
         'message': message,
         'reply_to': replyTo,
         'force_resend': forceResend,
+        'resend_scope': bulkResend ? 'bulk' : 'single',
       },
     );
 
@@ -92,6 +101,7 @@ class ReportEmailService {
     String? replyTo,
     bool allowLegs = false, // 👈 Leg Change
     bool forceResend = false,
+    bool bulkResend = false,
   }) async {
     // Use the shared report sender so exhibitor sends are recorded in the
     // same delivery history as National and State club report sends.
@@ -107,6 +117,7 @@ class ReportEmailService {
         'reply_to': replyTo,
         'allow_legs': allowLegs,
         'force_resend': forceResend,
+        'resend_scope': bulkResend ? 'bulk' : 'single',
       },
     );
 
