@@ -53,7 +53,7 @@ try:
  from concurrency import run
  run(container,database)
  sql((root/'supabase/tests/checkin_report_fixture.sql').read_text())
- sql((root/'supabase/migrations/20261121012054_checkin_current_balances_read_only.sql').read_text())
+ sql((root/'supabase/migrations/20261121013433_checkin_current_balances_read_only.sql').read_text())
  output=sql((root/'supabase/tests/checkin_current_balances_test.sql').read_text());print(output)
  if 'not ok ' in output or '1..' not in output: raise RuntimeError('Check-in report tests failed')
 finally:

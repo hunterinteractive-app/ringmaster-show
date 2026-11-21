@@ -107,7 +107,7 @@ explicit show authorization before accessing the private ledger.
 
 ## Check-in sheet timeout fix (November 20, 2026)
 
-`20261121012054_checkin_current_balances_read_only.sql` changes the interactive
+`20261121013433_checkin_current_balances_read_only.sql` changes the interactive
 `report_checkin_entries` RPC to read maintained balances using the same selection
 as Show Finances. Previously every report page invoked the legacy balance writer,
 whose updates triggered current payment allocation again and timed out. Entry,
