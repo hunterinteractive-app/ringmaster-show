@@ -104,3 +104,41 @@ balance totals were unchanged. The calculator is inaccessible to client roles.
 Post-deployment advisors: added exhibitor foreign-key indexes. Private tables
 intentionally have no client RLS policies or grants. Public finance RPCs use
 explicit show authorization before accessing the private ledger.
+
+## Check-in sheet timeout fix (November 20, 2026)
+
+`20261121012054_checkin_current_balances_read_only.sql` changes the interactive
+`report_checkin_entries` RPC to read maintained balances using the same selection
+as Show Finances. Previously every report page invoked the legacy balance writer,
+whose updates triggered current payment allocation again and timed out. Entry,
+payment, and credit writes already maintain the authoritative balance; generating
+a report does not need another refresh. Submitted-cart fallback totals are summed
+once when no authoritative entry balance exists. Contact/balance access is limited
+to authorized show staff and server workers. The return shape is unchanged.
+
+The isolated SQL suite now includes 19 check-in assertions (184 SQL assertions
+plus five concurrency checks overall). It verifies immediate payment/credit
+freshness, entry changes, filtering, fallback carts, access, and unchanged
+balances/audit records after repeated reads.
+
+The opt-in PDF rehearsal runs the actual combined check-in screen and builder
+against a captured read-only query result, with native save and HTTP replayed:
+
+```sh
+CHECKIN_REPORT_FIXTURE=/tmp/checkin-fixture.json \
+CHECKIN_REPORT_OUTPUT=/tmp/check-in.pdf \
+flutter test test/checkin_full_report_rehearsal_test.dart
+```
+
+The JSON snapshot has `show` (one-row list), `sections`, `exhibitors`, `entries`
+(id/animal_id/is_fur/class_name), `coop`, `wave` (schedule object), and `report`
+(the complete replacement RPC query result). Keep snapshots outside Git because
+they contain exhibitor contact details. This rehearsal cannot send email or write
+production data. Database function tests run separately in the isolated SQL suite.
+
+Southern Adirondack validation: 3,176 active entry rows, eight sections, 148
+exhibitors, 288 PDF pages. The replacement SELECT ran in approximately 132 ms on
+the production data; the PDF rehearsal took approximately two seconds after
+snapshot capture. All 148 printed balances matched current Show Finances totals,
+and the printed entry totals summed to 3,176. These are database/render timings,
+not an end-to-end browser download measurement.
