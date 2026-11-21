@@ -53,7 +53,7 @@ jobs:
           flutter test --platform chrome test/show_layout_navigation_widget_test.dart
 
       - name: Verify report email duplicate protection
-        run: npx --yes deno@2.9.6 test --allow-env supabase/functions/send-report-email/handler_test.ts supabase/functions/send-club-report-batch/handler_test.ts
+        run: npx --yes deno@2.9.6 test --config supabase/functions/deno.json --allow-env supabase/functions/send-report-email/handler_test.ts supabase/functions/send-club-report-batch/handler_test.ts
 
       - name: Build Flutter Web
         run: |
