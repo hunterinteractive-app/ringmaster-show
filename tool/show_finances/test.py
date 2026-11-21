@@ -34,6 +34,8 @@ try:
  sql((root/'supabase/migrations/20261114054901_show_finance_summary_and_name_sort.sql').read_text())
  sql((root/'supabase/migrations/20261114061750_show_finance_discount_total.sql').read_text())
  sql((root/'supabase/migrations/20261118030022_automatic_scratch_replacement_offsets.sql').read_text())
+ sql((root/'supabase/migrations/20261121015533_reviewed_unpaid_cart_quote_corrections.sql').read_text())
+ sql((root/'supabase/migrations/20261121020058_preserve_replacement_credits_for_corrected_quotes.sql').read_text())
  report=(root/'supabase/migrations/20260910213930_attribute_checkin_fees_to_report_sections.sql').read_text()
  marker='create or replace function public.report_show_exhibitor_balances_scoped('
  start=report.index(marker,report.index(marker)+len(marker));end=report.index('\n$$;',start)+len('\n$$;')
@@ -48,6 +50,8 @@ try:
  if 'not ok ' in output or '1..' not in output: raise RuntimeError('Tests failed')
  output=sql((root/'supabase/tests/show_finance_summary_test.sql').read_text());print(output)
  if 'not ok ' in output or '1..' not in output: raise RuntimeError('Summary tests failed')
+ output=sql((root/'supabase/tests/reviewed_cart_quote_corrections_test.sql').read_text());print(output)
+ if 'not ok ' in output or '1..14' not in output: raise RuntimeError('Reviewed quote tests failed')
  output=sql((root/'supabase/tests/scratch_replacement_offsets_test.sql').read_text());print(output)
  if 'not ok ' in output or '1..' not in output: raise RuntimeError('Replacement tests failed')
  from concurrency import run
