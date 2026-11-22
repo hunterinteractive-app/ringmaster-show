@@ -2,6 +2,14 @@ const closeoutReportStatusTimeoutMessage =
     'The report status check took too long. If generation is already running, '
     'it will continue on the server. Select Retry to check progress again.';
 
+const closeoutReadinessTimeoutMessage =
+    'The results readiness check took too long. Select Retry to check again.';
+
+String closeoutReadinessErrorMessage(Object error) =>
+    isCloseoutStatusStatementTimeout(error)
+    ? closeoutReadinessTimeoutMessage
+    : error.toString();
+
 bool isCloseoutStatusStatementTimeout(Object error) {
   final message = error.toString().toLowerCase();
   return message.contains('statement timeout') ||

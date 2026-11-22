@@ -1103,7 +1103,7 @@ class _MustFixPanelState extends State<_MustFixPanel> {
     } catch (error) {
       if (!mounted) return;
       setState(() {
-        _error = closeoutReportStatusErrorMessage(error);
+        _error = closeoutReadinessErrorMessage(error);
         _loading = false;
       });
     }
@@ -1198,7 +1198,7 @@ class _MustFixPanelState extends State<_MustFixPanel> {
           children: [
             Text(
               'Unable to load results readiness: '
-              '${closeoutReportStatusErrorMessage(_error!)}',
+              '${closeoutReadinessErrorMessage(_error!)}',
             ),
             OutlinedButton.icon(
               onPressed: _loadIssues,

@@ -28,6 +28,21 @@ void main() {
     );
   });
 
+  test('readiness timeout does not imply report generation is running', () {
+    expect(
+      closeoutReadinessErrorMessage('code: 57014'),
+      closeoutReadinessTimeoutMessage,
+    );
+    expect(
+      closeoutReadinessErrorMessage('statement timeout'),
+      isNot(contains('generation')),
+    );
+    expect(
+      closeoutReadinessErrorMessage('Permission denied'),
+      'Permission denied',
+    );
+  });
+
   test('leaves unrelated status errors available for diagnosis', () {
     const raw = 'Permission denied';
     expect(closeoutReportStatusErrorMessage(raw), raw);
@@ -75,7 +90,9 @@ void main() {
 
     for (final loader in protectedLoaders) {
       expect(
-        RegExp(r'closeoutReportStatusErrorMessage\(').allMatches(loader).length,
+        RegExp(
+          r'closeout(?:ReportStatus|Readiness)ErrorMessage\(',
+        ).allMatches(loader).length,
         greaterThanOrEqualTo(2),
       );
       expect(loader, isNot(contains('_error = error.toString();')));
