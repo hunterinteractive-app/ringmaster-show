@@ -43,6 +43,24 @@ void main() {
     );
   });
 
+  test(
+    'preparation timeout tells the user to reload before queueing again',
+    () {
+      expect(
+        closeoutReportPreparationErrorMessage('code: 57014'),
+        closeoutReportPreparationTimeoutMessage,
+      );
+      expect(
+        closeoutReportPreparationErrorMessage('statement timeout'),
+        isNot(contains('continue on the server')),
+      );
+      expect(
+        closeoutReportPreparationErrorMessage('Not authorized'),
+        'Not authorized',
+      );
+    },
+  );
+
   test('leaves unrelated status errors available for diagnosis', () {
     const raw = 'Permission denied';
     expect(closeoutReportStatusErrorMessage(raw), raw);

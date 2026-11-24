@@ -5,6 +5,15 @@ const closeoutReportStatusTimeoutMessage =
 const closeoutReadinessTimeoutMessage =
     'The results readiness check took too long. Select Retry to check again.';
 
+const closeoutReportPreparationTimeoutMessage =
+    'Report preparation took too long. Select Retry to reload the current '
+    'status before trying to queue reports again.';
+
+String closeoutReportPreparationErrorMessage(Object error) =>
+    isCloseoutStatusStatementTimeout(error)
+    ? closeoutReportPreparationTimeoutMessage
+    : error.toString();
+
 String closeoutReadinessErrorMessage(Object error) =>
     isCloseoutStatusStatementTimeout(error)
     ? closeoutReadinessTimeoutMessage

@@ -2060,6 +2060,7 @@ class _GenerateReportsPanelState extends State<_GenerateReportsPanel> {
   bool _loading = true;
   bool _starting = false;
   String? _error;
+  bool _preparationFailed = false;
   String? _progressWarning;
   _ReportGenerationState? _state;
   DateTime? _startedAt;
@@ -2083,6 +2084,7 @@ class _GenerateReportsPanelState extends State<_GenerateReportsPanel> {
   }
 
   Future<void> _refresh() async {
+    _preparationFailed = false;
     try {
       final latestProgress = await _loadLatestProgress();
       if (latestProgress != null && latestProgress.isActive) {
@@ -2325,7 +2327,10 @@ class _GenerateReportsPanelState extends State<_GenerateReportsPanel> {
       await _refresh();
     } catch (error) {
       if (!mounted) return;
-      setState(() => _error = closeoutReportStatusErrorMessage(error));
+      setState(() {
+        _preparationFailed = true;
+        _error = closeoutReportPreparationErrorMessage(error);
+      });
     } finally {
       if (mounted) setState(() => _starting = false);
     }
@@ -2349,8 +2354,9 @@ class _GenerateReportsPanelState extends State<_GenerateReportsPanel> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Unable to load report generation status: '
-              '${closeoutReportStatusErrorMessage(_error!)}',
+              _preparationFailed
+                  ? 'Unable to prepare reports: ${closeoutReportPreparationErrorMessage(_error!)}'
+                  : 'Unable to load report generation status: ${closeoutReportStatusErrorMessage(_error!)}',
             ),
             OutlinedButton.icon(
               onPressed: () => unawaited(_refresh()),
