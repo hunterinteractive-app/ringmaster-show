@@ -226,3 +226,33 @@ payment-quote races passed, alongside the existing Houston regression suite.
 Hosted checks confirmed exactly one configured show, both table guards, all
 three checkout guards, and pending carts still within the limit. No live payment
 was made during testing.
+
+## Owner-scoped meat-pen breed list
+
+The `owner_scoped_meat_pen_breeds` migration makes `meat_pen_breeds(show_id)` the
+shared source for the exhibitor/secretary picker and the cart/entry validation
+trigger. Shows owned by Kyle Walker (`bca983ed-59ac-4615-a9a7-a2ce56d3d8e8`) use
+these active master rabbit breeds, including future shows owned by that account:
+American, American Chinchilla, Argente Brun, Californian, Champagne d'Argent,
+Cinnamon, Creme d'Argente, New Zealand, Palomino, Satin, and Rex. These are the
+catalog names corresponding to the supplied handbook. Rex stays four-class in
+the master catalog. Other owners still use active master six-class breeds.
+
+This affects only meat pens where that commercial class and section are already
+enabled. Ordinary breed entries, fees, entry limits, tattoos, and existing
+entries are not changed. Ownership transfers immediately use the new owner's
+rule. The lookup is security-invoker and retains catalog/show RLS; it is granted
+only to authenticated and service-role callers. Failed lookups do not fall back
+to the unrestricted catalog.
+
+Apply the database migration before releasing the updated client. Older clients
+continue to show the old list until refreshed, but the database enforces the new
+list. Do not regenerate or email reports for this change.
+
+Focused database verification: in an isolated database, load
+`supabase/tests/meat_pen_master_six_class_fixture.sql`, then the
+`20261112005909_meat_pen_master_six_class_breeds.sql` and
+`20261125105136_owner_scoped_meat_pen_breeds.sql` migrations. Run
+`supabase/tests/meat_pen_master_six_class_breeds.sql` and
+`supabase/tests/owner_scoped_meat_pen_breeds.sql`. Browser verification:
+`flutter test --platform chrome test/meat_pen_dialog_test.dart`.

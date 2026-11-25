@@ -3132,14 +3132,10 @@ class _MeatPenDialogState extends State<_MeatPenDialog> {
         'meat_pen_registration_enabled',
         params: {'p_show_id': widget.showId},
       );
-      final res = await supabase
-          .from('breeds')
-          .select('id,name,species,class_system')
-          .eq('species', 'rabbit')
-          .eq('class_system', 'six')
-          .eq('is_active', true)
-          .isFilter('local_show_id', null)
-          .order('name');
+      final res = await supabase.rpc(
+        'meat_pen_breeds',
+        params: {'p_show_id': widget.showId},
+      );
 
       if (!mounted) return;
 
@@ -3295,7 +3291,7 @@ class _MeatPenDialogState extends State<_MeatPenDialog> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Choose a six-class rabbit breed from the master catalog. All 3 rabbits must be the same breed and variety. Weight verified at show.',
+                'Choose an eligible rabbit breed for this show. All 3 rabbits must be the same breed and variety. Weight verified at show.',
                 style: Theme.of(context).textTheme.bodySmall,
               ),
               const SizedBox(height: 12),

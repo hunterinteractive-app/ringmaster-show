@@ -1,6 +1,6 @@
 create schema extensions;
 create extension pgtap with schema extensions;
-create table public.shows(id uuid primary key,is_published boolean default true);
+create table public.shows(id uuid primary key,owner_user_id uuid,is_published boolean default true);
 create table public.breeds(id uuid primary key default gen_random_uuid(),name text,species text,class_system text,is_active boolean,local_show_id uuid);
 create table public.show_breeds(show_id uuid,breed_id uuid,is_enabled boolean);
 create table public.show_sections(id uuid primary key,show_id uuid,is_enabled boolean,breed_scope text,allow_meat_classes boolean);

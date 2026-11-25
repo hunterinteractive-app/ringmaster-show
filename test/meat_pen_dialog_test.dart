@@ -15,6 +15,7 @@ import 'package:ringmaster_show/widgets/meat_pen_tattoos.dart';
 void main() {
   bool pendingEnabled = false;
   bool rejectSave = false;
+  bool rejectBreeds = false;
   Map<String, dynamic>? lastUpdate;
   setUpAll(() async {
     SharedPreferences.setMockInitialValues({});
@@ -35,7 +36,8 @@ void main() {
           if (rejectSave) {
             return http.Response(
               jsonEncode({
-                'message': 'Entry deadline passed. Tattoos can no longer be changed.',
+                'message':
+                    'Entry deadline passed. Tattoos can no longer be changed.',
                 'code': 'P0001',
               }),
               400,
@@ -44,11 +46,16 @@ void main() {
             );
           }
           return http.Response('', 204, request: r);
-        } else if (r.url.path.endsWith('/breeds')) {
-          expect(r.url.queryParameters['species'], 'eq.rabbit');
-          expect(r.url.queryParameters['class_system'], 'eq.six');
-          expect(r.url.queryParameters['is_active'], 'eq.true');
-          expect(r.url.queryParameters['local_show_id'], 'is.null');
+        } else if (r.url.path.endsWith('/meat_pen_breeds')) {
+          final showId = (jsonDecode(r.body) as Map)['p_show_id'];
+          expect(showId, isIn(['meat-only', 'kyle-show']));
+          if (rejectBreeds) {
+            return http.Response(
+              jsonEncode({'message': 'Unavailable', 'code': 'P0001'}),
+              503,
+              headers: {'content-type': 'application/json'},
+            );
+          }
           data = [
             {
               'id': 'cal',
@@ -56,9 +63,16 @@ void main() {
               'species': 'rabbit',
               'class_system': 'six',
             },
+            if (showId == 'kyle-show')
+              {
+                'id': 'rex',
+                'name': 'Rex',
+                'species': 'rabbit',
+                'class_system': 'four',
+              },
           ];
         } else if (r.url.path.endsWith('/varieties')) {
-          expect(r.url.queryParameters['breed_id'], 'eq.cal');
+          expect(r.url.queryParameters['breed_id'], isIn(['eq.cal', 'eq.rex']));
           data = [
             {'id': 'standard', 'name': 'Standard'},
           ];
@@ -73,6 +87,10 @@ void main() {
         );
       }),
     );
+  });
+
+  setUp(() {
+    rejectBreeds = false;
   });
 
   for (final width in [390.0, 1200.0]) {
@@ -175,6 +193,116 @@ void main() {
         expect(tester.takeException(), isNull);
       });
     }
+  }
+  for (final reject in [false, true]) {
+    testWidgets('owner-scoped breeds: Rex selection; lookup failure $reject', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(390, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      rejectBreeds = reject;
+      pendingEnabled = true;
+      MeatPenInput? saved;
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.lightTheme,
+          home: Theme(
+            data: AppTheme.onGradientTheme(AppTheme.lightTheme),
+            child: Scaffold(
+              body: Builder(
+                builder: (context) => TextButton(
+                  onPressed: () async {
+                    saved = await showMeatPenDialog(
+                      context,
+                      showId: 'kyle-show',
+                    );
+                  },
+                  child: const Text('Open'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('Open'));
+      await tester.pumpAndSettle(
+        const Duration(milliseconds: 100),
+        EnginePhase.sendSemanticsUpdate,
+        const Duration(seconds: 5),
+      );
+      if (reject) {
+        expect(
+          find.text(
+            'Could not load meat-pen options. Close this window and try again.',
+          ),
+          findsOneWidget,
+        );
+        await tester.enterText(find.byType(TextField).first, 'Re');
+        await tester.tap(find.text('Save'));
+        await tester.pump(const Duration(milliseconds: 20));
+        await tester.pumpAndSettle(
+          const Duration(milliseconds: 100),
+          EnginePhase.sendSemanticsUpdate,
+          const Duration(seconds: 5),
+        );
+        expect(saved, isNull);
+        expect(find.byType(AlertDialog), findsOneWidget);
+      } else {
+        await tester.enterText(find.byType(TextField).first, 'Beveren');
+        await tester.tap(find.text('Save'));
+        await tester.pump(const Duration(milliseconds: 20));
+        await tester.pumpAndSettle(
+          const Duration(milliseconds: 100),
+          EnginePhase.sendSemanticsUpdate,
+          const Duration(seconds: 5),
+        );
+        expect(
+          find.text('Please select a valid breed from the list.'),
+          findsOneWidget,
+        );
+        await tester.enterText(find.byType(TextField).first, 'Re');
+        await tester.pumpAndSettle(
+          const Duration(milliseconds: 100),
+          EnginePhase.sendSemanticsUpdate,
+          const Duration(seconds: 5),
+        );
+        await tester.tap(find.text('Rex').last);
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 50)),
+        );
+        await tester.pumpAndSettle(
+          const Duration(milliseconds: 100),
+          EnginePhase.sendSemanticsUpdate,
+          const Duration(seconds: 5),
+        );
+        await tester.enterText(find.byType(TextField).at(1), 'Standard');
+        await tester.pumpAndSettle(
+          const Duration(milliseconds: 100),
+          EnginePhase.sendSemanticsUpdate,
+          const Duration(seconds: 5),
+        );
+        await tester.tap(find.text('Standard').last);
+        await tester.ensureVisible(find.text('Tattoos not yet assigned'));
+        await tester.tap(find.text('Tattoos not yet assigned'));
+        await tester.pumpAndSettle(
+          const Duration(milliseconds: 100),
+          EnginePhase.sendSemanticsUpdate,
+          const Duration(seconds: 5),
+        );
+        await tester.tap(find.text('Save'));
+        await tester.pump(const Duration(milliseconds: 20));
+        await tester.pumpAndSettle(
+          const Duration(milliseconds: 100),
+          EnginePhase.sendSemanticsUpdate,
+          const Duration(seconds: 5),
+        );
+        expect(saved?.breed, 'Rex');
+        expect(saved?.usesPenId, true);
+      }
+      expect(tester.takeException(), isNull);
+    });
   }
   testWidgets(
     'phone tattoo update validates, preserves input on failure, and saves actual tattoos',
