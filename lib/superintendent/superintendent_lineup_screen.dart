@@ -1,5 +1,6 @@
 import 'final_award_lineup.dart';
 import 'lineup_timing.dart';
+import 'lineup_judge_eligibility.dart';
 import 'specialty_lineup_dialog.dart';
 // lib/superintendent/superintendent_lineup_screen.dart
 // ignore_for_file: use_build_context_synchronously
@@ -795,7 +796,7 @@ class _SuperintendentLineupScreenState
     if (judgeRows.isNotEmpty) {
       final rates = await supabase
           .from('judges')
-          .select('id,average_entries_per_hour')
+          .select('id,judge_type,average_entries_per_hour')
           .inFilter(
             'id',
             judgeRows.map((j) => j['judge_id'].toString()).toList(),
@@ -805,6 +806,7 @@ class _SuperintendentLineupScreenState
             .where((r) => r['id'] == judge['judge_id'])
             .firstOrNull;
         judge['average_entries_per_hour'] = rate?['average_entries_per_hour'];
+        judge['judge_type'] = rate?['judge_type'];
       }
     }
     final breedRows = List<Map<String, dynamic>>.from(breedCounts as List);
@@ -1501,10 +1503,17 @@ class _SuperintendentLineupScreenState
           'breed': breed,
           'variety': _isCommercialBreed(breed) ? variety : null,
           'species': row['species'],
+          'required_species': <String>{},
           'entry_count': 0,
         },
       );
 
+      // The stored lineup identifies breeds by section/name, not species.
+      // If a name (such as American) spans both species, require a dual judge
+      // for the combined assignment rather than silently treating it as one.
+      (grouped[key]!['required_species'] as Set<String>).add(
+        (row['species'] ?? '').toString().trim().toLowerCase(),
+      );
       grouped[key]!['entry_count'] =
           ((grouped[key]!['entry_count'] as num?)?.toInt() ?? 0) + count;
     }
@@ -1662,6 +1671,17 @@ class _SuperintendentLineupScreenState
       _entryConflicts = await _fetchEntryConflicts();
       _conflictCheckError = null;
       final skipped = <String>[];
+      bool speciesEligible(
+        Map<String, dynamic> judge,
+        Map<String, dynamic> row,
+      ) => lineupJudgeSupportsSpecies(
+        judge,
+        row['required_species'] as Set<String>,
+      );
+      bool canAssign(Map<String, dynamic> judge, Map<String, dynamic> row) =>
+          speciesEligible(judge, row) &&
+          _conflictsFor(row, judge['judge_id']?.toString()).isEmpty;
+
       // Preserved specialties/finals keep their judge and table. Their workload
       // must be reserved before distributing the regular breed assignments.
       _groupByTable(data.assignments);
@@ -1985,11 +2005,7 @@ class _SuperintendentLineupScreenState
                 )
                 .toSet();
             final eligible = data.judges
-                .where(
-                  (j) => group.every(
-                    (r) => _conflictsFor(r, j['judge_id']?.toString()).isEmpty,
-                  ),
-                )
+                .where((j) => group.every((r) => canAssign(j, r)))
                 .toList();
             final clean = eligible
                 .where(
@@ -2050,15 +2066,25 @@ class _SuperintendentLineupScreenState
             ? pairedJudges[pairKey(breed)]
             : null;
         final eligibleJudges = data.judges
-            .where(
-              (j) => pair.every(
-                (r) => _conflictsFor(r, j['judge_id']?.toString()).isEmpty,
-              ),
-            )
+            .where((j) => pair.every((r) => canAssign(j, r)))
             .toList();
         if (eligibleJudges.isEmpty) {
+          final hasQualifiedJudge = data.judges.any(
+            (j) => pair.every((r) => speciesEligible(j, r)),
+          );
+          final requiredSpecies = pair
+              .expand((r) => r['required_species'] as Set<String>)
+              .toSet();
+          final qualification = requiredSpecies.length > 1
+              ? 'dual judge for this combined rabbit/cavy breed'
+              : '${requiredSpecies.single} or dual judge';
+          final reason = hasQualifiedJudge
+              ? 'household entry conflicts'
+              : requiredSpecies.any((s) => s != 'rabbit' && s != 'cavy')
+              ? 'animal species could not be identified'
+              : 'no enabled $qualification';
           skipped.add(
-            '${breed['show_letter']} • ${breed['scope']} • ${breed['breed']}',
+            '${breed['show_letter']} • ${breed['scope']} • ${breed['breed']} — $reason',
           );
           continue;
         }
@@ -2204,19 +2230,22 @@ class _SuperintendentLineupScreenState
       if (skipped.isNotEmpty) {
         await showDialog<void>(
           context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('Breeds left unassigned'),
-            content: SingleChildScrollView(
-              child: Text(
-                'No conflict-free judge was available for these assignments. Youth/Open pairs stay together.\n\n${skipped.join('\n')}',
+          builder: (context) => Theme(
+            data: AppTheme.surfaceDialogTheme(Theme.of(context)),
+            child: AlertDialog(
+              title: const Text('Breeds left unassigned'),
+              content: SingleChildScrollView(
+                child: Text(
+                  'No qualified, conflict-free judge was available for these assignments. Check the judge types and enabled judges for the show. Youth/Open pairs stay together.\n\n${skipped.join('\n')}',
+                ),
               ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('OK'),
+                ),
+              ],
             ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('OK'),
-              ),
-            ],
           ),
         );
       } else {

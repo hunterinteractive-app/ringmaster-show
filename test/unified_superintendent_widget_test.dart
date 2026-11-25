@@ -12,7 +12,10 @@ void main() {
   final mutations = <Map<String, dynamic>>[];
   var withSpecialty = false;
   var judgeCount = 1;
+  var judgeTypes = <String, String?>{};
+  var speciesBreeds = <Map<String, String>>[];
   var conflictJudges = <String>[];
+  var conflictBreed = 'Havana';
   var conflictFails = false;
   var withAssignedBreed = false;
   var withTimingOverlap = false;
@@ -52,7 +55,7 @@ void main() {
                 'show_id': show,
                 'section_id': '$show-Youth A',
                 'judge_id': judge,
-                'breed': 'Havana',
+                'breed': conflictBreed,
                 'exhibitor_name': 'Family Exhibitor',
                 'relationship': 'Shared household',
               },
@@ -158,14 +161,30 @@ void main() {
         if (path.endsWith('/get_show_lineup_breed_counts')) {
           result = [
             for (final name in names)
+              for (final breed
+                  in speciesBreeds.isEmpty
+                      ? [
+                          {'breed': 'Havana', 'species': 'rabbit'},
+                        ]
+                      : speciesBreeds)
+                {
+                  'show_id': show,
+                  'section_id': '$show-$name',
+                  'show_letter': name.split(' ').last,
+                  'section_label': name,
+                  ...breed,
+                  'entry_count': 2,
+                },
+          ];
+        }
+        if (path.endsWith('/judges')) {
+          result = [
+            for (var j = 1; j <= judgeCount; j++)
               {
-                'show_id': show,
-                'section_id': '$show-$name',
-                'show_letter': name.split(' ').last,
-                'section_label': name,
-                'breed': 'Havana',
-                'species': 'rabbit',
-                'entry_count': 2,
+                'id': 'judge$j',
+                'judge_type': judgeTypes.containsKey('judge$j')
+                    ? judgeTypes['judge$j']
+                    : 'Rabbit',
               },
           ];
         }
@@ -193,7 +212,10 @@ void main() {
             },
           ];
         }
-        if (path.endsWith('/mutate_workspace_lineup')) mutations.add(body);
+        if (path.endsWith('/mutate_workspace_lineup') ||
+            path.endsWith('/upsert_show_judging_assignment')) {
+          mutations.add(body);
+        }
         return http.Response(
           jsonEncode(result),
           200,
@@ -596,4 +618,163 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+  for (final types in [
+    <String, String?>{'judge1': 'Rabbit', 'judge2': 'Cavy'},
+    <String, String?>{'judge1': 'Dual', 'judge2': 'Dual'},
+    <String, String?>{'judge1': 'Rabbit', 'judge2': null},
+  ]) {
+    testWidgets('Auto Fill honors species qualifications $types', (
+      tester,
+    ) async {
+      judgeCount = 2;
+      judgeTypes = types;
+      speciesBreeds = [
+        {'breed': 'Havana', 'species': 'rabbit'},
+        {'breed': 'Abyssinian', 'species': 'cavy'},
+      ];
+      addTearDown(() {
+        judgeCount = 1;
+        judgeTypes = {};
+        speciesBreeds = [];
+      });
+      await open(tester);
+      await tester.tap(find.text('Auto Fill').first);
+      await tester.pumpAndSettle();
+      final rows = List<Map<String, dynamic>>.from(
+        mutations.singleWhere(
+          (m) => m['p_action'] == 'replace',
+        )['p_payload']['rows'],
+      );
+      final byTable = {
+        for (final r in rows.where((r) => r['p_is_judge_change'] == true))
+          r['p_table_number']: r['p_judge_id'],
+      };
+      final breeds = rows.where((r) => r['p_section_id'] != null).toList();
+      expect(breeds.where((r) => r['p_breed_id'] == 'Havana').length, 6);
+      expect(
+        breeds.where((r) => r['p_breed_id'] == 'Abyssinian').length,
+        types['judge2'] == null ? 0 : 6,
+      );
+      for (final row in breeds) {
+        final type = types[byTable[row['p_table_number']]];
+        expect(
+          type == 'Dual' ||
+              type == (row['p_breed_id'] == 'Havana' ? 'Rabbit' : 'Cavy'),
+          isTrue,
+        );
+      }
+      if (types['judge2'] == null) {
+        expect(find.text('Breeds left unassigned'), findsOneWidget);
+        expect(
+          find.textContaining('no enabled cavy or dual judge'),
+          findsOneWidget,
+        );
+        final dialog = tester.element(find.byType(AlertDialog));
+        final theme = Theme.of(dialog);
+        final foreground = theme.textTheme.bodyMedium!.color!;
+        final background = theme.dialogTheme.backgroundColor!;
+        final l1 = foreground.computeLuminance(),
+            l2 = background.computeLuminance();
+        expect((l2 + .05) / (l1 + .05), greaterThanOrEqualTo(4.5));
+      }
+      expect(tester.takeException(), isNull);
+    });
+  }
+  testWidgets('shared rabbit and cavy breed name requires a dual judge', (
+    tester,
+  ) async {
+    judgeCount = 3;
+    judgeTypes = {'judge1': 'Rabbit', 'judge2': 'Cavy', 'judge3': 'Dual'};
+    speciesBreeds = [
+      {'breed': 'American', 'species': 'rabbit'},
+      {'breed': 'American', 'species': 'cavy'},
+    ];
+    addTearDown(() {
+      judgeCount = 1;
+      judgeTypes = {};
+      speciesBreeds = [];
+    });
+    await open(tester);
+    await tester.tap(find.text('Auto Fill').first);
+    await tester.pumpAndSettle();
+    final rows = List<Map<String, dynamic>>.from(
+      mutations.singleWhere(
+        (m) => m['p_action'] == 'replace',
+      )['p_payload']['rows'],
+    );
+    final breeds = rows.where((r) => r['p_section_id'] != null).toList();
+    expect(breeds.length, 6);
+    for (final row in breeds) {
+      expect(row['p_table_number'], '3');
+      expect(row['p_entry_count_actual'], 4);
+    }
+  });
+  testWidgets('single-show Auto Fill sends cavies only to the cavy table', (
+    tester,
+  ) async {
+    judgeCount = 2;
+    judgeTypes = {'judge1': 'Rabbit', 'judge2': 'Cavy'};
+    speciesBreeds = [
+      {'breed': 'Havana', 'species': 'rabbit'},
+      {'breed': 'Abyssinian', 'species': 'cavy'},
+    ];
+    addTearDown(() {
+      judgeCount = 1;
+      judgeTypes = {};
+      speciesBreeds = [];
+    });
+    await open(tester, single: true);
+    await tester.tap(find.text('Auto Fill').first);
+    await tester.pumpAndSettle();
+    final rows = List<Map<String, dynamic>>.from(
+      mutations.singleWhere(
+        (m) => m['p_action'] == 'replace',
+      )['p_payload']['rows'],
+    ).where((r) => r['p_section_id'] != null).toList();
+    expect(rows.length, 8);
+    for (final row in rows) {
+      expect(
+        row['p_table_number'],
+        row['p_breed_id'] == 'Abyssinian' ? '2' : '1',
+      );
+    }
+    expect(tester.takeException(), isNull);
+  });
+  testWidgets('cavy conflict never falls back to a rabbit-only judge', (
+    tester,
+  ) async {
+    judgeCount = 2;
+    judgeTypes = {'judge1': 'Rabbit', 'judge2': 'Cavy'};
+    speciesBreeds = [
+      {'breed': 'Abyssinian', 'species': 'cavy'},
+    ];
+    conflictJudges = ['judge2'];
+    conflictBreed = 'Abyssinian';
+    addTearDown(() {
+      judgeCount = 1;
+      judgeTypes = {};
+      speciesBreeds = [];
+      conflictJudges = [];
+      conflictBreed = 'Havana';
+    });
+    await open(tester);
+    await tester.tap(find.text('Auto Fill').first);
+    await tester.pumpAndSettle();
+    final rows = List<Map<String, dynamic>>.from(
+      mutations.singleWhere(
+        (m) => m['p_action'] == 'replace',
+      )['p_payload']['rows'],
+    );
+    final breeds = rows.where((r) => r['p_section_id'] != null).toList();
+    expect(
+      breeds.length,
+      2,
+    ); // Only Open/Youth B, neither half of conflicted A.
+    for (final row in breeds) {
+      expect(row['p_table_number'], '2');
+      expect(row['p_section_id'].toString(), endsWith('B'));
+    }
+    expect(find.textContaining('household entry conflicts'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 }
