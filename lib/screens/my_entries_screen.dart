@@ -1,3 +1,4 @@
+import '../widgets/add_fur_wool_dialog.dart';
 // lib/screens/my_entries_screen.dart
 // ignore_for_file: avoid_web_libraries_in_flutter, deprecated_member_use
 
@@ -183,7 +184,7 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
 
       final selectColumns =
           'id,show_id,exhibitor_id,animal_id,species,tattoo,meat_pen_id,meat_pen_tattoos,breed,variety,sex,'
-          'class_name,status,section_id,created_at,exhibitor_user_id';
+          'class_name,status,is_fur,section_id,created_at,exhibitor_user_id';
 
       final rowsById = <String, Map<String, dynamic>>{};
 
@@ -228,7 +229,7 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
         final shows = await supabase
             .from('shows')
             .select(
-              'id,name,start_date,entry_close_at,is_locked,'
+              'id,name,start_date,entry_open_at,entry_close_at,is_locked,'
               'superintendent_judge_order_published,'
               'superintendent_judge_order_published_at',
             )
@@ -538,6 +539,24 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
         .order('display_name', ascending: true);
 
     return (rows as List).cast<Map<String, dynamic>>();
+  }
+
+  Future<void> _addFurWool(Map<String, dynamic> entry) async {
+    if (AppSession.supportReadOnly) return;
+    final result = await showAddFurWoolDialog(context, entry);
+    if (!mounted || result == null) return;
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) => CartScreen(
+          cartId: result['cart_id'] as String,
+          showId: result['show_id'] as String,
+          showName: result['show_name'] as String,
+        ),
+      ),
+    );
+    if (!mounted) return;
+    _reloadDraftCarts();
+    await _load();
   }
 
   Future<void> _editEntry(Map<String, dynamic> entry) async {
@@ -1313,6 +1332,12 @@ class _MyEntriesScreenState extends State<MyEntriesScreen> {
                     exhibitorLabel: _exhibitorLabelById,
                     sectionLabel: _sectionLabel,
                     onEdit: _editEntry,
+                    onAddFurWool: _addFurWool,
+                    entriesOpened:
+                        _parseTs(
+                          _showsById[showId]?['entry_open_at'],
+                        )?.isAfter(DateTime.now()) !=
+                        true,
                     onScratch: _scratchEntry,
                     onRestore: _restoreEntry,
                     initiallyExpanded: _expandedShowIds.contains(showId),
@@ -1382,6 +1407,8 @@ class _ShowExpansionCard extends StatelessWidget {
   final String Function(String? exhibitorId) exhibitorLabel;
   final String Function(String? sectionId) sectionLabel;
   final Future<void> Function(Map<String, dynamic> entry) onEdit;
+  final Future<void> Function(Map<String, dynamic> entry) onAddFurWool;
+  final bool entriesOpened;
   final Future<void> Function(Map<String, dynamic> entry) onScratch;
   final Future<void> Function(Map<String, dynamic> entry) onRestore;
   final bool initiallyExpanded;
@@ -1408,6 +1435,8 @@ class _ShowExpansionCard extends StatelessWidget {
     required this.exhibitorLabel,
     required this.sectionLabel,
     required this.onEdit,
+    required this.onAddFurWool,
+    required this.entriesOpened,
     required this.onScratch,
     required this.onRestore,
     required this.initiallyExpanded,
@@ -1867,6 +1896,30 @@ class _ShowExpansionCard extends StatelessWidget {
                                                                                                   e,
                                                                                                 )
                                                                                               : 'Edit Entry',
+                                                                                        ),
+                                                                                      ),
+                                                                                    if (canEdit &&
+                                                                                        entriesOpened &&
+                                                                                        e['is_fur'] !=
+                                                                                            true &&
+                                                                                        (e['species'] ??
+                                                                                                    '')
+                                                                                                .toString()
+                                                                                                .toLowerCase() ==
+                                                                                            'rabbit' &&
+                                                                                        !hasMeatPenId(
+                                                                                          e,
+                                                                                        ))
+                                                                                      OutlinedButton.icon(
+                                                                                        onPressed: () => onAddFurWool(
+                                                                                          e,
+                                                                                        ),
+                                                                                        icon: const Icon(
+                                                                                          Icons.add,
+                                                                                          size: 18,
+                                                                                        ),
+                                                                                        label: const Text(
+                                                                                          'Add Fur/Wool',
                                                                                         ),
                                                                                       ),
                                                                                     if (canScratch)
