@@ -21,7 +21,6 @@ import 'entry_refund_dialog.dart';
 import 'entry_management_loader.dart';
 import 'no_email_exhibitor_option.dart';
 import 'closeout/data/report_data_reader.dart';
-import '../../services/manual_animal_lookup.dart';
 import '../../widgets/exhibitor_school_information.dart';
 import '../../widgets/meat_pen_tattoos.dart';
 import '../enter_show_screen.dart' show showMeatPenDialog;
@@ -4933,43 +4932,31 @@ class _AdminAddEntrySheetState extends State<_AdminAddEntrySheet> {
         final normalizedTattoo = _tattoo.text.trim().toUpperCase();
         final now = DateTime.now().toUtc().toIso8601String();
 
-        final existingAnimal = await findManualEntryAnimal(
-          supabase,
-          tattoo: normalizedTattoo,
-          breed: animalBreed,
-          variety: animalVariety,
-          species: entrySpecies,
-          sex: _sexValue!.trim(),
-          ownerUserId: exhibitorOwnerUserId,
-          exhibitorId: resolvedExhibitorId,
-        );
+        // Match exhibitor Add Animal: an explicit new animal gets its own ID.
+        // Tattoos (even with matching breed/variety/sex) are not unique IDs.
+        // Reuse happens only when the secretary selects a Saved Animal.
+        final insertedAnimal = await supabase
+            .from('animals')
+            .insert({
+              'owner_user_id': exhibitorOwnerUserId.isEmpty
+                  ? null
+                  : exhibitorOwnerUserId,
+              'exhibitor_id': resolvedExhibitorId,
+              'species': entrySpecies,
+              'name': _animalName.text.trim().isEmpty
+                  ? null
+                  : _animalName.text.trim(),
+              'tattoo': normalizedTattoo,
+              'breed': animalBreed,
+              'variety': animalVariety.isEmpty ? null : animalVariety,
+              'sex': _sexValue,
+              'created_at': now,
+              'updated_at': now,
+            })
+            .select('id')
+            .single();
 
-        if (existingAnimal != null) {
-          animalId = (existingAnimal['id'] ?? '').toString();
-        } else {
-          final insertedAnimal = await supabase
-              .from('animals')
-              .insert({
-                'owner_user_id': exhibitorOwnerUserId.isEmpty
-                    ? null
-                    : exhibitorOwnerUserId,
-                'exhibitor_id': resolvedExhibitorId,
-                'species': entrySpecies,
-                'name': _animalName.text.trim().isEmpty
-                    ? null
-                    : _animalName.text.trim(),
-                'tattoo': normalizedTattoo,
-                'breed': animalBreed,
-                'variety': animalVariety.isEmpty ? null : animalVariety,
-                'sex': _sexValue,
-                'created_at': now,
-                'updated_at': now,
-              })
-              .select('id')
-              .single();
-
-          animalId = (insertedAnimal['id'] ?? '').toString();
-        }
+        animalId = (insertedAnimal['id'] ?? '').toString();
       } else {
         animalId = (_animal!['id'] ?? '').toString();
       }
