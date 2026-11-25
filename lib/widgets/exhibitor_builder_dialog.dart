@@ -25,6 +25,7 @@ class ExhibitorBuilderDialog extends StatefulWidget {
 
 class _ExhibitorBuilderDialogState extends State<ExhibitorBuilderDialog> {
   final _creation = RegistrationWrite();
+  final _scrollController = ScrollController();
   bool _loading = true;
   bool _saving = false;
   String? _msg;
@@ -66,6 +67,7 @@ class _ExhibitorBuilderDialogState extends State<ExhibitorBuilderDialog> {
 
   @override
   void dispose() {
+    _scrollController.dispose();
     _firstName.dispose();
     _lastName.dispose();
     _showingName.dispose();
@@ -861,8 +863,10 @@ class _ExhibitorBuilderDialogState extends State<ExhibitorBuilderDialog> {
                         ),
                       ),
                       child: Scrollbar(
+                        controller: _scrollController,
                         thumbVisibility: true,
                         child: SingleChildScrollView(
+                          controller: _scrollController,
                           padding: const EdgeInsets.only(right: AppSpacing.sm),
                           child: Column(
                             mainAxisSize: MainAxisSize.min,

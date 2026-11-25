@@ -77,4 +77,82 @@ void main() {
       contains('Select show(s) to enter'),
     );
   });
+  test(
+    'new entry workflows route natural questions without confusing profiles or age classes',
+    () {
+      final fur = assistantPreparedAnswer(
+        'How can I add fur classes to rabbits already entered?',
+      )!;
+      expect(fur, contains('My Entries'));
+      expect(fur, contains('Add Fur/Wool'));
+      expect(fur, contains('Continue to checkout'));
+      expect(
+        fur,
+        contains('does not submit them or charge a card automatically'),
+      );
+      final wool = assistantPreparedAnswer('How do I enter a wool class?')!;
+      expect(wool, contains('separate competition'));
+      expect(wool, contains('While creating an entry'));
+      final tattoo = assistantPreparedAnswer(
+        'How can I change my rabbit tattoo?',
+      )!;
+      expect(tattoo, contains('Tattoo / ear number'));
+      expect(tattoo, contains('Choose other show sections'));
+      expect(tattoo, contains('saved My Animals profile stays unchanged'));
+      final profile = assistantPreparedAnswer(
+        'How do I change a tattoo in My Animals?',
+      )!;
+      expect(profile, startsWith('Open My Animals'));
+      expect(
+        assistantPreparedAnswer('How do I enter a meat pen without tattoos?'),
+        contains('Tattoos not yet assigned'),
+      );
+    },
+  );
+  test(
+    'current guidance preserves deadlines, payment and delivery boundaries',
+    () {
+      expect(
+        assistantPreparedAnswer('How do I correct an entry?'),
+        contains('locked or finalized'),
+      );
+      expect(
+        assistantPreparedAnswer(
+          'What happens to the balance when I scratch an unpaid entry?',
+        ),
+        contains('Paid entries are not automatically refunded'),
+      );
+      expect(
+        assistantPreparedAnswer('How do I resend reports?'),
+        contains('requires a message'),
+      );
+      expect(
+        assistantPreparedAnswer(
+          'How do I resend reports?',
+          updatedLayout: true,
+        ),
+        contains('Reports & Closeout'),
+      );
+      expect(
+        assistantPreparedAnswer(
+          'Why does it say only youth exhibitors may be used?',
+        ),
+        contains('Do not create duplicate exhibitors'),
+      );
+      expect(
+        assistantPreparedAnswer(
+          'How do I check which show sections I entered?',
+        ),
+        contains('A before B'),
+      );
+      for (final question in [
+        'Can you check whether my fur entry was submitted?',
+        'Is my rabbit entered in wool?',
+        'Did my tattoo change save?',
+        'Did my payment go through?',
+      ]) {
+        expect(assistantPreparedAnswer(question), isNull, reason: question);
+      }
+    },
+  );
 }

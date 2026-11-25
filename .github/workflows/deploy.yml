@@ -34,7 +34,7 @@ jobs:
         run: flutter test test/exhibitor_entry_order_test.dart test/entry_section_selection_dialog_test.dart test/add_fur_wool_dialog_test.dart test/edit_entry_dialog_test.dart test/upcoming_show_visibility_test.dart test/print_reports_service_test.dart test/checkin_release_test.dart test/checkin_before_finalize_test.dart test/accessibility_widget_test.dart test/accessibility_color_contrast_test.dart test/no_email_exhibitor_option_test.dart test/show_assistant_test.dart test/assistant_context_test.dart test/assistant_answer_editor_test.dart test/assistant_conversations_test.dart test/assistant_guide_links_test.dart test/assistant_support_test.dart test/convention_sale_test.dart test/legal_acceptance_service_test.dart test/support_idle_test.dart
 
       - name: Verify delegated show creation and account isolation
-        run: flutter test --platform chrome test/my_entries_section_edits_test.dart test/my_entries_fur_wool_test.dart test/meat_pen_dialog_test.dart test/print_reports_menu_test.dart test/admin_resources_pdf_test.dart test/support_delegation_test.dart test/secretary_dashboard_counts_test.dart test/cart_payment_preview_test.dart test/cart_fee_breakdown_test.dart test/entry_discount_codes_test.dart test/class_payback_test.dart test/custom_payback_widget_test.dart test/payback_report_loader_test.dart test/admin_add_entry_contrast_test.dart test/manual_report_delivery_widget_test.dart test/manual_exhibitor_information_policy_test.dart test/report_recipient_test.dart test/show_finances_test.dart test/cart_registration_requirements_test.dart test/exhibitor_school_information_test.dart test/show_addons_widget_test.dart
+        run: flutter test --platform chrome test/enter_show_youth_selection_test.dart test/my_entries_section_edits_test.dart test/my_entries_fur_wool_test.dart test/meat_pen_dialog_test.dart test/print_reports_menu_test.dart test/admin_resources_pdf_test.dart test/support_delegation_test.dart test/secretary_dashboard_counts_test.dart test/cart_payment_preview_test.dart test/cart_fee_breakdown_test.dart test/entry_discount_codes_test.dart test/class_payback_test.dart test/custom_payback_widget_test.dart test/payback_report_loader_test.dart test/admin_add_entry_contrast_test.dart test/manual_report_delivery_widget_test.dart test/manual_exhibitor_information_policy_test.dart test/report_recipient_test.dart test/show_finances_test.dart test/cart_registration_requirements_test.dart test/exhibitor_school_information_test.dart test/show_addons_widget_test.dart
 
       - name: Verify COD awards and recognition boundaries
         run: |
@@ -54,6 +54,9 @@ jobs:
 
       - name: Verify report email duplicate protection
         run: npx --yes deno@2.9.6 test --config supabase/functions/deno.json --allow-env supabase/functions/send-report-email/handler_test.ts supabase/functions/send-club-report-batch/handler_test.ts
+
+      - name: Verify Chester guidance and lookup safeguards
+        run: npx --yes deno@2.9.6 test --config supabase/functions/deno.json supabase/functions/show-assistant/core_test.ts
 
       - name: Build Flutter Web
         run: |

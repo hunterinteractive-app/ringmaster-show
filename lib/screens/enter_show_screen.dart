@@ -263,6 +263,7 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
       if (savedId.isNotEmpty) {
         _selectedExhibitorId = savedId;
       }
+      _ensureSelectedExhibitorStillAllowed();
       _msg = null;
     });
   }
@@ -456,21 +457,13 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
     await _loadPaymentSettings();
     await _loadCommercialClasses();
     final animals = await _loadAnimals();
-    final exhibitors = await _loadActiveExhibitors();
-
-    if (exhibitors.isNotEmpty && _selectedExhibitorId == null) {
-      _selectedExhibitorId = exhibitors.first['id'].toString();
-    }
+    await _loadActiveExhibitors();
 
     await _loadActiveCartIdIfExists();
     await _refreshAnimalsInCart();
     await _refreshAnimalsAlreadyEnteredForShow(animals);
 
-    return _EnterShowLoadBundle(
-      animals: animals,
-      sections: sections,
-      exhibitors: exhibitors,
-    );
+    return _EnterShowLoadBundle(animals: animals, sections: sections);
   }
 
   Future<List<Map<String, dynamic>>> _loadActiveExhibitors() async {
@@ -488,6 +481,7 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
 
     final list = (rows as List).cast<Map<String, dynamic>>();
     _exhibitors = list;
+    _ensureSelectedExhibitorStillAllowed();
     return list;
   }
 
@@ -536,17 +530,11 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
   }
 
   void _ensureSelectedExhibitorStillAllowed() {
-    if (_selectedExhibitorId == null) return;
-
-    final exhibitor = _selectedExhibitorRecord();
-    if (exhibitor == null) {
-      _selectedExhibitorId = null;
-      return;
-    }
-
-    if (!_isExhibitorAllowedForCurrentSelection(exhibitor)) {
-      _selectedExhibitorId = null;
-    }
+    final allowed = _allowedExhibitorsForCurrentSelection(_exhibitors);
+    if (allowed.any((e) => e['id'].toString() == _selectedExhibitorId)) return;
+    _selectedExhibitorId = allowed.isEmpty
+        ? null
+        : allowed.first['id'].toString();
   }
 
   Future<void> _loadActiveCartIdIfExists() async {
@@ -1242,10 +1230,6 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
       }
 
       _ensureSelectedExhibitorStillAllowed();
-
-      if (_selectionIncludesYouth && _selectedExhibitorId == null) {
-        _msg = 'Youth sections selected. Please choose a youth exhibitor.';
-      }
     });
   }
 
@@ -2617,23 +2601,9 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
               final allAnimals = bundle.animals;
               final sections = bundle.sections;
 
-              _exhibitors = bundle.exhibitors;
-
               final allowedExhibitors = _allowedExhibitorsForCurrentSelection(
                 _exhibitors,
               );
-
-              final selectedStillAllowed =
-                  _selectedExhibitorId != null &&
-                  allowedExhibitors.any(
-                    (e) => e['id'].toString() == _selectedExhibitorId,
-                  );
-
-              if (!selectedStillAllowed) {
-                _selectedExhibitorId = allowedExhibitors.isNotEmpty
-                    ? allowedExhibitors.first['id'].toString()
-                    : null;
-              }
 
               final showDateText = _showDate == null
                   ? '(show date missing)'
@@ -2727,6 +2697,11 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
                                     ),
                                     const SizedBox(height: 12),
                                     DropdownButtonFormField<String>(
+                                      // Reconcile FormField's internal selection when
+                                      // switching to Youth filters out the adult.
+                                      key: ValueKey(
+                                        'entry-exhibitor-$_selectedExhibitorId',
+                                      ),
                                       initialValue:
                                           allowedExhibitors.any(
                                             (e) =>
@@ -2785,12 +2760,17 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
                                     if (_selectionIncludesYouth) ...[
                                       const SizedBox(height: 8),
                                       Text(
-                                        'Youth sections selected. Only youth exhibitors may be used.',
+                                        _selectedExhibitorId == null
+                                            ? 'Add a youth exhibitor to enter Youth sections.'
+                                            : 'Youth exhibitor selected. Choose your animals below.',
                                         style: Theme.of(context)
                                             .textTheme
                                             .bodySmall
                                             ?.copyWith(
-                                              color: AppColors.danger,
+                                              color:
+                                                  _selectedExhibitorId == null
+                                                  ? AppColors.danger
+                                                  : AppColors.text,
                                               fontWeight: FontWeight.w600,
                                             ),
                                       ),
@@ -2983,13 +2963,8 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
 class _EnterShowLoadBundle {
   final List<Map<String, dynamic>> animals;
   final List<Map<String, dynamic>> sections;
-  final List<Map<String, dynamic>> exhibitors;
 
-  _EnterShowLoadBundle({
-    required this.animals,
-    required this.sections,
-    required this.exhibitors,
-  });
+  _EnterShowLoadBundle({required this.animals, required this.sections});
 }
 
 class _CommercialValidationResult {

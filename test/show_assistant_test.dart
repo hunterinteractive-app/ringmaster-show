@@ -236,6 +236,25 @@ void main() {
     await tester.pumpAndSettle();
     expect(gateway.calls, 1);
   });
+  testWidgets(
+    'existing-entry fur question gives current checkout instructions without AI',
+    (tester) async {
+      final gateway = FakeGateway();
+      await mount(tester, gateway);
+      await tester.enterText(
+        find.byType(TextField),
+        'How do I add fur classes to rabbits already entered?',
+      );
+      await tester.tap(find.byTooltip('Send question'));
+      await tester.pumpAndSettle();
+      expect(gateway.calls, 0);
+      expect(find.textContaining('Continue to checkout'), findsOneWidget);
+      expect(
+        find.textContaining('charge a card automatically'),
+        findsOneWidget,
+      );
+    },
+  );
   testWidgets('opening and reading built-in help never invokes AI', (
     tester,
   ) async {

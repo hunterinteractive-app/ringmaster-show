@@ -25,6 +25,8 @@ List<String> assistantSuggestions(String title) {
       'How do I check which show sections I entered?',
       'How do I correct an entry?',
       'Why is an entry missing from my list?',
+      'How do I add Fur/Wool to an existing entry?',
+      'How do I edit or scratch across show sections?',
     ];
   }
   if (page.contains('enter show')) {
@@ -96,6 +98,24 @@ List<String> assistantSuggestions(String title) {
 
 /// Static guidance only: never implies that a user's live records were checked.
 const assistantPreparedAnswers = <String, String>{
+  "How are cavy control sheets ordered?":
+      "New judging control-sheet PDFs print rabbit breeds first, then cavy breeds together in show order. An explicitly selected judging lineup is honored within each species. Generate a new control-sheet PDF to use this order; an already-downloaded PDF does not change.",
+  "How do I resend reports?":
+      "In Close Show/Reports, review Report Delivery Status and use the explicit resend controls for previously sent reports. Normal sending skips reports already sent. A bulk resend to all clubs or exhibitors requires a message explaining the resend. Regenerating a PDF does not send it. Review the recipients and confirm the send yourself; Chester cannot send reports.",
+  "Why does it say only youth exhibitors may be used?":
+      "Earlier versions showed that red notice whenever Youth sections were selected, even with a valid youth exhibitor. The notice alone did not mean the entry was rejected. Check the Exhibitor dropdown: select the youth exhibitor, select Youth A/B as needed, then select animals and Add Selected to Cart. Current versions confirm Youth exhibitor selected. If adding to the cart actually fails, give support the validation message. Do not create duplicate exhibitors or change the exhibitor type just to bypass a warning.",
+  "How do I enter a wool class?":
+      "Fur/Wool is a separate competition, not an age class. While creating an entry, select the rabbit and the offered Fur/Wool options for the intended sections. For a rabbit already entered in breed class, use My Entries → Add Fur/Wool before entries close, choose the sections, then complete checkout. Intermediate is the 6/8 age class for six-class rabbits; it does not enter a wool competition. If Fur/Wool is unavailable, confirm the selected show offers it.",
+  "How do I enter a meat pen before tattoos are assigned?":
+      "Choose the show’s meat-pen section, then Add Meat Pen in the commercial/meat entry area. When the show supports Pen ID registration, choose the breed and variety and select Tattoos not yet assigned; the system assigns a Pen ID. You do not need to create three individual saved-animal records for that pen. Complete the cart and checkout. Add the three tattoos through the pen’s tattoo action in My Entries before the deadline. If that option is absent, ask the secretary about that show’s requirements; do not invent tattoos or wait past the deadline.",
+  "What happens to the balance when I scratch an unpaid entry?":
+      "Unpaid entry fees scratched before the entry deadline are removed from the balance. Choose Scratch in My Entries and select the affected sections. Paid entries are not automatically refunded, and scratching after the deadline does not automatically waive the fee. Restoring a previously waived entry restores its charge. If a payment is in progress or an online payment needs review, contact the secretary rather than submitting another payment.",
+  "How do I add Fur/Wool to an existing entry?":
+      "Before entries close, open My Entries, expand the show, and choose Add Fur/Wool for the rabbit already entered in breed class. Select the eligible show sections and, when requested, White or Colored. Already-entered Fur/Wool sections are unavailable to prevent duplicates. Review the fees and choose Continue to checkout. Complete checkout and any required online payment; adding items to the cart does not submit them or charge a card automatically. Fur/Wool is separate from the rabbit’s Junior, Intermediate or Senior age class.",
+  "How do I edit or scratch across show sections?":
+      "In My Entries, use Edit Entry and select Choose other show sections for these edits. Choose Save, then select the sections for the same animal and exhibitor. For scratches, choose Scratch and select the sections, or Select all sections. Only selected sections are affected. Secretaries can use the entry-management edit and scratch controls for the same workflow; show locks and finalization still apply. Save animal, exhibitor or section moves separately from bulk field edits.",
+  "How do I edit a tattoo?":
+      "Open My Entries, expand the show, and choose Edit Entry for the rabbit. Update Tattoo / ear number. For multiple sections, select Choose other show sections for these edits, choose Save, and select the sections to update. Do this before the entry deadline. You do not need to delete and re-enter the rabbit. This updates the selected show entries; the saved My Animals profile stays unchanged.",
   'How do I record a PayPal, Venmo or Zelle payment?':
       'Open the show’s Manage / Show Settings page, then Show Finances under Admin Operations. Search for the exhibitor and choose Record payment. Enter the amount already received, select PayPal, Venmo, Zelle, cash, check or Other, set the receipt date, and add a reference if available. This records money the club already received; it does not charge the exhibitor. Check-In does not need to be enabled.',
   'How do I correct a balance without recording a payment?':
@@ -109,9 +129,9 @@ const assistantPreparedAnswers = <String, String>{
   'What should I do if checkout does not finish?':
       'First check My Entries to see whether the submission completed before trying checkout again. If the result is unclear, contact support with the show name and the message you saw. I have not checked your payment or entry status.',
   'How do I check which show sections I entered?':
-      'Open My Entries, expand the show, and review the sections listed for each entry. Check each intended show letter and Open or Youth section. Adding an animal to one section does not confirm it is entered in the others.',
-  'How do I correct an entry?':
-      'Open My Entries, expand the show, and choose Edit Entry for the animal, then Save. Editing is available before the entry deadline. Use Scratch to remove an entry from competition; check each section if the animal is in multiple shows. If editing is unavailable, contact the secretary before creating a duplicate entry.',
+      'Open My Entries, expand the show, and review the sections listed for each entry. Entries for the same animal and exhibitor stay together, with A before B. Check each intended show letter and Open or Youth section. Adding an animal to one section does not confirm it is entered in the others.',
+  "How do I correct an entry?":
+      "Open My Entries, expand the show, and choose Edit Entry. Change Tattoo / ear number directly, or edit the other available fields. To apply the changes to this same animal and exhibitor in more sections, select Choose other show sections for these edits, then Save and choose the sections. Only changed fields are applied. Save animal, exhibitor or section moves separately. Exhibitors can edit before the entry deadline; locked or finalized shows cannot be edited. These changes do not update the saved My Animals profile.",
   'Why is an entry missing from my list?':
       'Check that you are viewing the correct household exhibitor and show. Then check whether the animal is still in your cart. Saving an animal alone does not enter it in a show. If it still looks wrong, tell me which show you mean so we can look into it.',
   'How do I enter shows A, B and C?':
@@ -192,6 +212,38 @@ String? assistantPreparedAnswer(String question, {bool updatedLayout = false}) {
       .toLowerCase()
       .replaceAll('’', "'")
       .replaceAll(RegExp(r'[?!.]+$'), '');
+  // General workflow questions can use reviewed guidance. Requests to check
+  // actual entries/payment status must continue through authorized lookups.
+  final howTo = RegExp(r'^(how|where|can i|do i)\b').hasMatch(normalized);
+  if (howTo &&
+      RegExp(r'\b(add|enter|register)\b').hasMatch(normalized) &&
+      RegExp(r'\b(fur|wool)\b').hasMatch(normalized)) {
+    return forLayout(
+      assistantPreparedAnswers[RegExp(
+            r'\b(existing|already|entered|submitted)\b',
+          ).hasMatch(normalized)
+          ? 'How do I add Fur/Wool to an existing entry?'
+          : 'How do I enter a wool class?'],
+    );
+  }
+  if (howTo &&
+      RegExp(r'\b(edit|change|correct|update)\b').hasMatch(normalized) &&
+      RegExp(r'\b(tattoo|tattoos|ear number)\b').hasMatch(normalized)) {
+    return forLayout(
+      assistantPreparedAnswers[RegExp(
+            r'\b(saved|profile|my animals)\b',
+          ).hasMatch(normalized)
+          ? 'How do I correct my animal’s information?'
+          : 'How do I edit a tattoo?'],
+    );
+  }
+  if (howTo &&
+      normalized.contains('meat pen') &&
+      RegExp(r'\b(tattoos?|born|unknown)\b').hasMatch(normalized)) {
+    return forLayout(
+      assistantPreparedAnswers['How do I enter a meat pen before tattoos are assigned?'],
+    );
+  }
   if (RegExp(r'\b(record|mark|enter|log)\b').hasMatch(normalized) &&
       RegExp(
         r'\b(payment|payments|paid|paypal|venmo|zelle)\b',

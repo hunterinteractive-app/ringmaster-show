@@ -195,3 +195,16 @@ Deno.test("a personal answer without the required lookup fails closed", async ()
     answerQuestion([], true, async () => text, async () => ({}), true)
   );
 });
+
+Deno.test("provider receives current entry workflows and follow-up safeguards", () => {
+  const body = providerBody([{ role: "user", content: "How do I add fur to an existing entry?" }], false);
+  for (const phrase of [
+    "reviewed 2026-11-24", "Tattoo / ear number", "Choose other show sections",
+    "Continue to checkout", "does not submit them or charge a card automatically",
+    "Paid entries are not automatically refunded", "Tattoos not yet assigned",
+    "The notice alone did not mean the entry was rejected", "requires a message",
+    "Record payment", "with show A before B", "do not repeat it",
+    "If two troubleshooting attempts", "No lookup means no verified private facts",
+  ]) assert(body.instructions.includes(phrase), `Missing reviewed guidance: ${phrase}`);
+  assert(body.tool_choice === "none" && body.tools.length === 0);
+});
