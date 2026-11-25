@@ -10,6 +10,76 @@ import 'package:ringmaster_show/screens/admin/closeout/data/loaders/legs_report_
 import 'package:ringmaster_show/screens/admin/closeout/models/base/report_request.dart';
 
 void main() {
+  for (final species in ['rabbit', 'cavy']) {
+    test(
+      'shared section keeps the legacy cavy finals judge separate from $species finals',
+      () async {
+        final rows = _qualificationRows();
+        for (final row in rows) {
+          row['species'] = species;
+          row['breed_name'] = species == 'cavy' ? 'Peruvian' : 'Mini Rex';
+        }
+        final fixture = _Fixture(
+          rows,
+          award: 'RESERVE IN SHOW',
+          finalSections: [
+            {
+              'id': 'open',
+              'kind': 'open',
+              'letter': 'A',
+              'display_name': 'ARBA Open Show A',
+              'is_enabled': true,
+              'judging_date': '2026-09-10',
+            },
+            {
+              'id': 'old-cavy',
+              'kind': 'open',
+              'letter': 'D',
+              'display_name': 'ACBA Open Show A',
+              'is_enabled': false,
+              'judging_date': '2026-09-10',
+            },
+          ],
+          finalPlans: [
+            {
+              'id': 'rabbit-final',
+              'award_section_id': 'open',
+              'award_code': 'FINALS',
+              'table_number': '5',
+              'sort_order': 15,
+            },
+            {
+              'id': 'cavy-final',
+              'award_section_id': 'old-cavy',
+              'award_code': 'FINALS',
+              'table_number': '8',
+              'sort_order': 15,
+            },
+          ],
+          judgeMarkers: [
+            {
+              'id': 'rabbit-judge',
+              'table_number': '5',
+              'sort_order': 0,
+              'judge_id': 'corey',
+            },
+            {
+              'id': 'cavy-judge',
+              'table_number': '8',
+              'sort_order': 0,
+              'judge_id': 'cavyjudge',
+            },
+          ],
+        );
+        addTearDown(fixture.client.dispose);
+        final legs = await LegsReportLoader(fixture.repo).load(_request);
+        expect(
+          legs.single.judgeName,
+          species == 'cavy' ? 'G JOSEPH COLUCCI' : 'Corey San Jose',
+        );
+      },
+    );
+  }
   for (final hasMarker in [true, false]) {
     test(
       'explicit BIS plan takes precedence over combined finals (assigned: $hasMarker)',
@@ -712,6 +782,7 @@ class _Fixture {
     bool failFinals = false,
     List<Map<String, dynamic>> finalPlans = const [],
     List<Map<String, dynamic>> judgeMarkers = const [],
+    List<Map<String, dynamic>> finalSections = const [],
   }) {
     client = SupabaseClient(
       'http://fixture.invalid',
@@ -765,8 +836,8 @@ class _Fixture {
                   'id': 'a',
                   'show_id': 'show',
                   'exhibitor_id': 'ex1',
-                  'species': 'rabbit',
-                  'breed': 'Mini Rex',
+                  'species': rows.first['species'],
+                  'breed': rows.first['breed_name'],
                   'tattoo': 'a',
                   'sex': 'Buck',
                   'class_name': 'Senior Buck',
@@ -778,9 +849,12 @@ class _Fixture {
           data = [
             {'id': 'judge', 'name': 'Synthetic Judge'},
             {'id': 'corey', 'name': 'Corey San Jose'},
+            {'id': 'cavyjudge', 'name': 'G JOSEPH COLUCCI'},
           ];
         } else if (table == 'workspace_specialties') {
           data = finalPlans;
+        } else if (table == 'show_sections') {
+          data = finalSections;
         } else if (table == 'show_judging_assignments') {
           expect(request.url.queryParameters['show_id'], 'in.("show")');
           expect(request.url.queryParameters['is_judge_change'], 'eq.true');

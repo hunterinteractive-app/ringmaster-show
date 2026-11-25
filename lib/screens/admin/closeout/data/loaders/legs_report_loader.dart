@@ -345,6 +345,16 @@ class LegsReportLoader {
       if (ruleMatch.rule == 8 || ruleMatch.rule == 10) {
         final award = ruleMatch.rule == 8 ? 'BIS' : 'RIS';
         judgeRef =
+            finalJudgeRefs[finalAwardJudgeKey(
+              ctx.sectionId,
+              award,
+              species: species,
+            )] ??
+            finalJudgeRefs[finalAwardJudgeKey(
+              ctx.sectionId,
+              'FINALS',
+              species: species,
+            )] ??
             finalJudgeRefs[finalAwardJudgeKey(ctx.sectionId, award)] ??
             finalJudgeRefs[finalAwardJudgeKey(ctx.sectionId, 'FINALS')] ??
             '';

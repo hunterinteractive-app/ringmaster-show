@@ -10,11 +10,20 @@ Future<Map<String, String>> loadFinalAwardJudgeRefs(
   required String showId,
   required Iterable<String> sectionIds,
 }) async {
+  final requestedSections = sectionIds.toSet();
+  final sections = await loadReportRowsByIds(
+    client,
+    table: 'show_sections',
+    columns: 'id,kind,letter,display_name,is_enabled,judging_date',
+    ids: [showId],
+    idColumn: 'show_id',
+  );
+  final cavyAliases = legacyCavyFinalsSections(sections, requestedSections);
   final plans = await loadReportRowsByIds(
     client,
     table: 'workspace_specialties',
     columns: 'id,award_section_id,award_code,table_number,sort_order',
-    ids: sectionIds,
+    ids: {...requestedSections, ...cavyAliases.keys},
     idColumn: 'award_section_id',
   );
   if (plans.isEmpty) return {};
@@ -26,11 +35,75 @@ Future<Map<String, String>> loadFinalAwardJudgeRefs(
     idColumn: 'show_id',
     filters: const {'is_judge_change': true},
   );
-  return resolveFinalAwardJudgeRefs(plans, markers);
+  final refs = resolveFinalAwardJudgeRefs(plans, markers);
+  for (final alias in cavyAliases.entries) {
+    for (final award in ['BIS', 'RIS', 'FINALS']) {
+      final sourceKey = finalAwardJudgeKey(alias.key, award);
+      if (refs.containsKey(sourceKey)) {
+        refs[finalAwardJudgeKey(alias.value, award, species: 'cavy')] =
+            refs[sourceKey]!;
+      }
+    }
+  }
+  return refs;
 }
 
-String finalAwardJudgeKey(String sectionId, String award) =>
-    '$sectionId|${award.trim().toUpperCase()}';
+String finalAwardJudgeKey(
+  String sectionId,
+  String award, {
+  String species = '',
+}) => '$sectionId|${award.trim().toUpperCase()}|$species';
+
+/// Older shows moved cavies into shared A/B sections but retained their
+/// separate finals plans on disabled sections named "ACBA Open Show A/B".
+/// Only that explicit legacy naming convention, scope, and judging date can
+/// establish an alias; never use the old physical letter (often D/E), a fuzzy
+/// name match, or the rabbit finals judge in place of the saved cavy plan.
+Map<String, String> legacyCavyFinalsSections(
+  ReportRows sections,
+  Set<String> requested,
+) {
+  final aliases = <String, String>{};
+  final seenTargets = <String>{};
+  final name = RegExp(
+    r'^ACBA (Open|Youth) Show ([A-Z])$',
+    caseSensitive: false,
+  );
+  for (final source in sections) {
+    if (source['is_enabled'] != false) continue;
+    final match = name.firstMatch(
+      (source['display_name'] ?? '').toString().trim(),
+    );
+    if (match == null) continue;
+    final kind = match[1]!.toLowerCase();
+    final date = source['judging_date']?.toString();
+    if (date == null ||
+        date.isEmpty ||
+        source['kind']?.toString().toLowerCase() != kind) {
+      continue;
+    }
+    final targets = sections
+        .where(
+          (target) =>
+              requested.contains(target['id']) &&
+              target['is_enabled'] != false &&
+              target['kind']?.toString().toLowerCase() == kind &&
+              target['letter']?.toString().toUpperCase() ==
+                  match[2]!.toUpperCase() &&
+              target['judging_date']?.toString() == date,
+        )
+        .toList();
+    if (targets.isEmpty) continue;
+    if (targets.length != 1 ||
+        !seenTargets.add(targets.single['id'].toString())) {
+      throw StateError(
+        'Ambiguous legacy cavy finals section. Review its saved award plans.',
+      );
+    }
+    aliases[source['id'].toString()] = targets.single['id'].toString();
+  }
+  return aliases;
+}
 
 Map<String, String> resolveFinalAwardJudgeRefs(
   ReportRows plans,
