@@ -1,3 +1,7 @@
+// ignore_for_file: avoid_web_libraries_in_flutter, deprecated_member_use
+import 'dart:html' as html;
+import '../widgets/edit_cart_entry_dialog.dart';
+import '../utils/cart_entry_review.dart';
 import '../utils/exhibitor_entry_order.dart';
 import '../widgets/meat_pen_tattoos.dart';
 // lib/screens/cart_screen.dart
@@ -104,6 +108,144 @@ class _CartScreenState extends State<CartScreen> {
     };
   }
 
+  bool _editing = false;
+  bool _loadFailed = false;
+
+  Future<void> _editCartEntry(Map<String, dynamic> item) async {
+    if (!_canAddExhibitors || _cartBusy || _loading) return;
+    setState(() => _editing = true);
+    try {
+      final catalog =
+          (await supabase
+                      .from('breeds')
+                      .select('id,name,species,class_system,has_prejunior')
+                      .eq('species', item['species'])
+                      .eq('is_active', true)
+                      .or(
+                        'local_show_id.is.null,local_show_id.eq.${widget.showId}',
+                      )
+                      .order('name')
+                  as List)
+              .cast<Map<String, dynamic>>();
+      final configured =
+          (await supabase
+                      .from('show_breeds')
+                      .select('breed_id,is_enabled,class_system_override')
+                      .eq('show_id', widget.showId)
+                  as List)
+              .cast<Map<String, dynamic>>();
+      final settings = {for (final b in configured) b['breed_id']: b};
+      final section = _sectionById['${item['section_id']}'];
+      final breeds = catalog
+          .where(
+            (b) =>
+                (configured.isEmpty ||
+                    settings[b['id']]?['is_enabled'] == true ||
+                    item['meat_pen_id'] != null) &&
+                (section == null || sectionAllowsBreed(section, b['name'])),
+          )
+          .map(
+            (b) => <String, dynamic>{
+              ...b,
+              'class_system':
+                  settings[b['id']]?['class_system_override'] ??
+                  b['class_system'],
+            },
+          )
+          .toList();
+      if (!mounted) return;
+      final expected = {
+        for (final key in [
+          'tattoo',
+          'breed',
+          'variety',
+          'sex',
+          'class_name',
+          'fur_variety',
+          'meat_pen_tattoos',
+        ])
+          key: item[key],
+      };
+      final saved = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => EditCartEntryDialog(
+          item: item,
+          breeds: breeds,
+          description:
+              '${_exhibitorLabelById[item['exhibitor_id']] ?? 'Exhibitor'} · ${section?['display_name'] ?? 'Section'}',
+          onSave: (changes) async {
+            await supabase.rpc(
+              'edit_entry_cart_item',
+              params: {
+                'p_cart_id': widget.cartId,
+                'p_item_id': item['id'],
+                'p_expected': expected,
+                'p_changes': changes,
+              },
+            );
+          },
+        ),
+      );
+      if (saved == true && mounted) await _load();
+    } catch (e) {
+      if (mounted) setState(() => _msg = 'Unable to edit entry: $e');
+    } finally {
+      if (mounted) setState(() => _editing = false);
+    }
+  }
+
+  void _printEntryReview() {
+    if (_loading || _cartBusy || _loadFailed) return;
+    final fees = _calculateFeesForItems(_items);
+    final currency = fees['currency'] as String;
+    final feeLines = <String>[
+      for (final group in _groupItemsByExhibitor().entries)
+        '${_exhibitorLabelById[group.key] ?? 'Exhibitor'} — ${_buildExhibitorFeeLine(exhibitorItems: group.value, currency: currency)}',
+      for (final fee in _exhibitorFees.where(
+        (f) => !_items.any((i) => i['exhibitor_id'] == f.exhibitorId),
+      ))
+        '${fee.label} — ${_exhibitorLabelById[fee.exhibitorId] ?? 'Exhibitor'}: ${_money(fee.amountCents / 100, currency: currency)}',
+      for (final addon in _addons)
+        '${addon['name']} × ${addon['quantity']} — ${_exhibitorLabelById[addon['exhibitor_id']] ?? 'Exhibitor'}: ${_money((addon['quantity'] as num) * (addon['unit_price_cents'] as num) / 100, currency: currency)}',
+      'Cart total before online payment fee: ${_money(fees['total'] as double, currency: currency)}',
+      if (_selectedPaymentTiming == 'online' && _quotePreview != null) ...[
+        'Online payment fee: ${_money(_quotePreview!.onlineFeeCents / 100, currency: currency)}',
+        'Cart total due online: ${_money(_quotePreview!.amountDueCents / 100, currency: currency)}',
+      ],
+      for (final balance in _submittedBalances)
+        'Previously submitted balance due (separate from this cart): ${_money((balance['due_cents'] as num) / 100, currency: balance['currency'].toString())}',
+    ];
+    final document = buildCartEntryReview(
+      showName: widget.showName,
+      showDate: '${_show?['start_date'] ?? ''}',
+      items: _items,
+      submittedEntries: _submittedEntries,
+      exhibitorNames: _exhibitorLabelById,
+      sections: _sectionById,
+      feeLines: feeLines,
+      notices: [
+        if (_cartLocked)
+          'This cart is locked. Check My Entries for its submission status.',
+        if (_cartReviewUnavailable)
+          'Previously submitted entries and duplicate checks are unavailable. Refresh the cart before submitting.',
+        if (_duplicateMatches.isNotEmpty)
+          'Possible duplicate entries require review in the cart before submitting.',
+        ..._breedScopeErrors,
+        if (_selectedPaymentTiming == 'online' && _quotePreview == null)
+          'Online payment total is not available yet. Refresh the cart before paying.',
+        'Amounts reflect the current cart. Entries for other shows are not included.',
+      ],
+    );
+    final blob = html.Blob([document], 'text/html;charset=utf-8');
+    final url = html.Url.createObjectUrlFromBlob(blob);
+    html.window.open(url, '_blank');
+    Future.delayed(
+      const Duration(minutes: 1),
+      () => html.Url.revokeObjectUrl(url),
+    );
+  }
+
   bool _confirming = false;
   bool _payingOnline = false;
   bool _cancellingCheckout = false;
@@ -138,7 +280,11 @@ class _CartScreenState extends State<CartScreen> {
   }
 
   bool get _cartBusy =>
-      _confirming || _payingOnline || _cancellingCheckout || _reviewingMatch;
+      _confirming ||
+      _payingOnline ||
+      _cancellingCheckout ||
+      _reviewingMatch ||
+      _editing;
 
   List<ExhibitorFee> _exhibitorFees = [];
   List<Map<String, dynamic>> _addons = [];
@@ -184,6 +330,9 @@ class _CartScreenState extends State<CartScreen> {
   Future<void> _load() async {
     setState(() {
       _loading = true;
+      _loadFailed = false;
+      _quotePreview = null;
+      _quotePreviewRequest++;
       _pricingReady = false;
       _msg = null;
       _checkoutUrl = null;
@@ -389,6 +538,7 @@ class _CartScreenState extends State<CartScreen> {
       if (!mounted) return;
       setState(() {
         _loading = false;
+        _loadFailed = true;
         _msg = 'Load failed: $e';
       });
     }
@@ -591,6 +741,7 @@ class _CartScreenState extends State<CartScreen> {
 
   bool get _canPayOnline {
     return !_loading &&
+        !_cartBusy &&
         _pricingReady &&
         !_quotePreviewLoading &&
         _quotePreview != null &&
@@ -1119,7 +1270,7 @@ class _CartScreenState extends State<CartScreen> {
   }
 
   Future<void> _payOnline() async {
-    if (_cartReviewBlocksCheckout) return;
+    if (_editing || _cartReviewBlocksCheckout) return;
     if (_breedScopeErrors.isNotEmpty) {
       setState(() => _msg = _breedScopeErrors.first);
       return;
@@ -1242,7 +1393,8 @@ class _CartScreenState extends State<CartScreen> {
   }
 
   Future<void> _confirmDayOf() async {
-    if (AppSession.supportReadOnly ||
+    if (_editing ||
+        AppSession.supportReadOnly ||
         !_pricingReady ||
         _cartReviewBlocksCheckout) {
       return;
@@ -1692,6 +1844,14 @@ class _CartScreenState extends State<CartScreen> {
       subtitle: 'Entry Cart',
       showBackButton: true,
       actions: [
+        IconButton(
+          tooltip: 'Print Entry Review',
+          icon: const Icon(Icons.print_outlined),
+          onPressed: (_loading || _cartBusy || _loadFailed || !_pricingReady)
+              ? null
+              : _printEntryReview,
+        ),
+
         if (_addonsAvailable || _addons.isNotEmpty)
           IconButton(
             tooltip: 'Contests & Add-Ons',
@@ -1947,6 +2107,22 @@ class _CartScreenState extends State<CartScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        OutlinedButton.icon(
+                          icon: const Icon(Icons.print_outlined),
+                          label: const Text('Print Entry Review'),
+                          onPressed:
+                              (_loading ||
+                                  _cartBusy ||
+                                  _loadFailed ||
+                                  !_pricingReady)
+                              ? null
+                              : _printEntryReview,
+                        ),
+                        const SizedBox(height: 8),
+                        const Text(
+                          'Check each entry before submitting. Use the pencil beside an animal to correct that cart line.',
+                        ),
+                        const SizedBox(height: 12),
                         if (_items.isEmpty && _addons.isNotEmpty)
                           const Text(
                             'Contest registrations and add-on orders follow their registration deadlines.',
@@ -2259,17 +2435,28 @@ class _CartScreenState extends State<CartScreen> {
                                     ),
                                   ),
                                   isThreeLine: _cartItemIsThreeLine(it),
-                                  trailing: IconButton(
-                                    tooltip: 'Remove',
-                                    icon: const Icon(Icons.delete_outline),
-                                    onPressed:
-                                        (_confirming ||
-                                            _payingOnline ||
-                                            _cartLocked ||
-                                            _cancellingCheckout)
-                                        ? null
-                                        : () =>
-                                              _removeItem(it['id'].toString()),
+                                  trailing: Wrap(
+                                    spacing: 4,
+                                    children: [
+                                      IconButton(
+                                        tooltip: 'Edit Entry',
+                                        icon: const Icon(Icons.edit_outlined),
+                                        onPressed:
+                                            !_canAddExhibitors || _cartBusy
+                                            ? null
+                                            : () => _editCartEntry(it),
+                                      ),
+                                      IconButton(
+                                        tooltip: 'Remove',
+                                        icon: const Icon(Icons.delete_outline),
+                                        onPressed:
+                                            !_canAddExhibitors || _cartBusy
+                                            ? null
+                                            : () => _removeItem(
+                                                it['id'].toString(),
+                                              ),
+                                      ),
+                                    ],
                                   ),
                                 );
                               }),

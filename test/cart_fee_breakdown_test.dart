@@ -16,8 +16,10 @@ Future<void> initializeFeeCart({
   bool pendingCheckout = false,
   bool cancellationFails = false,
   bool includeExistingEntries = false,
+  void Function(Map<String, dynamic>)? onCartEdit,
 }) async {
   var checkoutPending = pendingCheckout;
+  final edits = <String, dynamic>{};
   var confirmedDistinct = false;
   final addonItems = <Map<String, dynamic>>[
     {
@@ -52,7 +54,7 @@ Future<void> initializeFeeCart({
     ),
     httpClient: MockClient((req) async {
       final path = req.url.path;
-      Object data = [];
+      Object? data = [];
       if (path.endsWith('/entry_carts')) {
         data = {
           'status': 'active',
@@ -102,6 +104,20 @@ Future<void> initializeFeeCart({
             'fur_fee': 0,
           },
         ];
+      } else if (path.endsWith('/breeds')) {
+        data = [
+          {
+            'id': 'peruvian',
+            'name': 'Peruvian',
+            'species': 'cavy',
+            'class_system': 'four',
+          },
+        ];
+      } else if (path.endsWith('/edit_entry_cart_item')) {
+        final payload = Map<String, dynamic>.from(jsonDecode(req.body));
+        onCartEdit?.call(payload);
+        edits.addAll(Map<String, dynamic>.from(payload['p_changes']));
+        data = null;
       } else if (path.endsWith('/entry_cart_items')) {
         data = List.generate(
           exhibitors,
@@ -117,6 +133,7 @@ Future<void> initializeFeeCart({
             'tattoo': 'A$i',
             'class_name': 'Senior',
             'is_fur': false,
+            if (i == 0) ...edits,
           },
         );
       } else if (path.endsWith('/exhibitors')) {
@@ -307,6 +324,50 @@ void main() {
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
   }
+
+  testWidgets(
+    'cart edit saves one snapshot and refreshes review without submitting or paying',
+    (tester) async {
+      Map<String, dynamic>? request;
+      await tester.runAsync(
+        () => initializeFeeCart(onCartEdit: (v) => request = v),
+      );
+      addTearDown(() => Supabase.instance.dispose());
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.lightTheme,
+          home: const CartScreen(
+            cartId: 'cart',
+            showId: 'show',
+            showName: 'Show',
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byTooltip('Print Entry Review'), findsOneWidget);
+      await tester.scrollUntilVisible(
+        find.byTooltip('Edit Entry'),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Edit Entry'));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Tattoo / ear number'),
+        'FIXED',
+      );
+      await tester.tap(find.text('Save Changes'));
+      await tester.pumpAndSettle();
+      expect(request?['p_cart_id'], 'cart');
+      expect(request?['p_item_id'], 'item0');
+      expect(request?['p_changes'], {'tattoo': 'FIXED'});
+      expect(request?['p_expected']['tattoo'], 'A0');
+      expect(find.textContaining('FIXED'), findsWidgets);
+      expect(find.text('Edit Cart Entry'), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('phone cart reviews a family match and separates the totals', (
     tester,
