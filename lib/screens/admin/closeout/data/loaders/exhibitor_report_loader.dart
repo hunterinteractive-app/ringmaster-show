@@ -102,9 +102,6 @@ class ExhibitorReportLoader {
       allEligibleRows,
       targetRows: rowList,
     );
-    final displayPlacementByEntryId = _buildDisplayPlacementByEntryId(
-      allEligibleRows,
-    );
     final pointsByEntryId = await _loadAnimalSweepstakesPointsByEntryId(
       showId,
       entryIds,
@@ -203,7 +200,7 @@ class ExhibitorReportLoader {
         variety: _str(row['variety_name']),
         className: _str(row['class_name']),
         sex: _str(row['sex']),
-        placing: _displayResultOrPlacement(row, displayPlacementByEntryId),
+        placing: _displayResultOrPlacement(row),
         classCount: ctx?.classCount,
         exhibitorCount: ctx?.exhibitorCount,
         awardsText: _formatAwards(awards),
@@ -395,59 +392,6 @@ class ExhibitorReportLoader {
       map.putIfAbsent(entryId, () => <String>{}).add(awardCode);
     }
     return map;
-  }
-
-  Map<String, String> _buildDisplayPlacementByEntryId(
-    List<Map<String, dynamic>> rows,
-  ) {
-    final result = <String, String>{};
-    final grouped = <String, List<Map<String, dynamic>>>{};
-
-    for (final row in rows) {
-      final entryId = _str(row['entry_id']);
-      final showLetter = _str(row['resolved_show_letter']).toUpperCase();
-      final breed = _str(row['breed_name']);
-      final variety = _str(row['variety_name']);
-      final className = _str(row['class_name']);
-      final sex = _str(row['sex']);
-
-      if (entryId.isEmpty || showLetter.isEmpty) continue;
-
-      final key =
-          '${_str(row['section_id'])}|$showLetter|$breed|$variety|$className|$sex';
-      grouped.putIfAbsent(key, () => <Map<String, dynamic>>[]).add(row);
-    }
-
-    for (final rowsInClass in grouped.values) {
-      final classSize = rowsInClass.where(_countsAsJudgedAnimal).length;
-
-      rowsInClass.sort((a, b) {
-        final aPlacement = int.tryParse(_str(a['placement'])) ?? 999;
-        final bPlacement = int.tryParse(_str(b['placement'])) ?? 999;
-        final placementCompare = aPlacement.compareTo(bPlacement);
-        if (placementCompare != 0) return placementCompare;
-
-        return _str(a['tattoo']).compareTo(_str(b['tattoo']));
-      });
-
-      for (var i = 0; i < rowsInClass.length; i++) {
-        final row = rowsInClass[i];
-        final entryId = _str(row['entry_id']);
-        if (entryId.isEmpty) continue;
-
-        final storedPlacement = int.tryParse(_str(row['placement']));
-
-        if (storedPlacement != null &&
-            storedPlacement > 0 &&
-            storedPlacement <= classSize) {
-          result[entryId] = '$storedPlacement';
-        } else {
-          result[entryId] = '${i + 1}';
-        }
-      }
-    }
-
-    return result;
   }
 
   Future<Map<String, String>> _loadJudgeNamesByShowJudgeId(
@@ -677,11 +621,7 @@ class ExhibitorReportLoader {
   bool _countsAsJudgedAnimal(Map<String, dynamic> row) =>
       countsTowardClassPopulation(row);
 
-  String _displayResultOrPlacement(
-    Map<String, dynamic> row,
-    Map<String, String> displayPlacementByEntryId,
-  ) {
-    final entryId = _str(row['entry_id']);
+  String _displayResultOrPlacement(Map<String, dynamic> row) {
     final status = _str(row['result_status']);
     final dqReason = _str(row['disqualified_reason']);
     final isDisqualified = row['is_disqualified'] == true;
@@ -704,7 +644,12 @@ class ExhibitorReportLoader {
       return 'Unworthy of Award';
     }
 
-    return displayPlacementByEntryId[entryId] ?? _str(row['placement']);
+    // A zero is the saved No Place outcome, not a zero-based rank. Never
+    // derive a placing from row order or class size: legs and points use the
+    // actual saved result, and the printed report must agree with that result.
+    final placement = _str(row['placement']);
+    if (int.tryParse(placement) == 0) return 'No Place';
+    return placement;
   }
 
   String _formatAwards(Set<String> awards) {

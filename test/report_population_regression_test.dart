@@ -10,6 +10,114 @@ import 'package:ringmaster_show/screens/admin/closeout/data/loaders/legs_report_
 import 'package:ringmaster_show/screens/admin/closeout/models/base/report_request.dart';
 
 void main() {
+  test(
+    'unplaced 001 is not promoted ahead of the saved class winner',
+    () async {
+      // Reproduce the reported class: five NP rows, places 1–11, 16 shown,
+      // nine exhibitors. Tattoo 001 sorts first among the NP rows.
+      final rows = <Map<String, dynamic>>[
+        for (var i = 0; i < 16; i++)
+          _row(
+            i == 0
+                ? '001'
+                : i == 5
+                ? 'EVE'
+                : 'rabbit-$i',
+            exhibitor: 'ex${i % 9 + 1}',
+            values: {
+              'breed_name': 'Holland Lop',
+              'variety_name': 'Solid',
+              'group_name': '',
+              'uses_group_awards': false,
+              'class_name': 'Senior',
+              'sex': 'Doe',
+              'placement': i < 5 ? '0' : '${i - 4}',
+              'result_status': 'Shown',
+            },
+          ),
+      ];
+      final fixture = _Fixture(rows.reversed.toList());
+      addTearDown(fixture.client.dispose);
+      final report = await ExhibitorReportLoader(fixture.repo).load(_request);
+      final unplaced = report.entries.singleWhere((row) => row.tattoo == '001');
+      expect(unplaced.placing, 'No Place');
+      expect(unplaced.classCount, 16);
+      expect(unplaced.exhibitorCount, 9);
+      expect(unplaced.earnedLeg, isFalse);
+      expect(unplaced.totalPoints, 0);
+      final winnerReport = await ExhibitorReportLoader(fixture.repo).load(
+        ReportRequest(
+          showId: 'show',
+          reportName: 'regression',
+          finalizeRunId: 'run',
+          sectionIds: ['open'],
+          exhibitorId: 'ex6',
+        ),
+      );
+      final winner = winnerReport.entries.singleWhere(
+        (row) => row.tattoo == 'EVE',
+      );
+      expect(winner.placing, '1');
+      expect(winner.earnedLeg, isTrue);
+      final legs = await LegsReportLoader(fixture.repo).load(
+        ReportRequest(
+          showId: 'show',
+          reportName: 'legs',
+          finalizeRunId: 'run',
+          sectionIds: ['open'],
+        ),
+      );
+      expect(legs.map((leg) => leg.entryId), ['EVE']);
+    },
+  );
+
+  test(
+    'report preserves saved places and result statuses without inventing ranks',
+    () async {
+      final fixture = _Fixture([
+        _row('zero', values: {'placement': 0}),
+        _row('missing', values: {'placement': null}),
+        _row('empty', values: {'placement': ''}),
+        _row('outside-count', values: {'placement': '99'}),
+        _row(
+          'no-show',
+          values: {
+            'placement': 0,
+            'is_shown': false,
+            'result_status': 'No Show',
+          },
+        ),
+        _row(
+          'dq',
+          values: {
+            'placement': 0,
+            'is_disqualified': true,
+            'disqualified_reason': 'Overweight',
+          },
+        ),
+        _row(
+          'unworthy',
+          values: {'placement': 0, 'result_status': 'Unworthy of Award'},
+        ),
+      ]);
+      addTearDown(fixture.client.dispose);
+      final report = await ExhibitorReportLoader(fixture.repo).load(_request);
+      expect(
+        {for (final row in report.entries) row.tattoo: row.placing},
+        {
+          'zero': 'No Place',
+          'missing': '',
+          'empty': '',
+          'outside-count': '99',
+          'no-show': 'No Show',
+          'dq': 'DQ - Weight',
+          'unworthy': 'Unworthy of Award',
+        },
+      );
+      expect(report.entries.every((row) => !row.earnedLeg), isTrue);
+    },
+  );
+
   for (final species in ['rabbit', 'cavy']) {
     test(
       'shared section keeps the legacy cavy finals judge separate from $species finals',
