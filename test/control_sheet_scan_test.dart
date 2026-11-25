@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -543,6 +544,7 @@ void main() {
               onPressed: () => showControlSheetScanDialog(
                 context,
                 showId: _page.showId,
+                showName: 'Test Show',
                 loadSection: (_) async => [
                   for (var index = 0; index < 2; index++)
                     {
@@ -556,7 +558,8 @@ void main() {
                       'sex': 'Buck',
                     },
                 ],
-                validate: (changes) async => changes.length,
+                prepare: (changes) async =>
+                    (count: changes.length, save: () async => changes.length),
               ),
               child: const Text('Open scan review'),
             ),
@@ -580,7 +583,7 @@ void main() {
     expect(
       tester
           .widget<FilledButton>(
-            find.widgetWithText(FilledButton, 'Check results'),
+            find.widgetWithText(FilledButton, 'Save reviewed results'),
           )
           .onPressed,
       isNull,
@@ -599,7 +602,7 @@ void main() {
     expect(
       tester
           .widget<FilledButton>(
-            find.widgetWithText(FilledButton, 'Check results'),
+            find.widgetWithText(FilledButton, 'Save reviewed results'),
           )
           .onPressed,
       isNotNull,
@@ -659,6 +662,8 @@ void main() {
       );
 
       List<ScanResultChange>? checked;
+      var saveAttempts = 0;
+      final finishSave = Completer<void>();
       await tester.pumpWidget(
         MaterialApp(
           theme: AppTheme.onGradientTheme(AppTheme.lightTheme),
@@ -668,6 +673,7 @@ void main() {
                 onPressed: () => showControlSheetScanDialog(
                   context,
                   showId: _page.showId,
+                  showName: 'Test Show',
                   loadSection: (_) async => [
                     for (var row = 0; row < 21; row++)
                       {
@@ -683,10 +689,18 @@ void main() {
                         'species': 'rabbit',
                       },
                   ],
-                  validate: (results) async {
-                    checked = results;
-                    return results.length;
-                  },
+                  prepare: (results) async => (
+                    count: results.length,
+                    save: () async {
+                      saveAttempts++;
+                      if (saveAttempts == 1) {
+                        throw StateError('Connection interrupted. Try again.');
+                      }
+                      await finishSave.future;
+                      checked = results;
+                      return results.length;
+                    },
+                  ),
                 ),
                 child: const Text('Import from Results Entry'),
               ),
@@ -743,7 +757,7 @@ void main() {
       expect(
         tester
             .widget<FilledButton>(
-              find.widgetWithText(FilledButton, 'Check results'),
+              find.widgetWithText(FilledButton, 'Save reviewed results'),
             )
             .onPressed,
         isNull,
@@ -798,7 +812,50 @@ void main() {
       await tester.ensureVisible(find.text('Unworthy of Award').last);
       await tester.tap(find.text('Unworthy of Award').last);
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Check results'));
+      await tester.tap(find.text('Save reviewed results'));
+      await tester.pumpAndSettle();
+      expect(checked, isNull);
+      expect(find.text('Save reviewed results?'), findsOneWidget);
+      expect(find.textContaining('to Test Show?'), findsOneWidget);
+      final confirmation = tester.widget<AlertDialog>(
+        find.byType(AlertDialog).last,
+      );
+      final confirmationContext = tester.element(find.byWidget(confirmation));
+      final confirmationTheme = Theme.of(confirmationContext);
+      expect(confirmationTheme.colorScheme.onSurface, AppColors.text);
+      await tester.tap(find.text('Back to review'));
+      await tester.pumpAndSettle();
+      expect(saveAttempts, 0);
+      expect(checked, isNull);
+      await tester.tap(find.text('Save reviewed results'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Confirm and save'));
+      await tester.pumpAndSettle();
+      expect(saveAttempts, 1);
+      expect(checked, isNull);
+      expect(find.textContaining('Connection interrupted.'), findsOneWidget);
+      expect(find.text('7 marked rows · 0 to review'), findsOneWidget);
+      await tester.tap(find.text('Save reviewed results'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Confirm and save'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 350));
+      expect(saveAttempts, 2);
+      expect(
+        tester
+            .widget<TextButton>(find.widgetWithText(TextButton, 'Close'))
+            .onPressed,
+        isNull,
+      );
+      expect(
+        tester
+            .widget<FilledButton>(
+              find.widgetWithText(FilledButton, 'Save reviewed results'),
+            )
+            .onPressed,
+        isNull,
+      );
+      finishSave.complete();
       await tester.pumpAndSettle();
       expect(checked?.map((change) => change.placement), [
         null,

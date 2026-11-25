@@ -5,6 +5,7 @@ import 'package:file_selector/file_selector.dart';
 import 'package:flutter/foundation.dart' show compute;
 import 'package:flutter/material.dart';
 import 'package:printing/printing.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
 import 'package:ringmaster_show/services/results/control_sheet_scan.dart';
 import 'package:ringmaster_show/services/results/result_status.dart';
 import 'package:ringmaster_show/services/results/results_rules_router.dart';
@@ -18,6 +19,9 @@ typedef ScanResultChange = ({
   ResultStatus? outcome,
   Set<String> awards,
 });
+
+/// Validation freezes a batch before the user gives the final save confirmation.
+typedef ScanResultSavePlan = ({int count, Future<int> Function() save});
 
 enum _ReviewStatus {
   good(
@@ -97,14 +101,17 @@ class ControlSheetScanDialog extends StatefulWidget {
   const ControlSheetScanDialog({
     super.key,
     required this.showId,
+    required this.showName,
     required this.loadSection,
-    required this.validate,
+    required this.prepare,
   });
 
   final String showId;
+  final String showName;
   final Future<List<Map<String, dynamic>>> Function(String sectionId)
   loadSection;
-  final Future<int> Function(List<ScanResultChange> changes) validate;
+  final Future<ScanResultSavePlan> Function(List<ScanResultChange> changes)
+  prepare;
 
   @override
   State<ControlSheetScanDialog> createState() => _ControlSheetScanDialogState();
@@ -214,6 +221,7 @@ class _ControlSheetScanDialogState extends State<ControlSheetScanDialog> {
   final _errors = <String>[];
   var _issues = <String>[];
   bool _working = false;
+  bool _confirming = false;
   bool _showBlank = false;
   bool _preview = true;
 
@@ -543,10 +551,11 @@ class _ControlSheetScanDialogState extends State<ControlSheetScanDialog> {
   String _message(Object error) {
     if (error is FormatException) return error.message;
     if (error is StateError) return error.message.toString();
+    if (error is PostgrestException) return error.message;
     return error.toString();
   }
 
-  Future<void> _validate() async {
+  Future<void> _save() async {
     if (_working) return;
     final changes = _rows
         .where((row) => !row.skipped && row.hasResults)
@@ -557,13 +566,50 @@ class _ControlSheetScanDialogState extends State<ControlSheetScanDialog> {
       _issues = [];
     });
     try {
-      final count = await widget.validate(changes);
+      final plan = await widget.prepare(changes);
       if (!mounted) return;
+      setState(() => _confirming = true);
+      final confirmed = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (dialogContext) => Theme(
+          data: AppTheme.surfaceDialogTheme(Theme.of(dialogContext)),
+          child: AlertDialog(
+            title: const Text('Save reviewed results?'),
+            content: Text(
+              'Save results for ${plan.count} ${plan.count == 1 ? 'entry' : 'entries'} '
+              'to ${widget.showName}?\n\n'
+              'Placements, specials, scratches, and disqualifications will '
+              'be recorded in Results Entry. Skipped and unmarked rows stay as they are.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: const Text('Back to review'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(dialogContext, true),
+                child: const Text('Confirm and save'),
+              ),
+            ],
+          ),
+        ),
+      );
+      if (confirmed != true || !mounted) return;
+      setState(() => _confirming = false);
+      final count = await plan.save();
+      if (!mounted) return;
+      setState(() => _working = false);
       Navigator.pop(context, count);
     } catch (error) {
       if (mounted) setState(() => _issues = [_message(error)]);
     } finally {
-      if (mounted) setState(() => _working = false);
+      if (mounted) {
+        setState(() {
+          _working = false;
+          _confirming = false;
+        });
+      }
     }
   }
 
@@ -759,8 +805,8 @@ class _ControlSheetScanDialogState extends State<ControlSheetScanDialog> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Text(
-                    'This pilot checks scans against the show. It does not save results. Include all four corner markers in every photo or scan.',
+                  Text(
+                    'Review the scanned results, then confirm to save them to ${widget.showName}. Include all four corner markers in every photo or scan.',
                   ),
                   const SizedBox(height: 8),
                   Wrap(
@@ -778,7 +824,7 @@ class _ControlSheetScanDialogState extends State<ControlSheetScanDialog> {
                       ),
                     ],
                   ),
-                  if (_working) const LinearProgressIndicator(),
+                  if (_working && !_confirming) const LinearProgressIndicator(),
                   for (final error in [..._errors, ..._issues])
                     _statusNotice(_ReviewStatus.fix, error),
                   if (_pages.isNotEmpty) ...[
@@ -911,8 +957,8 @@ class _ControlSheetScanDialogState extends State<ControlSheetScanDialog> {
           FilledButton(
             onPressed: _working || pending > 0 || fixes > 0 || results == 0
                 ? null
-                : _validate,
-            child: const Text('Check results'),
+                : _save,
+            child: const Text('Save reviewed results'),
           ),
         ],
       ),
@@ -923,9 +969,11 @@ class _ControlSheetScanDialogState extends State<ControlSheetScanDialog> {
 Future<int?> showControlSheetScanDialog(
   BuildContext context, {
   required String showId,
+  required String showName,
   required Future<List<Map<String, dynamic>>> Function(String sectionId)
   loadSection,
-  required Future<int> Function(List<ScanResultChange> changes) validate,
+  required Future<ScanResultSavePlan> Function(List<ScanResultChange> changes)
+  prepare,
 }) => showDialog<int>(
   context: context,
   barrierDismissible: false,
@@ -933,8 +981,9 @@ Future<int?> showControlSheetScanDialog(
     data: AppTheme.surfaceDialogTheme(Theme.of(context)),
     child: ControlSheetScanDialog(
       showId: showId,
+      showName: showName,
       loadSection: loadSection,
-      validate: validate,
+      prepare: prepare,
     ),
   ),
 );
