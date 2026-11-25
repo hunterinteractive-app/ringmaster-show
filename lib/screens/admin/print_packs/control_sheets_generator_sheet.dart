@@ -19,6 +19,7 @@ import 'print_pack_pdf_helpers.dart';
 import 'control_sheet_labels.dart';
 import 'control_sheet_footer.dart';
 import 'control_sheet_judging_order.dart';
+import 'control_sheet_page_order.dart';
 import 'control_sheet_scan_pdf.dart';
 import '../closeout/data/report_data_reader.dart';
 
@@ -872,7 +873,8 @@ class _ControlSheetsGeneratorSheetState
     return '';
   }
 
-  pw.Document _buildPdf(
+  @visibleForTesting
+  pw.Document buildPdf(
     List<Map<String, dynamic>> rows,
     pw.ThemeData theme, {
     required bool includeQrCode,
@@ -881,6 +883,11 @@ class _ControlSheetsGeneratorSheetState
     required Map<String, Map<String, int>> cavySopSortMap,
   }) {
     final doc = pw.Document(theme: theme);
+    final cavyBreedSortOrders = <String, int>{
+      for (final entry in cavySopSortMap.entries)
+        if (entry.value['breed'] != null)
+          entry.key.split('|').first: entry.value['breed']!,
+    };
 
     final bySection = <String, List<Map<String, dynamic>>>{};
     for (final row in rows) {
@@ -921,7 +928,7 @@ class _ControlSheetsGeneratorSheetState
           color.toLowerCase(),
           cls.toLowerCase(),
           sex.toLowerCase(),
-          if (bubbleSheet) _safe(row, 'species').toLowerCase(),
+          _isCavyRow(row) ? 'cavy' : 'rabbit',
         ].join('|');
 
         grouped.putIfAbsent(key, () => <Map<String, dynamic>>[]);
@@ -1032,6 +1039,12 @@ class _ControlSheetsGeneratorSheetState
           groupRows.map((row) => _safe(row, 'judge_name')),
         );
 
+        final cavySort = _isCavyRow(first)
+            ? cavySopSortMap[_cavySortKey(
+                _safe(first, 'breed'),
+                _safe(first, 'variety'),
+              )]
+            : null;
         allPages.add({
           'sectionId': _safe(first, 'section_id'),
           'sectionTitle': widget.combineSections
@@ -1056,8 +1069,13 @@ class _ControlSheetsGeneratorSheetState
           'ageSpecial': _ageSpecialForRow(first),
           'isFurOrWool': isFurOrWool,
           'judgeName': judgeName,
-          'groupSortOrder': _sortValue(first, 'group_sort_order'),
-          'varietySortOrder': _sortValue(first, 'variety_sort_order'),
+          'cavyBreedSortOrder':
+              cavyBreedSortOrders[_safe(first, 'breed').toLowerCase()],
+          'groupSortOrder': _isCavyRow(first)
+              ? 0
+              : _sortValue(first, 'group_sort_order'),
+          'varietySortOrder':
+              cavySort?['variety'] ?? _sortValue(first, 'variety_sort_order'),
           'classSortRank': _classSortRankForPrint(
             isFurOrWool
                 ? _furWoolLabel(first)
@@ -1067,200 +1085,12 @@ class _ControlSheetsGeneratorSheetState
       }
     }
 
-    // BEGIN REPLACEMENT BLOCK
-    String sectionKindForPage(Map<String, dynamic> page) {
-      final rawKind = (page['sectionKind'] ?? '')
-          .toString()
-          .trim()
-          .toLowerCase();
-      if (rawKind == 'open' || rawKind == 'youth') return rawKind;
-
-      final title = (page['sectionTitle'] ?? '')
-          .toString()
-          .trim()
-          .toLowerCase();
-      if (title.startsWith('open') || title.contains(' open ')) return 'open';
-      if (title.startsWith('youth') || title.contains(' youth ')) {
-        return 'youth';
-      }
-
-      return rawKind;
-    }
-
-    int sectionKindRank(Map<String, dynamic> page) {
-      final kind = sectionKindForPage(page);
-      switch (kind) {
-        case 'open':
-          return widget.youthFirst ? 1 : 0;
-        case 'youth':
-          return widget.youthFirst ? 0 : 1;
-        default:
-          return 99;
-      }
-    }
-
-    String sectionLetterForPage(Map<String, dynamic> page) {
-      final rawLetter = (page['sectionLetter'] ?? '')
-          .toString()
-          .trim()
-          .toUpperCase();
-      if (rawLetter.isNotEmpty) return rawLetter;
-
-      final title = (page['sectionTitle'] ?? '')
-          .toString()
-          .trim()
-          .toUpperCase();
-      final match = RegExp(r'\b([A-Z])$').firstMatch(title);
-      return match?.group(1) ?? '';
-    }
-
-    int pageInt(Map<String, dynamic> page, String key) {
-      final value = page[key];
-      if (value is int) return value;
-      return int.tryParse(value?.toString() ?? '') ?? 9999;
-    }
-
-    int compareControlPages(Map<String, dynamic> a, Map<String, dynamic> b) {
-      if (widget.combineSections) {
-        // Paired control sheets should be ordered by breed, then by section.
-        // This keeps Open A American Fuzzy Lop together, then Youth A
-        // American Fuzzy Lop together, instead of splitting the same breed
-        // into repeated Open/Youth runs by class or sex.
-        final breedCmp = (a['breed'] ?? '').toString().toLowerCase().compareTo(
-          (b['breed'] ?? '').toString().toLowerCase(),
-        );
-        if (breedCmp != 0) return breedCmp;
-
-        final kindCmp = sectionKindRank(a).compareTo(sectionKindRank(b));
-        if (kindCmp != 0) return kindCmp;
-
-        final sectionSortCmp = pageInt(
-          a,
-          'sectionSortOrder',
-        ).compareTo(pageInt(b, 'sectionSortOrder'));
-        if (sectionSortCmp != 0) return sectionSortCmp;
-
-        final sectionLetterCmp = sectionLetterForPage(
-          a,
-        ).compareTo(sectionLetterForPage(b));
-        if (sectionLetterCmp != 0) return sectionLetterCmp;
-
-        final titleCmp = (a['sectionTitle'] ?? '').toString().compareTo(
-          (b['sectionTitle'] ?? '').toString(),
-        );
-        if (titleCmp != 0) return titleCmp;
-
-        // Within each Open or Youth section, print all regular breed
-        // classes first and place Fur/Wool at the end of that section.
-        final aIsFurOrWool = a['isFurOrWool'] == true;
-        final bIsFurOrWool = b['isFurOrWool'] == true;
-        if (aIsFurOrWool != bIsFurOrWool) {
-          return aIsFurOrWool ? 1 : -1;
-        }
-
-        final groupCmp = pageInt(
-          a,
-          'groupSortOrder',
-        ).compareTo(pageInt(b, 'groupSortOrder'));
-        if (groupCmp != 0) return groupCmp;
-
-        final varietyCmp = pageInt(
-          a,
-          'varietySortOrder',
-        ).compareTo(pageInt(b, 'varietySortOrder'));
-        if (varietyCmp != 0) return varietyCmp;
-
-        final colorCmp = (a['color'] ?? '').toString().toLowerCase().compareTo(
-          (b['color'] ?? '').toString().toLowerCase(),
-        );
-        if (colorCmp != 0) return colorCmp;
-
-        final classCmp = pageInt(
-          a,
-          'classSortRank',
-        ).compareTo(pageInt(b, 'classSortRank'));
-        if (classCmp != 0) return classCmp;
-
-        final sexCmp = (a['sex'] ?? '').toString().toLowerCase().compareTo(
-          (b['sex'] ?? '').toString().toLowerCase(),
-        );
-        if (sexCmp != 0) return sexCmp;
-
-        return 0;
-      } else {
-        final kindCmp = sectionKindRank(a).compareTo(sectionKindRank(b));
-        if (kindCmp != 0) return kindCmp;
-
-        final sectionSortCmp = pageInt(
-          a,
-          'sectionSortOrder',
-        ).compareTo(pageInt(b, 'sectionSortOrder'));
-        if (sectionSortCmp != 0) return sectionSortCmp;
-
-        final sectionLetterCmp = sectionLetterForPage(
-          a,
-        ).compareTo(sectionLetterForPage(b));
-        if (sectionLetterCmp != 0) return sectionLetterCmp;
-
-        final breedCmp = (a['breed'] ?? '').toString().toLowerCase().compareTo(
-          (b['breed'] ?? '').toString().toLowerCase(),
-        );
-        if (breedCmp != 0) return breedCmp;
-
-        // Fur/Wool must always print after every regular class in the breed.
-        final aIsFurOrWool = a['isFurOrWool'] == true;
-        final bIsFurOrWool = b['isFurOrWool'] == true;
-
-        if (aIsFurOrWool != bIsFurOrWool) {
-          return aIsFurOrWool ? 1 : -1;
-        }
-      }
-
-      // Only use the fallback sorting when not combining sections
-      if (!widget.combineSections) {
-        final groupCmp = pageInt(
-          a,
-          'groupSortOrder',
-        ).compareTo(pageInt(b, 'groupSortOrder'));
-        if (groupCmp != 0) return groupCmp;
-
-        final varietyCmp = pageInt(
-          a,
-          'varietySortOrder',
-        ).compareTo(pageInt(b, 'varietySortOrder'));
-        if (varietyCmp != 0) return varietyCmp;
-
-        final colorCmp = (a['color'] ?? '').toString().toLowerCase().compareTo(
-          (b['color'] ?? '').toString().toLowerCase(),
-        );
-        if (colorCmp != 0) return colorCmp;
-
-        final classCmp = pageInt(
-          a,
-          'classSortRank',
-        ).compareTo(pageInt(b, 'classSortRank'));
-        if (classCmp != 0) return classCmp;
-
-        final sexCmp = (a['sex'] ?? '').toString().toLowerCase().compareTo(
-          (b['sex'] ?? '').toString().toLowerCase(),
-        );
-        if (sexCmp != 0) return sexCmp;
-
-        return (a['sectionTitle'] ?? '').toString().compareTo(
-          (b['sectionTitle'] ?? '').toString(),
-        );
-      }
-
-      return 0;
-    }
-
-    final sortedAllPages = [...allPages]
-      ..sort((a, b) {
-        final order = judgingOrder == null
-            ? 0
-            : judgingOrder.rank(a).compareTo(judgingOrder.rank(b));
-        return order != 0 ? order : compareControlPages(a, b);
-      });
+    final sortedAllPages = sortControlSheetPages(
+      allPages,
+      combineSections: widget.combineSections,
+      youthFirst: widget.youthFirst,
+      judgingOrder: judgingOrder,
+    );
 
     if (bubbleSheet) {
       _addCompactBubblePages(doc, sortedAllPages, judgingOrder);
@@ -1270,12 +1100,13 @@ class _ControlSheetsGeneratorSheetState
     final sortedSectionGroups =
         <MapEntry<String, List<Map<String, dynamic>>>>[];
 
-    if (widget.combineSections || judgingOrder != null) {
+    {
       // Keep Open and Youth as separate sheet sections inside the same PDF,
       // while preserving the sorted Open/Youth-by-breed flow. Repeated section
       // titles are allowed here because each run gets its own PDF header.
       String? currentTitle;
       int? currentRank;
+      bool? currentIsCavy;
       List<Map<String, dynamic>> currentPages = <Map<String, dynamic>>[];
 
       void flushCurrentRun() {
@@ -1291,27 +1122,18 @@ class _ControlSheetsGeneratorSheetState
 
         if (currentTitle != null &&
             (currentTitle != sectionTitle ||
-                currentRank != judgingOrder?.rank(p))) {
+                currentRank != judgingOrder?.rank(p) ||
+                currentIsCavy != isCavyControlPage(p))) {
           flushCurrentRun();
         }
 
         currentTitle = sectionTitle;
         currentRank = judgingOrder?.rank(p);
+        currentIsCavy = isCavyControlPage(p);
         currentPages.add(p);
       }
 
       flushCurrentRun();
-    } else {
-      final sectionPageGroups = <String, List<Map<String, dynamic>>>{};
-      for (final p in sortedAllPages) {
-        final sectionTitle = (p['sectionTitle'] ?? '').toString();
-        sectionPageGroups.putIfAbsent(
-          sectionTitle,
-          () => <Map<String, dynamic>>[],
-        );
-        sectionPageGroups[sectionTitle]!.add(p);
-      }
-      sortedSectionGroups.addAll(sectionPageGroups.entries);
     }
 
     pw.Widget topHeader({
@@ -2267,7 +2089,7 @@ class _ControlSheetsGeneratorSheetState
       final cavySopSortMap = await _loadCavySopSortMap();
 
       final theme = await buildPrintPackPdfTheme();
-      final doc = _buildPdf(
+      final doc = buildPdf(
         rows,
         theme,
         includeQrCode: includeQrCode,
