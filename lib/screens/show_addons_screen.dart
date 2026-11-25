@@ -21,10 +21,12 @@ class ShowAddonsScreen extends StatefulWidget {
     required this.showName,
     this.exhibitorId,
     this.openCart = true,
+    this.returnToEntry = false,
   });
   final String cartId, showId, showName;
   final String? exhibitorId;
   final bool openCart;
+  final bool returnToEntry;
   @override
   State<ShowAddonsScreen> createState() => _ShowAddonsScreenState();
 }
@@ -193,21 +195,25 @@ class _ShowAddonsScreenState extends State<ShowAddonsScreen> {
     }
   }
 
-  void _continue() {
+  Future<void> _continue() async {
     if (!widget.openCart) {
       Navigator.pop(context);
       return;
     }
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(
-        builder: (_) => CartScreen(
-          cartId: widget.cartId,
-          showId: widget.showId,
-          showName: widget.showName,
-        ),
+    final route = MaterialPageRoute<Object?>(
+      builder: (_) => CartScreen(
+        cartId: widget.cartId,
+        showId: widget.showId,
+        showName: widget.showName,
+        returnToEntry: widget.returnToEntry,
       ),
     );
+    if (!widget.returnToEntry) {
+      Navigator.pushReplacement(context, route);
+      return;
+    }
+    final result = await Navigator.push(context, route);
+    if (mounted && result != null) Navigator.pop(context, result);
   }
 
   String _name(Map<String, dynamic> e) =>

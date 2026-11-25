@@ -15,8 +15,10 @@ Future<void> initializeFeeCart({
   int exhibitors = 1,
   bool pendingCheckout = false,
   bool cancellationFails = false,
+  bool includeExistingEntries = false,
 }) async {
   var checkoutPending = pendingCheckout;
+  var confirmedDistinct = false;
   final addonItems = <Map<String, dynamic>>[
     {
       'id': 'contest',
@@ -137,6 +139,50 @@ Future<void> initializeFeeCart({
         data = {'items': []};
       } else if (path.endsWith('/get_cart_addons')) {
         data = addonItems;
+      } else if (path.endsWith('/get_entry_cart_review')) {
+        data = {
+          'entries': includeExistingEntries
+              ? [
+                  {
+                    'id': 'prior-entry',
+                    'exhibitor_id': 'prior-exhibitor',
+                    'exhibitor_name': 'Previously Submitted Family Member',
+                    'section_id': 'section',
+                    'tattoo': 'A0',
+                    'breed': 'Peruvian',
+                    'variety': 'Black',
+                    'sex': 'boar',
+                    'class_name': 'Senior',
+                    'is_fur': false,
+                  },
+                ]
+              : [],
+          'balances': includeExistingEntries
+              ? [
+                  {'currency': 'usd', 'due_cents': 500},
+                ]
+              : [],
+          'matches': includeExistingEntries
+              ? [
+                  {
+                    'match_key': 'match-1',
+                    'item_id': 'item0',
+                    'section_id': 'section',
+                    'tattoo': 'A0',
+                    'exhibitor_name': 'Exhibitor 1',
+                    'other_exhibitor_name':
+                        'Previously Submitted Family Member',
+                    'already_submitted': true,
+                    'already_same_animal': false,
+                    'confirmed': confirmedDistinct,
+                  },
+                ]
+              : [],
+        };
+      } else if (path.endsWith('/confirm_distinct_cart_entry')) {
+        expect(jsonDecode(req.body)['p_match_key'], 'match-1');
+        confirmedDistinct = true;
+        data = {};
       } else if (path.endsWith('/get_cart_exhibitor_fees')) {
         data = officeFeeCents == 0
             ? []
@@ -212,6 +258,8 @@ void main() {
     int exhibitors = 1,
     bool pendingCheckout = false,
     bool cancellationFails = false,
+    bool includeExistingEntries = false,
+    bool launchedFromEntry = false,
   }) async {
     tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1;
@@ -224,22 +272,95 @@ void main() {
         exhibitors: exhibitors,
         pendingCheckout: pendingCheckout,
         cancellationFails: cancellationFails,
+        includeExistingEntries: includeExistingEntries,
       ),
     );
     addTearDown(() => Supabase.instance.dispose());
+    final cart = CartScreen(
+      cartId: 'cart',
+      showId: 'show',
+      showName: 'Fee Breakdown Preview',
+      returnToEntry: launchedFromEntry,
+    );
     await tester.pumpWidget(
       MaterialApp(
         theme: AppTheme.lightTheme,
-        home: const CartScreen(
-          cartId: 'cart',
-          showId: 'show',
-          showName: 'Fee Breakdown Preview',
-        ),
+        home: launchedFromEntry
+            ? Builder(
+                builder: (context) => Scaffold(
+                  body: TextButton(
+                    onPressed: () async {
+                      final result = await Navigator.push<Object?>(
+                        context,
+                        MaterialPageRoute(builder: (_) => cart),
+                      );
+                      expect(result, EntryCartResult.addAnotherExhibitor);
+                    },
+                    child: const Text('Review Cart'),
+                  ),
+                ),
+              )
+            : cart,
       ),
     );
+    if (launchedFromEntry) await tester.tap(find.text('Review Cart'));
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
   }
+
+  testWidgets('phone cart reviews a family match and separates the totals', (
+    tester,
+  ) async {
+    await openCart(tester, includeExistingEntries: true);
+    expect(find.text('Review Possible Duplicates'), findsOneWidget);
+    expect(find.text('Add Another Exhibitor'), findsOneWidget);
+    await tester.tap(find.text('These Are Different Animals'));
+    await tester.pumpAndSettle();
+    final dialog = find.byType(AlertDialog);
+    expect(dialog, findsOneWidget);
+    final theme = Theme.of(tester.element(dialog));
+    final foreground = theme.colorScheme.onSurface.computeLuminance();
+    final background = AppColors.surface.computeLuminance();
+    expect((background + .05) / (foreground + .05), greaterThanOrEqualTo(4.5));
+    await tester.tap(find.text('Confirm Different Animals'));
+    await tester.pumpAndSettle();
+    expect(find.text('Review Possible Duplicates'), findsNothing);
+    expect(find.text('Already Submitted (1)'), findsOneWidget);
+    expect(find.text('Previously Submitted Family Member'), findsOneWidget);
+    expect(find.text(r'This cart · $73.00'), findsOneWidget);
+    expect(
+      find.text(r'Total outstanding with this cart · $78.00'),
+      findsOneWidget,
+    );
+    await tester.scrollUntilVisible(
+      find.text('Continue to Secure Square Checkout'),
+      250,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(
+      tester
+          .widget<FilledButton>(
+            find.ancestor(
+              of: find.text('Continue to Secure Square Checkout'),
+              matching: find.byWidgetPredicate(
+                (widget) => widget is FilledButton,
+              ),
+            ),
+          )
+          .onPressed,
+      isNotNull,
+    );
+  });
+
+  testWidgets(
+    'add another exhibitor returns to entry selection with the cart intact',
+    (tester) async {
+      await openCart(tester, launchedFromEntry: true);
+      await tester.tap(find.text('Add Another Exhibitor'));
+      await tester.pumpAndSettle();
+      expect(find.text('Review Cart'), findsOneWidget);
+    },
+  );
 
   testWidgets('cancel unpaid checkout then remove both add-ons and reprice', (
     tester,

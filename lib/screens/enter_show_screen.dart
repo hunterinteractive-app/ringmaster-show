@@ -39,11 +39,13 @@ Future<MeatPenInput?> showMeatPenDialog(
 class EnterShowScreen extends StatefulWidget {
   final String showId;
   final String showName;
+  final bool addingFamilyMembers;
 
   const EnterShowScreen({
     super.key,
     required this.showId,
     required this.showName,
+    this.addingFamilyMembers = false,
   });
 
   @override
@@ -65,6 +67,23 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
   final Map<String, TextEditingController> _classControllers = {};
 
   String? _msg;
+  late bool _addingFamilyMembers = widget.addingFamilyMembers;
+  final _exhibitorPickerKey = GlobalKey();
+
+  void _focusExhibitorPicker() {
+    if (!mounted) return;
+    setState(() => _addingFamilyMembers = true);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final picker = _exhibitorPickerKey.currentContext;
+      if (mounted && picker != null) {
+        Scrollable.ensureVisible(
+          picker,
+          duration: const Duration(milliseconds: 250),
+        );
+      }
+    });
+  }
+
   bool _submitting = false;
   bool get _hasCommercialClasses => _commercialByCode.isNotEmpty;
 
@@ -406,10 +425,11 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
 
     if (!mounted) return;
 
-    await Navigator.push(
+    final result = await Navigator.push<Object?>(
       context,
       MaterialPageRoute(builder: (_) => _cartDestination(cartId)),
     );
+    if (result == EntryCartResult.addAnotherExhibitor) _focusExhibitorPicker();
 
     await _loadActiveCartIdIfExists();
     await _refreshAnimalsInCart();
@@ -442,12 +462,14 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
           cartId: cartId,
           showId: widget.showId,
           showName: widget.showName,
+          returnToEntry: true,
           exhibitorId: _selectedExhibitorId,
         )
       : CartScreen(
           cartId: cartId,
           showId: widget.showId,
           showName: widget.showName,
+          returnToEntry: true,
         );
 
   Future<_EnterShowLoadBundle> _loadAll() async {
@@ -1715,10 +1737,13 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
         _selectedSectionIds.clear();
       });
 
-      await Navigator.push(
+      final result = await Navigator.push<Object?>(
         context,
         MaterialPageRoute(builder: (_) => _cartDestination(cartId)),
       );
+      if (result == EntryCartResult.addAnotherExhibitor) {
+        _focusExhibitorPicker();
+      }
 
       await _loadActiveCartIdIfExists();
       await _refreshAnimalsInCart();
@@ -2667,6 +2692,7 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
                               ),
                             ),
                           Padding(
+                            key: _exhibitorPickerKey,
                             padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
                             child: AppTheme.surfaceTextScope(
                               context,
@@ -2696,6 +2722,14 @@ class _EnterShowScreenState extends State<EnterShowScreen> {
                                       ),
                                     ),
                                     const SizedBox(height: 12),
+                                    if (_addingFamilyMembers)
+                                      const Padding(
+                                        padding: EdgeInsets.only(bottom: 12),
+                                        child: Text(
+                                          'Choose another exhibitor below and add their animals. '
+                                          'Your earlier selections are already in this cart.',
+                                        ),
+                                      ),
                                     DropdownButtonFormField<String>(
                                       // Reconcile FormField's internal selection when
                                       // switching to Youth filters out the adult.

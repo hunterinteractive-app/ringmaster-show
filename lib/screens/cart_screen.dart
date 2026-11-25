@@ -29,20 +29,25 @@ import '../services/show_addon_service.dart';
 import '../models/show_addon.dart';
 import 'show_addons_screen.dart';
 
+import 'enter_show_screen.dart';
 import 'my_entries_screen.dart';
 
 SupabaseClient get supabase => ringMasterClient;
+
+enum EntryCartResult { addAnotherExhibitor }
 
 class CartScreen extends StatefulWidget {
   final String cartId;
   final String showId;
   final String showName;
+  final bool returnToEntry;
 
   const CartScreen({
     super.key,
     required this.cartId,
     required this.showId,
     required this.showName,
+    this.returnToEntry = false,
   });
 
   @override
@@ -110,6 +115,31 @@ class _CartScreenState extends State<CartScreen> {
   String? _checkoutUrl;
 
   List<Map<String, dynamic>> _items = [];
+  List<Map<String, dynamic>> _submittedEntries = [];
+  List<Map<String, dynamic>> _submittedBalances = [];
+  List<Map<String, dynamic>> _duplicateMatches = [];
+  bool _cartReviewUnavailable = false;
+  bool _reviewingMatch = false;
+  bool get _cartReviewBlocksCheckout =>
+      !_cartLocked &&
+      (_cartReviewUnavailable ||
+          _reviewingMatch ||
+          _duplicateMatches.isNotEmpty);
+
+  bool get _canAddExhibitors {
+    final opensAt = DateTime.tryParse('${_show?['entry_open_at'] ?? ''}');
+    return _show != null &&
+        _show?['is_locked'] != true &&
+        _show?['finalized_at'] == null &&
+        !_cartLocked &&
+        !_deadlinePassed() &&
+        !(opensAt?.isAfter(DateTime.now()) ?? false) &&
+        !AppSession.supportReadOnly;
+  }
+
+  bool get _cartBusy =>
+      _confirming || _payingOnline || _cancellingCheckout || _reviewingMatch;
+
   List<ExhibitorFee> _exhibitorFees = [];
   List<Map<String, dynamic>> _addons = [];
   bool _addonsAvailable = false;
@@ -170,7 +200,7 @@ class _CartScreenState extends State<CartScreen> {
       final show = await supabase
           .from('shows')
           .select(
-            'id,name,entry_close_at,entry_open_at,start_date,'
+            'id,name,entry_close_at,entry_open_at,start_date,is_locked,finalized_at,'
             'online_payment_fee_mode,online_payment_fee_label,'
             'online_payment_fee_description',
           )
@@ -289,6 +319,22 @@ class _CartScreenState extends State<CartScreen> {
         ),
       ]);
 
+      Map<String, dynamic> review = {};
+      var cartReviewUnavailable = false;
+      if (!AppSession.supportReadOnly) {
+        try {
+          final response = await supabase.rpc(
+            'get_entry_cart_review',
+            params: {'p_cart_id': widget.cartId},
+          );
+          if (response is Map) review = Map<String, dynamic>.from(response);
+        } catch (_) {
+          cartReviewUnavailable = true;
+        }
+      }
+      List<Map<String, dynamic>> reviewRows(String key) =>
+          (review[key] as List? ?? []).cast<Map<String, dynamic>>();
+
       final readyProviders = paymentConfiguration.providers
           .where((provider) => provider.enabled && provider.ready)
           .map((provider) => provider.provider)
@@ -322,6 +368,12 @@ class _CartScreenState extends State<CartScreen> {
         _feeSettings = fee;
         _sectionById = parsedSections;
         _items = parsedItems;
+        _submittedEntries = reviewRows('entries');
+        _submittedBalances = reviewRows('balances');
+        _duplicateMatches = reviewRows(
+          'matches',
+        ).where((match) => match['confirmed'] != true).toList();
+        _cartReviewUnavailable = cartReviewUnavailable;
         _exhibitorFees = exhibitorFees;
         _addons = addons;
         _addonsAvailable = addonsAvailable;
@@ -545,6 +597,7 @@ class _CartScreenState extends State<CartScreen> {
         _quotePreviewError == null &&
         !_payingOnline &&
         !_confirming &&
+        !_cartReviewBlocksCheckout &&
         !AppSession.supportReadOnly &&
         (_items.isEmpty || !_deadlinePassed()) &&
         _hasCheckoutItems &&
@@ -1066,6 +1119,7 @@ class _CartScreenState extends State<CartScreen> {
   }
 
   Future<void> _payOnline() async {
+    if (_cartReviewBlocksCheckout) return;
     if (_breedScopeErrors.isNotEmpty) {
       setState(() => _msg = _breedScopeErrors.first);
       return;
@@ -1188,7 +1242,11 @@ class _CartScreenState extends State<CartScreen> {
   }
 
   Future<void> _confirmDayOf() async {
-    if (AppSession.supportReadOnly || !_pricingReady) return;
+    if (AppSession.supportReadOnly ||
+        !_pricingReady ||
+        _cartReviewBlocksCheckout) {
+      return;
+    }
     if (_breedScopeErrors.isNotEmpty) {
       setState(() => _msg = _breedScopeErrors.first);
       return;
@@ -1420,6 +1478,194 @@ class _CartScreenState extends State<CartScreen> {
     );
   }
 
+  Future<void> _addAnotherExhibitor() async {
+    if (widget.returnToEntry && Navigator.canPop(context)) {
+      Navigator.pop(context, EntryCartResult.addAnotherExhibitor);
+      return;
+    }
+    await Navigator.push<void>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => EnterShowScreen(
+          showId: widget.showId,
+          showName: widget.showName,
+          addingFamilyMembers: true,
+        ),
+      ),
+    );
+    if (mounted) await _load();
+  }
+
+  Future<void> _confirmDistinctMatch(Map<String, dynamic> match) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => Theme(
+        data: AppTheme.surfaceDialogTheme(Theme.of(dialogContext)),
+        child: AlertDialog(
+          title: const Text('Confirm two different animals'),
+          content: Text(
+            '${match['tattoo']} has matching entry details in '
+            '${_sectionLabelForCart(match['section_id'])}. '
+            'Only continue if these are two different animals.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Confirm Different Animals'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || confirmed != true) return;
+    setState(() => _reviewingMatch = true);
+    try {
+      await supabase.rpc(
+        'confirm_distinct_cart_entry',
+        params: {'p_cart_id': widget.cartId, 'p_match_key': match['match_key']},
+      );
+      if (mounted) await _load();
+    } catch (e) {
+      if (mounted) setState(() => _msg = 'Could not confirm the match. $e');
+    } finally {
+      if (mounted) setState(() => _reviewingMatch = false);
+    }
+  }
+
+  String _sectionLabelForCart(Object? sectionId) {
+    final section = _sectionById[sectionId?.toString()];
+    return (section?['display_name'] ?? section?['letter'] ?? 'Section')
+        .toString();
+  }
+
+  Widget _cartReviewCard({required String currency, required double? cartDue}) {
+    final currencyKey = currency.toLowerCase();
+    final previousDue = _submittedBalances
+        .where((row) => row['currency'] == currencyKey)
+        .fold<int>(0, (sum, row) => sum + (row['due_cents'] as num).toInt());
+    final groups = <String, List<Map<String, dynamic>>>{};
+    for (final entry in _submittedEntries) {
+      (groups[entry['exhibitor_name']?.toString() ?? 'Exhibitor'] ??= []).add(
+        entry,
+      );
+    }
+    return AppTheme.surfaceTextScope(
+      context,
+      child: RMCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Already submitted · ${_money(previousDue / 100, currency: currency)} due',
+            ),
+            for (final row in _submittedBalances)
+              if (row['currency'] != currencyKey && row['due_cents'] != 0)
+                Text(
+                  'Already submitted · ${_money((row['due_cents'] as num) / 100, currency: row['currency'].toString())} due',
+                ),
+            Text(
+              cartDue == null
+                  ? 'This cart · calculating total'
+                  : 'This cart · ${_money(cartDue, currency: currency)}',
+            ),
+            if (cartDue != null)
+              Text(
+                'Total outstanding with this cart · '
+                '${_money(previousDue / 100 + cartDue, currency: currency)}',
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+            if (_submittedEntries.isNotEmpty)
+              ExpansionTile(
+                tilePadding: EdgeInsets.zero,
+                initiallyExpanded: _submittedEntries.length <= 6,
+                title: Text('Already Submitted (${_submittedEntries.length})'),
+                children: [
+                  for (final group in groups.entries) ...[
+                    ListTile(
+                      dense: true,
+                      title: Text(
+                        group.key,
+                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                    for (final entry in groupExhibitorEntries(
+                      group.value,
+                      _sectionById,
+                    ).expand((rows) => rows))
+                      ListTile(
+                        dense: true,
+                        title: Text(
+                          _cartItemTitle(
+                            entry,
+                            _sectionLabelForCart(entry['section_id']),
+                          ),
+                        ),
+                        subtitle: Text(_cartItemSubtitle(entry)),
+                      ),
+                  ],
+                ],
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _duplicateReviewCard() => AppTheme.surfaceTextScope(
+    context,
+    child: RMCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const RMSectionHeader(
+            title: 'Review Possible Duplicates',
+            subtitle: 'Remove any extra entries before submitting your cart.',
+          ),
+          for (final match in _duplicateMatches)
+            Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '${match['tattoo']} · ${_sectionLabelForCart(match['section_id'])}',
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  Text(
+                    '${match['exhibitor_name']} in this cart matches '
+                    '${match['other_exhibitor_name']} '
+                    '${match['already_submitted'] == true ? 'in an existing entry' : 'in this cart'}.',
+                  ),
+                  Wrap(
+                    spacing: 8,
+                    children: [
+                      OutlinedButton(
+                        onPressed: _cartBusy
+                            ? null
+                            : () => _removeItem(match['item_id'].toString()),
+                        child: const Text('Remove From Cart'),
+                      ),
+                      if (match['already_same_animal'] != true)
+                        TextButton(
+                          onPressed: _cartBusy
+                              ? null
+                              : () => _confirmDistinctMatch(match),
+                          child: const Text('These Are Different Animals'),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    ),
+  );
+
   @override
   Widget build(BuildContext context) {
     final updated = ShowLayoutScope.isUpdated(context);
@@ -1610,6 +1856,76 @@ class _CartScreenState extends State<CartScreen> {
                           ],
                         ),
                       ),
+                    ),
+                  ),
+                if (_canAddExhibitors)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                    child: AppTheme.surfaceTextScope(
+                      context,
+                      child: RMCard(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Choose another family member on the entry screen. '
+                              'Your current entries stay in this cart.',
+                            ),
+                            const SizedBox(height: 8),
+                            FilledButton.tonalIcon(
+                              onPressed: _cartBusy
+                                  ? null
+                                  : _addAnotherExhibitor,
+                              icon: const Icon(Icons.person_add_outlined),
+                              label: const Text('Add Another Exhibitor'),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                if (!_cartLocked && _cartReviewUnavailable)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                    child: AppTheme.surfaceTextScope(
+                      context,
+                      child: RMCard(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Could not check existing entries. Reload the cart before submitting.',
+                            ),
+                            TextButton(
+                              onPressed: _load,
+                              child: const Text('Reload Cart'),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                if (!_cartLocked && _duplicateMatches.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                    child: _duplicateReviewCard(),
+                  ),
+                if (_submittedEntries.isNotEmpty ||
+                    _submittedBalances.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                    child: _cartReviewCard(
+                      currency: currency,
+                      cartDue: _cartLocked
+                          ? 0
+                          : !_pricingReady ||
+                                (_selectedPaymentTiming == 'online' &&
+                                    !freeAddons &&
+                                    !_freeCart &&
+                                    _hasCheckoutItems &&
+                                    _quotePreview == null)
+                          ? null
+                          : totalDue,
                     ),
                   ),
                 _buildPaymentChoices(),
@@ -1971,6 +2287,7 @@ class _CartScreenState extends State<CartScreen> {
                             onPressed:
                                 _confirming ||
                                     !_pricingReady ||
+                                    _cartReviewBlocksCheckout ||
                                     AppSession.supportReadOnly
                                 ? null
                                 : _confirmDayOf,
@@ -1998,6 +2315,7 @@ class _CartScreenState extends State<CartScreen> {
                             onPressed:
                                 (_confirming ||
                                     !_pricingReady ||
+                                    _cartReviewBlocksCheckout ||
                                     AppSession.supportReadOnly ||
                                     (_items.isNotEmpty && _deadlinePassed()) ||
                                     !_hasCheckoutItems)

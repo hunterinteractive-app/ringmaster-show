@@ -639,21 +639,25 @@ class _AdminEntryManagementScreenState
 
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Remove Entry?'),
-        content: Text(
-          'Remove $label from this show? This does not delete the saved animal profile. To switch Open/Youth, cancel and use Move to another section so the entry keeps its payment history.',
+      builder: (dialogContext) => Theme(
+        data: AppTheme.surfaceDialogTheme(Theme.of(dialogContext)),
+        child: AlertDialog(
+          title: const Text('Remove Entry?'),
+          content: Text(
+            'Remove $label from this show? Its unpaid entry charge will be removed when no payment has been recorded. '
+            'To change sections and keep the entry, choose Move to another section.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Remove'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Remove'),
-          ),
-        ],
       ),
     );
 
