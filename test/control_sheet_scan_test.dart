@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as image;
 import 'package:ringmaster_show/screens/admin/results/control_sheet_scan_dialog.dart';
 import 'package:ringmaster_show/services/results/control_sheet_scan.dart';
+import 'package:ringmaster_show/services/results/control_sheet_saved_result.dart';
 import 'package:ringmaster_show/services/results/result_status.dart';
 import 'package:ringmaster_show/theme/app_theme.dart';
 import 'package:uuid/uuid.dart';
@@ -160,9 +161,427 @@ void _expectMarks(ControlSheetScan scan) {
   expect(block.rows.last.marks, {'20'});
 }
 
+Future<void> _openSavedResultReview(
+  WidgetTester tester, {
+  required image.Image scanImage,
+  required Future<List<Map<String, dynamic>>> Function(String) loadSection,
+  required Future<ScanResultSavePlan> Function(List<ScanResultChange>) prepare,
+}) async {
+  tester.view.physicalSize = const Size(390, 844);
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
+  final directory = Directory.systemTemp.createTempSync('saved-scan-review-');
+  addTearDown(() => directory.deleteSync(recursive: true));
+  final scan = File('${directory.path}/sheet.png')
+    ..writeAsBytesSync(image.encodePng(scanImage));
+  const channel = MethodChannel('plugins.flutter.io/file_selector');
+  tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+    channel,
+    (_) async => [scan.path],
+  );
+  addTearDown(
+    () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      channel,
+      null,
+    ),
+  );
+  await tester.pumpWidget(
+    MaterialApp(
+      theme: AppTheme.onGradientTheme(AppTheme.lightTheme),
+      home: Scaffold(
+        body: Builder(
+          builder: (context) => FilledButton(
+            onPressed: () => showControlSheetScanDialog(
+              context,
+              showId: _page.showId,
+              showName: 'Test Show',
+              loadSection: loadSection,
+              prepare: prepare,
+            ),
+            child: const Text('Open scan review'),
+          ),
+        ),
+      ),
+    ),
+  );
+  await tester.tap(find.text('Open scan review'));
+  await tester.pumpAndSettle();
+  await tester.runAsync(() async {
+    await tester.tap(find.text('Choose scans'));
+    for (var i = 0; i < 250; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 25));
+      await tester.pump();
+      if (find.byTooltip('Remove scan').evaluate().isNotEmpty &&
+          find.byType(LinearProgressIndicator).evaluate().isEmpty) {
+        break;
+      }
+    }
+  });
+  await tester.pumpAndSettle();
+  expect(find.byTooltip('Remove scan'), findsOneWidget);
+}
+
+List<Map<String, dynamic>> _savedReviewEntries(int count) => [
+  for (var i = 0; i < count; i++)
+    {
+      'entry_id': i < _page.entryIds.length
+          ? _page.entryIds[i]
+          : _uuid.v5(Namespace.url.value, 'extra-$i'),
+      'section_id': _page.sectionId,
+      'tattoo': 'TEST$i',
+      'breed': 'Mini Rex',
+      'variety': 'Broken',
+      'class_name': 'Senior',
+      'sex': 'Buck',
+      'species': 'rabbit',
+      'is_shown': true,
+      'is_disqualified': false,
+      'result_status': 'Shown',
+    },
+];
+
 void main() {
   late image.Image paper;
   setUpAll(() => paper = _makeScan());
+
+  test(
+    'matches saved placements, NP, and marked awards without clearing other awards',
+    () {
+      for (final species in ['rabbit', 'cavy']) {
+        final entry = {
+          'species': species,
+          'placement': 1,
+          'result_status': 'Shown',
+          '_awards': ['BOV', 'BOS'],
+        };
+        expect(
+          compareControlSheetSavedResult(
+            entry: entry,
+            placement: '1',
+            outcome: null,
+            awards: {'BOSB'},
+          ).matches,
+          isTrue,
+        );
+        expect(
+          compareControlSheetSavedResult(
+            entry: entry,
+            placement: '1',
+            outcome: null,
+            awards: {},
+          ).matches,
+          isTrue,
+        );
+        expect(
+          compareControlSheetSavedResult(
+            entry: entry,
+            placement: '1',
+            outcome: null,
+            awards: {'BOB'},
+          ).matches,
+          isFalse,
+        );
+        expect(
+          compareControlSheetSavedResult(
+            entry: entry,
+            placement: '2',
+            outcome: null,
+            awards: {},
+          ).conflict,
+          isNotNull,
+        );
+      }
+      expect(
+        compareControlSheetSavedResult(
+          entry: {'placement': 0},
+          placement: '0',
+          outcome: null,
+          awards: {},
+        ).matches,
+        isTrue,
+      );
+      expect(
+        compareControlSheetSavedResult(
+          entry: {'placement': '1'},
+          placement: null,
+          outcome: null,
+          awards: {},
+        ).matches,
+        isFalse,
+      );
+      expect(
+        compareControlSheetSavedResult(
+          entry: {},
+          placement: '1',
+          outcome: null,
+          awards: {},
+        ).matches,
+        isFalse,
+      );
+      expect(
+        compareControlSheetSavedResult(
+          entry: {'placement': '1'},
+          placement: null,
+          outcome: ResultStatus.noShow,
+          awards: {},
+        ).conflict,
+        isNotNull,
+      );
+    },
+  );
+
+  test('matches every saved outcome and distinguishes DQ reasons', () {
+    for (final outcome in ResultStatus.values.where(
+      (s) => s != ResultStatus.shown,
+    )) {
+      final entry = {
+        'result_status': outcome.storedValue,
+        'is_shown': outcome.isShown,
+        'is_disqualified': outcome.isDq,
+        if (outcome == ResultStatus.scratched) 'status': 'scratched',
+        if (outcome.isDq)
+          'disqualified_reason': outcome.storedValue.split(' - ').last,
+      };
+      expect(
+        compareControlSheetSavedResult(
+          entry: entry,
+          placement: null,
+          outcome: outcome,
+          awards: {},
+        ).matches,
+        isTrue,
+        reason: outcome.label,
+      );
+      expect(
+        compareControlSheetSavedResult(
+          entry: entry,
+          placement: '1',
+          outcome: null,
+          awards: {},
+        ).conflict,
+        isNotNull,
+      );
+    }
+    expect(
+      compareControlSheetSavedResult(
+        entry: {'result_status': 'Disqualified - Wrong Sex'},
+        placement: null,
+        outcome: ResultStatus.wrongTattoo,
+        awards: {},
+      ).conflict,
+      isNotNull,
+    );
+  });
+
+  testWidgets(
+    'automatically skips matching results while keeping conflicts and faint marks for review',
+    (tester) async {
+      final layout = ControlSheetScanPage(
+        showId: _page.showId,
+        sectionId: _page.sectionId,
+        entryIds: _page.entryIds.take(7).toList(),
+        awards: const {'BOV', 'BOB'},
+        placementCount: 21,
+        firstRowY: 280,
+        includesOutcomes: true,
+        awardsLayout: ControlSheetAwardsLayout.centeredHeader,
+      );
+      final scanImage = _makeScan(
+        compactBlocks: [layout],
+        markedRows: ['1', 'NP', 'SCR', 'WT', '2', '3'],
+        markedSpecials: [
+          {'BOV': 13, 'BOB': 13},
+        ],
+      );
+      final faint = layout.bubble(6, 4);
+      image.fillCircle(
+        scanImage,
+        x: (faint.x * 3).round(),
+        y: (faint.y * 3).round(),
+        radius: 7,
+        color: image.ColorRgb8(0, 0, 0),
+      );
+      final entries = _savedReviewEntries(21);
+      entries[0].addAll({
+        'placement': '1',
+        '_awards': ['BOV', 'BOB'],
+      });
+      entries[1]['placement'] = '0';
+      entries[2].addAll({
+        'result_status': 'Scratched',
+        'status': 'scratched',
+        'is_shown': false,
+      });
+      entries[3].addAll({
+        'result_status': ResultStatus.wrongTattoo.storedValue,
+        'is_disqualified': true,
+        'disqualified_reason': 'Wrong Tattoo',
+      });
+      entries[5]['placement'] = '4';
+      entries[6]['placement'] = '5';
+      List<ScanResultChange>? submitted;
+      var saves = 0;
+      await _openSavedResultReview(
+        tester,
+        scanImage: scanImage,
+        loadSection: (_) async => entries,
+        prepare: (changes) async => (
+          count: changes.length,
+          save: () async {
+            submitted = changes;
+            saves++;
+            return changes.length;
+          },
+        ),
+      );
+      expect(find.text('4 already saved'), findsOneWidget);
+      expect(find.text('3 remaining rows · 1 to review'), findsOneWidget);
+      expect(find.text('1 needs fixing'), findsOneWidget);
+      for (var i = 0; i < 4; i++) {
+        expect(
+          find.byKey(ValueKey('scan-review-${_page.entryIds[i]}')),
+          findsNothing,
+        );
+      }
+      await tester.ensureVisible(find.text('Show already saved'));
+      await tester.tap(find.text('Show already saved'));
+      await tester.pumpAndSettle();
+      final savedCard = find.byKey(
+        ValueKey('scan-review-${_page.entryIds[0]}'),
+      );
+      expect(
+        find.descendant(of: savedCard, matching: find.text('Already Saved')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: savedCard,
+          matching: find.byType(DropdownButton<String>),
+        ),
+        findsNothing,
+      );
+      expect(
+        (tester.widget<Container>(savedCard).decoration! as BoxDecoration)
+            .color,
+        AppColors.successBg,
+      );
+      await tester.ensureVisible(find.text('Show already saved'));
+      await tester.tap(find.text('Show already saved'));
+      await tester.pumpAndSettle();
+      final conflict = find.byKey(ValueKey('scan-review-${_page.entryIds[5]}'));
+      expect(
+        find.descendant(
+          of: conflict,
+          matching: find.textContaining('place 4 saved'),
+        ),
+        findsOneWidget,
+      );
+      final skip = find.descendant(of: conflict, matching: find.text('Skip'));
+      await tester.ensureVisible(skip);
+      await tester.tap(skip);
+      await tester.pumpAndSettle();
+      final review = find.text('Mark reviewed');
+      await tester.ensureVisible(review);
+      await tester.tap(review);
+      await tester.pumpAndSettle();
+      expect(find.text('5 already saved'), findsOneWidget);
+      expect(find.text('1 remaining rows · 0 to review'), findsOneWidget);
+      expect(submitted, isNull);
+      await tester.tap(find.text('Save reviewed results'));
+      await tester.pumpAndSettle();
+      expect(
+        find.textContaining('Save results for 1 entry to Test Show?'),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('Confirm and save'));
+      await tester.pumpAndSettle();
+      expect(saves, 1);
+      expect(submitted!.map((c) => c.entry['entry_id']), [_page.entryIds[4]]);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  for (final refreshed in [
+    'matching',
+    'conflicting',
+    'identity',
+    'duringValidation',
+  ]) {
+    testWidgets('rechecks $refreshed saved results before preparing a save', (
+      tester,
+    ) async {
+      final layout = ControlSheetScanPage(
+        showId: _page.showId,
+        sectionId: _page.sectionId,
+        entryIds: _page.entryIds.take(2).toList(),
+        awards: const {},
+        placementCount: 2,
+        firstRowY: 280,
+        includesOutcomes: true,
+        awardsLayout: ControlSheetAwardsLayout.centeredHeader,
+      );
+      final entries = _savedReviewEntries(2);
+      entries[1]['placement'] = '2';
+      var prepares = 0;
+      await _openSavedResultReview(
+        tester,
+        scanImage: _makeScan(compactBlocks: [layout], markedRows: ['1', '2']),
+        loadSection: (_) async => entries,
+        prepare: (changes) async {
+          prepares++;
+          if (refreshed == 'duringValidation') {
+            entries[0]['placement'] = '1';
+            return (
+              count: 0,
+              save: () async => throw StateError('Already saved'),
+            );
+          }
+          return (count: changes.length, save: () async => changes.length);
+        },
+      );
+      expect(find.text('1 already saved'), findsOneWidget);
+      if (refreshed != 'duringValidation') {
+        entries[0]['placement'] = refreshed == 'conflicting' ? '2' : '1';
+      }
+      if (refreshed == 'identity') entries[0]['tattoo'] = 'CHANGED';
+      await tester.tap(find.text('Save reviewed results'));
+      await tester.pumpAndSettle();
+      expect(prepares, refreshed == 'duringValidation' ? 1 : 0);
+      expect(find.text('Confirm and save'), findsNothing);
+      if (refreshed == 'matching' || refreshed == 'duringValidation') {
+        expect(find.text('2 already saved'), findsOneWidget);
+        expect(find.textContaining('Nothing new to save.'), findsOneWidget);
+        expect(
+          find.byKey(ValueKey('scan-review-${_page.entryIds[0]}')),
+          findsNothing,
+        );
+        expect(
+          find.byWidgetPredicate(
+            (w) => w is Image && w.semanticLabel == 'Scanned control sheet',
+          ),
+          findsNothing,
+        );
+        expect(
+          tester
+              .widget<FilledButton>(
+                find.widgetWithText(FilledButton, 'Save reviewed results'),
+              )
+              .onPressed,
+          isNull,
+        );
+      } else {
+        expect(find.text('1 needs fixing'), findsOneWidget);
+        expect(
+          find.textContaining(
+            refreshed == 'identity' ? 'changed during review' : 'place 2 saved',
+          ),
+          findsOneWidget,
+        );
+      }
+      expect(tester.takeException(), isNull);
+    });
+  }
 
   test('encodes exactly the ranks for classes of 1, 7, and 20', () {
     for (final size in [1, 7, 20]) {
@@ -715,13 +1134,16 @@ void main() {
         for (var i = 0; i < 200; i++) {
           await Future<void>.delayed(const Duration(milliseconds: 25));
           await tester.pump();
-          if (find.text('7 marked rows · 2 to review').evaluate().isNotEmpty) {
+          if (find
+              .text('7 remaining rows · 2 to review')
+              .evaluate()
+              .isNotEmpty) {
             break;
           }
         }
       });
       await tester.pumpAndSettle();
-      expect(find.text('7 marked rows · 2 to review'), findsOneWidget);
+      expect(find.text('7 remaining rows · 2 to review'), findsOneWidget);
       final previewToggle = find.widgetWithText(
         FilterChip,
         'Show scanned pages',
@@ -782,11 +1204,11 @@ void main() {
       await tester.ensureVisible(find.text('Mark specials reviewed'));
       await tester.tap(find.text('Mark specials reviewed'));
       await tester.pumpAndSettle();
-      expect(find.text('7 marked rows · 1 to review'), findsOneWidget);
+      expect(find.text('7 remaining rows · 1 to review'), findsOneWidget);
       await tester.ensureVisible(find.text('Mark reviewed'));
       await tester.tap(find.text('Mark reviewed'));
       await tester.pumpAndSettle();
-      expect(find.text('7 marked rows · 0 to review'), findsOneWidget);
+      expect(find.text('7 remaining rows · 0 to review'), findsOneWidget);
       expect(find.text('7 good'), findsOneWidget);
       final firstRow = find.byKey(
         ValueKey('scan-review-${_page.entryIds.first}'),
@@ -834,7 +1256,7 @@ void main() {
       expect(saveAttempts, 1);
       expect(checked, isNull);
       expect(find.textContaining('Connection interrupted.'), findsOneWidget);
-      expect(find.text('7 marked rows · 0 to review'), findsOneWidget);
+      expect(find.text('7 remaining rows · 0 to review'), findsOneWidget);
       await tester.tap(find.text('Save reviewed results'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Confirm and save'));

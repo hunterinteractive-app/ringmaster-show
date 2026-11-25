@@ -25,7 +25,7 @@ void main() {
 
     var role = 'admin';
     final saves = <Map<String, dynamic>>[];
-    final entries = [
+    final entries = <Map<String, dynamic>>[
       for (var i = 0; i < 2; i++)
         {
           'entry_id': '00000000-0000-0000-0000-00000000000${i + 4}',
@@ -58,9 +58,22 @@ void main() {
         httpClient: MockClient((request) async {
           final path = request.url.path;
           if (path.endsWith('/save_control_sheet_scan')) {
-            saves.add(
-              Map<String, dynamic>.from(jsonDecode(request.body) as Map),
+            final body = Map<String, dynamic>.from(
+              jsonDecode(request.body) as Map,
             );
+            saves.add(body);
+            for (final change in body['p_changes'] as List) {
+              entries
+                  .firstWhere(
+                    (entry) => entry['entry_id'] == change['entry_id'],
+                  )
+                  .addAll({
+                    'placement': change['placement'],
+                    'result_status': change['result_status'],
+                    '_awards': change['awards'],
+                    'is_shown': change['result_status'] != 'Scratched',
+                  });
+            }
             return http.Response(
               '2',
               200,
@@ -220,6 +233,29 @@ void main() {
             },
           ],
         });
+        final repeat = await tester.runAsync(
+          () => dialog.prepare([
+            (
+              entry: entries[0],
+              placement: '1',
+              outcome: null,
+              awards: {'BOV', 'BOB'},
+            ),
+            (
+              entry: entries[1],
+              placement: null,
+              outcome: ResultStatus.scratched,
+              awards: <String>{},
+            ),
+          ]),
+        );
+        expect(
+          repeat!.count,
+          0,
+          reason:
+              'Already saved entries do not appear in the next confirmation count.',
+        );
+        expect(saves, hasLength(1));
         await tester.tap(find.widgetWithText(TextButton, 'Close'));
         await tester.pumpAndSettle();
       }

@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:printing/printing.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
 import 'package:ringmaster_show/services/results/control_sheet_scan.dart';
+import 'package:ringmaster_show/services/results/control_sheet_saved_result.dart';
 import 'package:ringmaster_show/services/results/result_status.dart';
 import 'package:ringmaster_show/services/results/results_rules_router.dart';
 import 'package:ringmaster_show/services/results_entry_validation.dart';
@@ -24,6 +25,12 @@ typedef ScanResultChange = ({
 typedef ScanResultSavePlan = ({int count, Future<int> Function() save});
 
 enum _ReviewStatus {
+  alreadySaved(
+    'Already Saved',
+    Icons.check_circle,
+    AppColors.success,
+    AppColors.successBg,
+  ),
   good(
     'Good',
     Icons.check_circle_outline,
@@ -124,6 +131,20 @@ class _DraftRow {
     this.placementCount,
     ControlSheetScanRow row,
   ) {
+    printedIdentity = {
+      for (final key in [
+        'section_id',
+        'species',
+        'breed',
+        'variety',
+        'fur_variety',
+        'class_name',
+        'sex',
+        'tattoo',
+        'is_fur',
+      ])
+        key: (entry[key] ?? '').toString().trim().toLowerCase(),
+    };
     final places = row.marks
         .where((mark) => mark == 'NP' || int.tryParse(mark) != null)
         .toList();
@@ -178,7 +199,8 @@ class _DraftRow {
     }.join(', ');
   }
 
-  final Map<String, dynamic> entry;
+  Map<String, dynamic> entry;
+  late final Map<String, String> printedIdentity;
   final Set<String> options;
   final int placementCount;
   String? placement;
@@ -188,14 +210,30 @@ class _DraftRow {
   late String uncertain;
   late bool conflictingMarks;
   bool skipped = false;
+  bool unavailable = false;
+  bool changedIdentity = false;
 
   bool get hasResults =>
       placement != null || outcome != null || awards.isNotEmpty;
+  ControlSheetSavedResult get savedResult => compareControlSheetSavedResult(
+    entry: entry,
+    placement: placement,
+    outcome: outcome,
+    awards: awards,
+  );
+  bool get alreadySaved =>
+      !unavailable &&
+      !changedIdentity &&
+      !review &&
+      !conflictingMarks &&
+      savedResult.matches;
+  bool get needsSaving => !skipped && !alreadySaved && hasResults;
   ScanResultChange get change =>
       (entry: entry, placement: placement, outcome: outcome, awards: awards);
 
   _ReviewStatus status(List<String> problems) {
     if (skipped) return _ReviewStatus.skipped;
+    if (alreadySaved) return _ReviewStatus.alreadySaved;
     if (problems.isNotEmpty) return _ReviewStatus.fix;
     if (review) return _ReviewStatus.review;
     return hasResults ? _ReviewStatus.good : _ReviewStatus.blank;
@@ -223,14 +261,19 @@ class _ControlSheetScanDialogState extends State<ControlSheetScanDialog> {
   bool _working = false;
   bool _confirming = false;
   bool _showBlank = false;
+  bool _showSaved = false;
   bool _preview = true;
 
   Iterable<_DraftRow> get _rows => _pages.expand((page) => page.rows);
 
   Map<_DraftRow, List<String>> _reviewProblems() {
     final problems = <_DraftRow, List<String>>{};
-    void add(_DraftRow row, String message) =>
-        problems.putIfAbsent(row, () => []).add(message);
+    void add(_DraftRow row, String message) {
+      if (row.alreadySaved) return;
+      final messages = problems.putIfAbsent(row, () => []);
+      if (!messages.contains(message)) messages.add(message);
+    }
+
     String value(_DraftRow row, String key) =>
         (row.entry[key] ?? '').toString().trim().toLowerCase();
     String label(_DraftRow row) =>
@@ -238,6 +281,20 @@ class _ControlSheetScanDialogState extends State<ControlSheetScanDialog> {
     final placements = <String, _DraftRow>{};
     final active = _rows.where((row) => !row.skipped).toList();
     for (final row in active) {
+      if (row.unavailable && (row.hasResults || row.review)) {
+        add(
+          row,
+          'This entry is no longer in the printed section. Skip it or reprint the sheet.',
+        );
+      }
+      final savedConflict = row.savedResult.conflict;
+      if (row.changedIdentity && (row.hasResults || row.review)) {
+        add(
+          row,
+          'This entry changed during review. Skip it or reload a newly printed sheet.',
+        );
+      }
+      if (savedConflict != null) add(row, savedConflict);
       if (row.conflictingMarks) {
         add(
           row,
@@ -340,6 +397,28 @@ class _ControlSheetScanDialogState extends State<ControlSheetScanDialog> {
     return problems;
   }
 
+  Future<void> _refreshSavedResults() async {
+    for (final sectionId in _sections.keys.toList()) {
+      final entries = await widget.loadSection(sectionId);
+      _sections[sectionId] = entries;
+      final byId = {for (final entry in entries) resultsEntryId(entry): entry};
+      for (final row in _rows.where(
+        (row) => resultsSectionScopeForEntry(row.entry) == sectionId,
+      )) {
+        final latest = byId[resultsEntryId(row.entry)];
+        row.unavailable = latest == null;
+        if (latest != null) {
+          row.changedIdentity = row.printedIdentity.entries.any(
+            (field) =>
+                (latest[field.key] ?? '').toString().trim().toLowerCase() !=
+                field.value,
+          );
+          row.entry = latest;
+        }
+      }
+    }
+  }
+
   Future<void> _selectFiles() async {
     try {
       final files = await openFiles(
@@ -395,6 +474,21 @@ class _ControlSheetScanDialogState extends State<ControlSheetScanDialog> {
       _errors.clear();
       _issues = [];
     });
+    try {
+      if (_pages.isEmpty) {
+        _sections.clear();
+      } else {
+        await _refreshSavedResults();
+      }
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          _errors.add(_message(error));
+          _working = false;
+        });
+      }
+      return;
+    }
     for (final file in files) {
       try {
         if (await file.length() > 40 * 1024 * 1024) {
@@ -557,17 +651,35 @@ class _ControlSheetScanDialogState extends State<ControlSheetScanDialog> {
 
   Future<void> _save() async {
     if (_working) return;
-    final changes = _rows
-        .where((row) => !row.skipped && row.hasResults)
-        .map((row) => row.change)
-        .toList();
     setState(() {
       _working = true;
       _issues = [];
     });
     try {
+      await _refreshSavedResults();
+      if (!mounted) return;
+      final problems = _reviewProblems();
+      if (_rows.any(
+            (row) =>
+                !row.skipped &&
+                !row.alreadySaved &&
+                (row.review || (problems[row]?.isNotEmpty ?? false)),
+          ) ||
+          _pages.any((page) => page.hasUnreviewedSpecials)) {
+        setState(() {});
+        return;
+      }
+      final changes = _rows
+          .where((row) => row.needsSaving)
+          .map((row) => row.change)
+          .toList();
+      if (changes.isEmpty) return;
       final plan = await widget.prepare(changes);
       if (!mounted) return;
+      if (plan.count == 0) {
+        await _refreshSavedResults();
+        return;
+      }
       setState(() => _confirming = true);
       final confirmed = await showDialog<bool>(
         context: context,
@@ -642,7 +754,9 @@ class _ControlSheetScanDialogState extends State<ControlSheetScanDialog> {
               fontWeight: FontWeight.w700,
             ),
           ),
-          if (row.skipped)
+          if (row.alreadySaved)
+            const Text('Matches the saved result. Automatically skipped.')
+          else if (row.skipped)
             TextButton(
               onPressed: _working
                   ? null
@@ -783,13 +897,16 @@ class _ControlSheetScanDialogState extends State<ControlSheetScanDialog> {
     int count(_ReviewStatus status) =>
         statuses.values.where((value) => value == status).length;
     final good = count(_ReviewStatus.good);
+    final saved = count(_ReviewStatus.alreadySaved);
     final fixes = count(_ReviewStatus.fix);
     final needsReview =
         count(_ReviewStatus.review) +
         _pages.where((page) => page.hasUnreviewedSpecials).length;
-    final results = _rows.where((row) => !row.skipped && row.hasResults).length;
+    final results = _rows.where((row) => row.needsSaving).length;
     final pending =
-        _rows.where((row) => !row.skipped && row.review).length +
+        _rows
+            .where((row) => !row.skipped && !row.alreadySaved && row.review)
+            .length +
         _pages.where((page) => page.hasUnreviewedSpecials).length;
     return PopScope(
       canPop: !_working,
@@ -836,6 +953,7 @@ class _ControlSheetScanDialogState extends State<ControlSheetScanDialog> {
                         runSpacing: 8,
                         children: [
                           for (final (status, total) in [
+                            if (saved > 0) (_ReviewStatus.alreadySaved, saved),
                             (_ReviewStatus.good, good),
                             (_ReviewStatus.review, needsReview),
                             (_ReviewStatus.fix, fixes),
@@ -861,10 +979,21 @@ class _ControlSheetScanDialogState extends State<ControlSheetScanDialog> {
                       ),
                     ),
                     const SizedBox(height: 6),
-                    Text('$results marked rows · $pending to review'),
+                    Text('$results remaining rows · $pending to review'),
+                    if (saved > 0 && results == 0 && pending == 0 && fixes == 0)
+                      const Text(
+                        'Nothing new to save. Matching results were skipped automatically.',
+                      ),
                     Wrap(
                       spacing: 8,
                       children: [
+                        if (saved > 0)
+                          FilterChip(
+                            label: const Text('Show already saved'),
+                            selected: _showSaved,
+                            onSelected: (value) =>
+                                setState(() => _showSaved = value),
+                          ),
                         FilterChip(
                           label: const Text('Show blank rows'),
                           selected: _showBlank,
@@ -912,15 +1041,23 @@ class _ControlSheetScanDialogState extends State<ControlSheetScanDialog> {
                             : page.hasUnreviewedSpecials ||
                                   pageStatuses.contains(_ReviewStatus.review)
                             ? _ReviewStatus.review
-                            : pageStatuses.contains(_ReviewStatus.blank)
-                            ? _ReviewStatus.blank
                             : pageStatuses.contains(_ReviewStatus.good)
                             ? _ReviewStatus.good
+                            : pageStatuses.contains(_ReviewStatus.alreadySaved)
+                            ? _ReviewStatus.alreadySaved
+                            : pageStatuses.contains(_ReviewStatus.blank)
+                            ? _ReviewStatus.blank
                             : _ReviewStatus.skipped;
                         return _statusLabel(status);
                       },
                     ),
-                    if (_preview)
+                    if (_preview &&
+                        (_showSaved ||
+                            !page.rows.any((row) => row.alreadySaved) ||
+                            page.hasUnreviewedSpecials ||
+                            page.rows.any(
+                              (row) => row.needsSaving || row.review,
+                            )))
                       Image.memory(
                         page.bytes,
                         semanticLabel: 'Scanned control sheet',
@@ -941,7 +1078,9 @@ class _ControlSheetScanDialogState extends State<ControlSheetScanDialog> {
                         ),
                       ),
                     for (final row in page.rows)
-                      if (_showBlank || row.hasResults || row.review)
+                      if ((row.alreadySaved && _showSaved) ||
+                          (!row.alreadySaved &&
+                              (_showBlank || row.hasResults || row.review)))
                         _buildRow(row, problems[row] ?? const []),
                   ],
                 ],

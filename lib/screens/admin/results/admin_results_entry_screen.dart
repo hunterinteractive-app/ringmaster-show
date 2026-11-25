@@ -2789,7 +2789,7 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
         },
     ];
     return (
-      count: byMarkedEntry.length,
+      count: proposed.length,
       save: () async {
         if (AppSession.isSupportMode || !await RoleService.isSuperAdmin()) {
           throw StateError('Only super admins can save scanned results.');
@@ -2803,7 +2803,7 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
             'p_changes': payload,
           },
         );
-        return byMarkedEntry.length;
+        return proposed.length;
       },
     );
   }

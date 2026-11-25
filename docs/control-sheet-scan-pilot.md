@@ -13,6 +13,17 @@ Unmarked and skipped entries remain unchanged. Results Entry refreshes after
 the batch succeeds. Existing conflicting results require correction through
 normal Results Entry.
 
+Matching marked results are labeled **Already Saved**, counted separately,
+and automatically excluded from review and saving. They are hidden by default;
+**Show already saved** reveals them. Previously saved extra specials are
+preserved when the scanned sheet marks only a subset of the saved awards.
+Uncertain/conflicting marks still require review. Saved placement/outcome
+conflicts appear in red and cannot replace the saved result through this pilot.
+
+The review reloads saved results before preparing a batch. Entries saved during
+review are also skipped. When every marked result matches, the screen shows
+that there is nothing new to save and does not ask for another confirmation.
+
 `control_sheet_scan_snapshot` captures the selected sections before validation.
 `save_control_sheet_scan` acquires the same breed locks as normal Results Entry,
 checks the snapshot again, and saves the entire batch in one transaction using
