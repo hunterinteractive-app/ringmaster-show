@@ -10,6 +10,7 @@ import '../../models/base/report_request.dart';
 import '../../models/legs/legs_certificate_data.dart';
 import '../../utils/club_report_grouping.dart';
 import '../closeout_repository.dart';
+import '../final_award_judge_reader.dart';
 import '../report_data_reader.dart';
 import '../report_population_index.dart';
 
@@ -223,8 +224,20 @@ class LegsReportLoader {
       ''',
     );
 
+    final hasFinals = awards.any((row) {
+      final code = _normalizeAwardCode(_str(row['award_code']));
+      return _isBestInShowAward(code) || _isReserveInShowAward(code);
+    });
+    final finalJudgeRefs = hasFinals
+        ? await loadFinalAwardJudgeRefs(
+            repo.supabase,
+            showId: showId,
+            sectionIds: entryContext.values.map((e) => e.sectionId),
+          )
+        : <String, String>{};
     final judgeRefs = entryContext.values
         .map((e) => e.showJudgeRowId)
+        .followedBy(finalJudgeRefs.values)
         .where((e) => e.isNotEmpty)
         .toSet()
         .toList();
@@ -326,8 +339,20 @@ class LegsReportLoader {
       final ruleMatch = _determineLegRule(awardCode: awardCode, ctx: ctx);
       if (ruleMatch == null) continue;
 
+      // A BIS/RIS certificate belongs to the finals judge, not the judge
+      // who placed this animal in its breed. Never silently substitute one.
+      final String judgeRef;
+      if (ruleMatch.rule == 8 || ruleMatch.rule == 10) {
+        final award = ruleMatch.rule == 8 ? 'BIS' : 'RIS';
+        judgeRef =
+            finalJudgeRefs[finalAwardJudgeKey(ctx.sectionId, award)] ??
+            finalJudgeRefs[finalAwardJudgeKey(ctx.sectionId, 'FINALS')] ??
+            '';
+      } else {
+        judgeRef = ctx.showJudgeRowId;
+      }
       final judgeName = _firstNonEmpty([
-        judgeNamesByRef[ctx.showJudgeRowId] ?? '',
+        judgeNamesByRef[judgeRef] ?? '',
         'Judge Not Available',
       ]);
 

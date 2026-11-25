@@ -10,6 +10,148 @@ import 'package:ringmaster_show/screens/admin/closeout/data/loaders/legs_report_
 import 'package:ringmaster_show/screens/admin/closeout/models/base/report_request.dart';
 
 void main() {
+  for (final hasMarker in [true, false]) {
+    test(
+      'explicit BIS plan takes precedence over combined finals (assigned: $hasMarker)',
+      () async {
+        final fixture = _Fixture(
+          _qualificationRows(),
+          award: 'BEST IN SHOW',
+          finalPlans: [
+            {
+              'id': 'combined',
+              'award_section_id': 'open',
+              'award_code': 'FINALS',
+              'table_number': '1',
+              'sort_order': 15,
+            },
+            {
+              'id': 'bis',
+              'award_section_id': 'open',
+              'award_code': 'BIS',
+              'table_number': '10',
+              'sort_order': 15,
+            },
+          ],
+          judgeMarkers: [
+            {
+              'id': 'combined-judge',
+              'table_number': '1',
+              'sort_order': 0,
+              'judge_id': 'judge',
+            },
+            if (hasMarker)
+              {
+                'id': 'bis-judge',
+                'table_number': '10',
+                'sort_order': 0,
+                'judge_id': 'corey',
+              },
+          ],
+        );
+        addTearDown(fixture.client.dispose);
+        final legs = await LegsReportLoader(fixture.repo).load(_request);
+        expect(
+          legs.single.judgeName,
+          hasMarker ? 'Corey San Jose' : 'Judge Not Available',
+        );
+      },
+    );
+  }
+  for (final award in [
+    'BIS',
+    'BEST IN SHOW',
+    'RIS',
+    'RESERVE IN SHOW',
+    '1RIS',
+  ]) {
+    test(
+      '$award leg uses the finals table judge instead of the breed judge',
+      () async {
+        final fixture = _Fixture(
+          _qualificationRows(),
+          award: '$award,BOB',
+          finalPlans: [
+            {
+              'id': 'final',
+              'award_section_id': 'open',
+              'award_code': 'FINALS',
+              'table_number': '10',
+              'sort_order': 5,
+            },
+            // Same show letter in Youth must not override the Open judge.
+            {
+              'id': 'youth-final',
+              'award_section_id': 'youth',
+              'award_code': 'FINALS',
+              'table_number': '2',
+              'sort_order': 5,
+            },
+          ],
+          judgeMarkers: [
+            {
+              'id': 'earlier',
+              'table_number': '10',
+              'sort_order': 0,
+              'judge_id': 'judge',
+            },
+            {
+              'id': 'finals',
+              'table_number': '10',
+              'sort_order': 3,
+              'judge_id': 'corey',
+            },
+            {
+              'id': 'later',
+              'table_number': '10',
+              'sort_order': 8,
+              'judge_id': 'judge',
+            },
+            {
+              'id': 'youth',
+              'table_number': '2',
+              'sort_order': 0,
+              'judge_id': 'judge',
+            },
+          ],
+        );
+        addTearDown(fixture.client.dispose);
+        final legs = await LegsReportLoader(fixture.repo).load(_request);
+        expect(legs.single.winCode, award);
+        expect(legs.single.judgeName, 'Corey San Jose');
+      },
+    );
+  }
+  for (final award in ['FIRST', 'BOB', 'BOV']) {
+    test('$award leg retains the breed judge', () async {
+      final fixture = _Fixture(_qualificationRows(), award: award);
+      addTearDown(fixture.client.dispose);
+      final legs = await LegsReportLoader(fixture.repo).load(_request);
+      expect(legs.single.judgeName, 'Synthetic Judge');
+      expect(fixture.finalJudgeReads, 0);
+    });
+  }
+  test('missing finals judge never becomes the breed judge', () async {
+    final fixture = _Fixture(_qualificationRows(), award: 'BIS');
+    addTearDown(fixture.client.dispose);
+    final legs = await LegsReportLoader(fixture.repo).load(_request);
+    expect(legs.single.judgeName, 'Judge Not Available');
+  });
+  test(
+    'failed finals lookup fails the report instead of printing a wrong judge',
+    () async {
+      final fixture = _Fixture(
+        _qualificationRows(),
+        award: 'BIS',
+        failFinals: true,
+      );
+      addTearDown(fixture.client.dispose);
+      await expectLater(
+        LegsReportLoader(fixture.repo).load(_request),
+        throwsA(isA<PostgrestException>()),
+      );
+    },
+  );
   test(
     'exhibitor report includes every breed special, not only the leg award',
     () async {
@@ -567,6 +709,9 @@ class _Fixture {
     List<String>? allowedBreedIds,
     bool failAwards = false,
     bool failPoints = false,
+    bool failFinals = false,
+    List<Map<String, dynamic>> finalPlans = const [],
+    List<Map<String, dynamic>> judgeMarkers = const [],
   }) {
     client = SupabaseClient(
       'http://fixture.invalid',
@@ -574,7 +719,15 @@ class _Fixture {
       authOptions: const AuthClientOptions(autoRefreshToken: false),
       httpClient: MockClient((request) async {
         final table = request.url.pathSegments.last;
+        if (table == 'workspace_specialties') {
+          finalJudgeReads++;
+          expect(
+            request.url.queryParameters['award_section_id'],
+            contains('open'),
+          );
+        }
         if ((table == 'entry_awards' && failAwards) ||
+            (table == 'workspace_specialties' && failFinals) ||
             (table == 'sweepstakes_entry_results' && failPoints)) {
           return http.Response(
             jsonEncode({'code': '42501', 'message': 'read failed'}),
@@ -624,7 +777,14 @@ class _Fixture {
         } else if (table == 'judges') {
           data = [
             {'id': 'judge', 'name': 'Synthetic Judge'},
+            {'id': 'corey', 'name': 'Corey San Jose'},
           ];
+        } else if (table == 'workspace_specialties') {
+          data = finalPlans;
+        } else if (table == 'show_judging_assignments') {
+          expect(request.url.queryParameters['show_id'], 'in.("show")');
+          expect(request.url.queryParameters['is_judge_change'], 'eq.true');
+          data = judgeMarkers;
         }
         if (data is List) {
           final offset =
@@ -644,6 +804,7 @@ class _Fixture {
     repo = _FixtureRepository(client, rows, breedScope, allowedBreedIds);
   }
   late final SupabaseClient client;
+  int finalJudgeReads = 0;
   late final _FixtureRepository repo;
 }
 
