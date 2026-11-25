@@ -1,3 +1,4 @@
+import '../utils/exhibitor_entry_order.dart';
 import '../widgets/meat_pen_tattoos.dart';
 // lib/screens/cart_screen.dart
 
@@ -860,7 +861,10 @@ class _CartScreenState extends State<CartScreen> {
 
     final ordered = <String, List<Map<String, dynamic>>>{};
     for (final k in keys) {
-      ordered[k] = grouped[k]!;
+      ordered[k] = groupExhibitorEntries(
+        grouped[k]!,
+        _sectionById,
+      ).expand((group) => group).toList();
     }
     return ordered;
   }

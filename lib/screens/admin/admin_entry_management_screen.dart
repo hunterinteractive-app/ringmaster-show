@@ -1,3 +1,5 @@
+import '../../services/entry_section_service.dart';
+import '../../widgets/entry_section_selection_dialog.dart';
 // lib/screens/admin/admin_entry_management_screen.dart
 
 import 'dart:async';
@@ -594,7 +596,6 @@ class _AdminEntryManagementScreenState
   }
 
   Future<void> _toggleScratch(Map<String, dynamic> entry) async {
-    final id = entry['id'].toString();
     final scratchedAt = entry['scratched_at']?.toString();
     final status = (entry['status'] ?? '').toString().trim().toLowerCase();
     final isScratched =
@@ -605,10 +606,14 @@ class _AdminEntryManagementScreenState
     try {
       await ShowLockService.assertShowUnlocked(widget.showId);
 
-      await supabase.rpc(
-        'set_entry_scratch_state',
-        params: {'p_entry_id': id, 'p_is_scratched': willScratch},
+      if (!mounted) return;
+      final sections = await chooseEntrySections(
+        context,
+        entry: entry,
+        action: willScratch ? 'Scratch' : 'Restore',
       );
+      if (sections == null) return;
+      await EntrySectionService.apply(entry, sections, scratched: willScratch);
 
       await _loadEntries();
       if (!mounted) return;
@@ -1339,6 +1344,7 @@ Widget _surfaceTextScope(BuildContext context, {required Widget child}) {
 const _entrySheetDropdownTextStyle = TextStyle(color: AppColors.text);
 const _entrySheetDropdownSubtitleStyle = TextStyle(color: AppColors.muted);
 const _entrySheetInputLabelStyle = TextStyle(color: AppColors.muted);
+
 const _entrySheetFocusedInputLabelStyle = TextStyle(
   color: AppColors.text,
   fontWeight: FontWeight.w600,
@@ -1848,36 +1854,51 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
             : null,
       };
 
-      if (_applyChangesToAllShowEntries && animalId.isNotEmpty) {
-        var allEntriesQuery = supabase
-            .from('entries')
-            .update(basePayload)
-            .eq('show_id', showId)
-            .eq('animal_id', animalId);
-        if (exhibitorId.isNotEmpty) {
-          allEntriesQuery = allEntriesQuery.eq('exhibitor_id', exhibitorId);
+      final bulk = _applyChangesToAllShowEntries && animalId.isNotEmpty;
+      if (bulk &&
+          (_isFur != wasFurEntry ||
+              (wasFurEntry &&
+                  (furVariety != widget.entry['fur_variety'] ||
+                      _furNotes.text.trim() !=
+                          (widget.entry['fur_notes'] ?? '')
+                              .toString()
+                              .trim())))) {
+        throw Exception(
+          'Save Fur/Wool changes separately before editing across sections.',
+        );
+      }
+      if (bulk) {
+        if (!mounted) return;
+        final sections = await chooseEntrySections(
+          context,
+          entry: widget.entry,
+          action: 'Apply edits',
+        );
+        if (sections == null) {
+          if (mounted) setState(() => _saving = false);
+          return;
         }
-
-        final allUpdatedRows = await allEntriesQuery.select('id');
-        final allUpdated = (allUpdatedRows as List)
-            .cast<Map<String, dynamic>>();
-        if (allUpdated.isEmpty ||
-            !allUpdated.any((row) => (row['id'] ?? '').toString() == id)) {
-          throw Exception(
-            'No matching entries were updated for this animal. This usually means RLS blocked the update.',
-          );
-        }
+        final changes = Map<String, dynamic>.from(basePayload)
+          ..remove('updated_at')
+          ..removeWhere((key, value) => value == widget.entry[key]);
+        await EntrySectionService.apply(
+          widget.entry,
+          sections,
+          changes: changes,
+        );
       }
 
       debugPrint('Updating entry $id with: $updatePayload');
 
-      final updatedRows = await supabase
-          .from('entries')
-          .update(updatePayload)
-          .eq('id', id)
-          .select(
-            'id, animal_name, tattoo, breed, variety, sex, class_name, notes, is_fur, fur_variety, fur_notes, updated_at',
-          );
+      final updatedRows = bulk
+          ? await supabase.from('entries').select().eq('id', id)
+          : await supabase
+                .from('entries')
+                .update(updatePayload)
+                .eq('id', id)
+                .select(
+                  'id, animal_name, tattoo, breed, variety, sex, class_name, notes, is_fur, fur_variety, fur_notes, updated_at',
+                );
 
       final updatedList = (updatedRows as List).cast<Map<String, dynamic>>();
       if (updatedList.isEmpty) {
@@ -1979,308 +2000,328 @@ class _EditEntrySheetState extends State<_EditEntrySheet> {
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
 
-    return Padding(
-      padding: EdgeInsets.only(
-        left: 16,
-        right: 16,
-        top: 10,
-        bottom: bottomInset + 16,
-      ),
-      child: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text('Edit Entry', style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 8),
-            if (_msg != null)
-              Container(
-                margin: const EdgeInsets.only(bottom: 10),
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.red.withValues(alpha: .08),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.red.withValues(alpha: .25)),
+    return AppTheme.surfaceTextScope(
+      context,
+      child: Material(
+        color: AppColors.surface,
+        child: Padding(
+          padding: EdgeInsets.only(
+            left: 16,
+            right: 16,
+            top: 10,
+            bottom: bottomInset + 16,
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  'Edit Entry',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(color: AppColors.text),
                 ),
-                child: Semantics(
-                  liveRegion: true,
-                  child: Text(
-                    _msg!,
-                    style: const TextStyle(
-                      color: AppColors.danger,
-                      fontWeight: FontWeight.w600,
+                const SizedBox(height: 8),
+                if (_msg != null)
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 10),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.red.withValues(alpha: .08),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: Colors.red.withValues(alpha: .25),
+                      ),
+                    ),
+                    child: Semantics(
+                      liveRegion: true,
+                      child: Text(
+                        _msg!,
+                        style: const TextStyle(
+                          color: AppColors.danger,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                     ),
                   ),
-                ),
-              ),
-            TextField(
-              controller: _animalName,
-              enabled: !_saving,
-              style: _entrySheetDropdownTextStyle,
-              decoration: const InputDecoration(
-                labelText: 'Animal Name',
-                labelStyle: _entrySheetInputLabelStyle,
-                floatingLabelStyle: _entrySheetFocusedInputLabelStyle,
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: _tattoo,
-              enabled: !_saving && !hasMeatPenId(widget.entry),
-              textCapitalization: TextCapitalization.characters,
-              inputFormatters: [UpperCaseTextFormatter()],
-              style: _entrySheetDropdownTextStyle,
-              decoration: const InputDecoration(
-                labelText: 'Tattoo / Ear #',
-                labelStyle: _entrySheetInputLabelStyle,
-                floatingLabelStyle: _entrySheetFocusedInputLabelStyle,
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 10),
-            if (_loadingBreeds) const LinearProgressIndicator(),
-            DropdownButtonFormField<String>(
-              initialValue: _breedId,
-              style: _entrySheetDropdownTextStyle,
-              dropdownColor: AppColors.surface,
-              iconEnabledColor: AppColors.muted,
-              iconDisabledColor: AppColors.muted,
-              decoration: const InputDecoration(
-                labelText: 'Breed',
-                border: OutlineInputBorder(),
-              ),
-              items: _breedOptions
-                  .map(
-                    (b) => DropdownMenuItem<String>(
-                      value: (b['id'] ?? '').toString(),
-                      child: Text(
-                        (b['name'] ?? '').toString(),
-                        style: _entrySheetDropdownTextStyle,
-                      ),
-                    ),
-                  )
-                  .toList(),
-              onChanged: _saving
-                  ? null
-                  : (value) async {
-                      final selected = _breedOptions.firstWhere(
-                        (b) => (b['id'] ?? '').toString() == value,
-                        orElse: () => <String, dynamic>{},
-                      );
-
-                      setState(() {
-                        _breedId = value;
-                        _breed.text = (selected['name'] ?? '').toString();
-                        _variety.clear();
-                        _varietyOptions = [];
-                        _clearInvalidClassSelection();
-                        _msg = null;
-                      });
-
-                      if (value != null && value.isNotEmpty) {
-                        await _loadVarietiesForBreed(value);
-                      }
-                    },
-            ),
-            const SizedBox(height: 10),
-            if (_breedId != null && _loadingVarieties)
-              const LinearProgressIndicator(),
-            DropdownButtonFormField<String>(
-              initialValue: _variety.text.trim().isEmpty
-                  ? null
-                  : _variety.text.trim(),
-              style: _entrySheetDropdownTextStyle,
-              dropdownColor: AppColors.surface,
-              iconEnabledColor: AppColors.muted,
-              iconDisabledColor: AppColors.muted,
-              decoration: const InputDecoration(
-                labelText: 'Variety',
-                border: OutlineInputBorder(),
-              ),
-              items: _varietyOptions
-                  .map(
-                    (v) => DropdownMenuItem<String>(
-                      value: (v['name'] ?? '').toString(),
-                      child: Text(
-                        (v['name'] ?? '').toString(),
-                        style: _entrySheetDropdownTextStyle,
-                      ),
-                    ),
-                  )
-                  .toList(),
-              onChanged: (_saving || _breedId == null)
-                  ? null
-                  : (value) {
-                      setState(() {
-                        _variety.text = value ?? '';
-                        _msg = null;
-                      });
-                    },
-            ),
-            const SizedBox(height: 10),
-            DropdownButtonFormField<String>(
-              key: ValueKey('entry-class-${_breedId ?? 'none'}'),
-              initialValue: _classValue,
-              style: _entrySheetDropdownTextStyle,
-              dropdownColor: AppColors.surface,
-              iconEnabledColor: AppColors.muted,
-              iconDisabledColor: AppColors.muted,
-              decoration: const InputDecoration(
-                labelText: 'Class',
-                border: OutlineInputBorder(),
-              ),
-              items: _classOptions
-                  .map(
-                    (value) => DropdownMenuItem(
-                      value: value,
-                      child: Text(value, style: _entrySheetDropdownTextStyle),
-                    ),
-                  )
-                  .toList(),
-              onChanged: _saving
-                  ? null
-                  : (value) {
-                      setState(() {
-                        _classValue = value ?? '';
-                        _className.text = _classValue ?? '';
-                        _msg = null;
-                      });
-                    },
-            ),
-            const SizedBox(height: 10),
-            DropdownButtonFormField<String>(
-              initialValue: _sexValue,
-              style: _entrySheetDropdownTextStyle,
-              dropdownColor: AppColors.surface,
-              iconEnabledColor: AppColors.muted,
-              iconDisabledColor: AppColors.muted,
-              decoration: const InputDecoration(
-                labelText: 'Sex',
-                border: OutlineInputBorder(),
-              ),
-              items: _sexOptions
-                  .map(
-                    (sex) => DropdownMenuItem<String>(
-                      value: sex,
-                      child: Text(sex, style: _entrySheetDropdownTextStyle),
-                    ),
-                  )
-                  .toList(),
-              onChanged: _saving
-                  ? null
-                  : (value) {
-                      setState(() {
-                        _sexValue = value;
-                        _sex.text = value ?? '';
-                        _msg = null;
-                      });
-                    },
-            ),
-            const SizedBox(height: 10),
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              title: const Text('Fur / Wool Entry'),
-              value: _isFur,
-              onChanged: _saving
-                  ? null
-                  : (v) => setState(() {
-                      _isFur = v;
-                      if (!v) {
-                        _furVarietyValue = null;
-                        _furVariety.clear();
-                        _furNotes.clear();
-                      }
-                      _msg = null;
-                    }),
-            ),
-            if ((widget.entry['animal_id'] ?? '').toString().trim().isNotEmpty)
-              CheckboxListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text(
-                  'Apply changes to every show entry for this animal',
-                ),
-                subtitle: const Text(
-                  'Updates Open A, Open B, Youth A, etc. Fur/Wool choices stay with their individual show entries.',
-                ),
-                value: _applyChangesToAllShowEntries,
-                onChanged: _saving
-                    ? null
-                    : (value) => setState(
-                        () => _applyChangesToAllShowEntries = value ?? false,
-                      ),
-              ),
-            if (_isFur) ...[
-              const SizedBox(height: 10),
-              DropdownButtonFormField<String>(
-                initialValue: _furVarietyValue,
-                style: _entrySheetDropdownTextStyle,
-                dropdownColor: AppColors.surface,
-                iconEnabledColor: AppColors.muted,
-                iconDisabledColor: AppColors.muted,
-                decoration: const InputDecoration(
-                  labelText: 'Fur / Wool Class',
-                  border: OutlineInputBorder(),
-                ),
-                items: const [
-                  DropdownMenuItem(
-                    value: 'White',
-                    child: Text('White', style: _entrySheetDropdownTextStyle),
+                TextField(
+                  controller: _animalName,
+                  enabled: !_saving,
+                  style: _entrySheetDropdownTextStyle,
+                  decoration: const InputDecoration(
+                    labelText: 'Animal Name',
+                    labelStyle: _entrySheetInputLabelStyle,
+                    floatingLabelStyle: _entrySheetFocusedInputLabelStyle,
+                    border: OutlineInputBorder(),
                   ),
-                  DropdownMenuItem(
-                    value: 'Colored',
-                    child: Text('Colored', style: _entrySheetDropdownTextStyle),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: _tattoo,
+                  enabled: !_saving && !hasMeatPenId(widget.entry),
+                  textCapitalization: TextCapitalization.characters,
+                  inputFormatters: [UpperCaseTextFormatter()],
+                  style: _entrySheetDropdownTextStyle,
+                  decoration: const InputDecoration(
+                    labelText: 'Tattoo / Ear #',
+                    labelStyle: _entrySheetInputLabelStyle,
+                    floatingLabelStyle: _entrySheetFocusedInputLabelStyle,
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                if (_loadingBreeds) const LinearProgressIndicator(),
+                DropdownButtonFormField<String>(
+                  initialValue: _breedId,
+                  style: _entrySheetDropdownTextStyle,
+                  dropdownColor: AppColors.surface,
+                  iconEnabledColor: AppColors.muted,
+                  iconDisabledColor: AppColors.muted,
+                  decoration: const InputDecoration(
+                    labelText: 'Breed',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: _breedOptions
+                      .map(
+                        (b) => DropdownMenuItem<String>(
+                          value: (b['id'] ?? '').toString(),
+                          child: Text(
+                            (b['name'] ?? '').toString(),
+                            style: _entrySheetDropdownTextStyle,
+                          ),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: _saving
+                      ? null
+                      : (value) async {
+                          final selected = _breedOptions.firstWhere(
+                            (b) => (b['id'] ?? '').toString() == value,
+                            orElse: () => <String, dynamic>{},
+                          );
+
+                          setState(() {
+                            _breedId = value;
+                            _breed.text = (selected['name'] ?? '').toString();
+                            _variety.clear();
+                            _varietyOptions = [];
+                            _clearInvalidClassSelection();
+                            _msg = null;
+                          });
+
+                          if (value != null && value.isNotEmpty) {
+                            await _loadVarietiesForBreed(value);
+                          }
+                        },
+                ),
+                const SizedBox(height: 10),
+                if (_breedId != null && _loadingVarieties)
+                  const LinearProgressIndicator(),
+                DropdownButtonFormField<String>(
+                  initialValue: _variety.text.trim().isEmpty
+                      ? null
+                      : _variety.text.trim(),
+                  style: _entrySheetDropdownTextStyle,
+                  dropdownColor: AppColors.surface,
+                  iconEnabledColor: AppColors.muted,
+                  iconDisabledColor: AppColors.muted,
+                  decoration: const InputDecoration(
+                    labelText: 'Variety',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: _varietyOptions
+                      .map(
+                        (v) => DropdownMenuItem<String>(
+                          value: (v['name'] ?? '').toString(),
+                          child: Text(
+                            (v['name'] ?? '').toString(),
+                            style: _entrySheetDropdownTextStyle,
+                          ),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (_saving || _breedId == null)
+                      ? null
+                      : (value) {
+                          setState(() {
+                            _variety.text = value ?? '';
+                            _msg = null;
+                          });
+                        },
+                ),
+                const SizedBox(height: 10),
+                DropdownButtonFormField<String>(
+                  key: ValueKey('entry-class-${_breedId ?? 'none'}'),
+                  initialValue: _classValue,
+                  style: _entrySheetDropdownTextStyle,
+                  dropdownColor: AppColors.surface,
+                  iconEnabledColor: AppColors.muted,
+                  iconDisabledColor: AppColors.muted,
+                  decoration: const InputDecoration(
+                    labelText: 'Class',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: _classOptions
+                      .map(
+                        (value) => DropdownMenuItem(
+                          value: value,
+                          child: Text(
+                            value,
+                            style: _entrySheetDropdownTextStyle,
+                          ),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: _saving
+                      ? null
+                      : (value) {
+                          setState(() {
+                            _classValue = value ?? '';
+                            _className.text = _classValue ?? '';
+                            _msg = null;
+                          });
+                        },
+                ),
+                const SizedBox(height: 10),
+                DropdownButtonFormField<String>(
+                  initialValue: _sexValue,
+                  style: _entrySheetDropdownTextStyle,
+                  dropdownColor: AppColors.surface,
+                  iconEnabledColor: AppColors.muted,
+                  iconDisabledColor: AppColors.muted,
+                  decoration: const InputDecoration(
+                    labelText: 'Sex',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: _sexOptions
+                      .map(
+                        (sex) => DropdownMenuItem<String>(
+                          value: sex,
+                          child: Text(sex, style: _entrySheetDropdownTextStyle),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: _saving
+                      ? null
+                      : (value) {
+                          setState(() {
+                            _sexValue = value;
+                            _sex.text = value ?? '';
+                            _msg = null;
+                          });
+                        },
+                ),
+                const SizedBox(height: 10),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Fur / Wool Entry'),
+                  value: _isFur,
+                  onChanged: _saving
+                      ? null
+                      : (v) => setState(() {
+                          _isFur = v;
+                          if (!v) {
+                            _furVarietyValue = null;
+                            _furVariety.clear();
+                            _furNotes.clear();
+                          }
+                          _msg = null;
+                        }),
+                ),
+                if ((widget.entry['animal_id'] ?? '')
+                    .toString()
+                    .trim()
+                    .isNotEmpty)
+                  buildAdminEntrySectionChoice(
+                    context,
+                    value: _applyChangesToAllShowEntries,
+                    onChanged: _saving
+                        ? null
+                        : (value) => setState(
+                            () =>
+                                _applyChangesToAllShowEntries = value ?? false,
+                          ),
+                  ),
+                if (_isFur) ...[
+                  const SizedBox(height: 10),
+                  DropdownButtonFormField<String>(
+                    initialValue: _furVarietyValue,
+                    style: _entrySheetDropdownTextStyle,
+                    dropdownColor: AppColors.surface,
+                    iconEnabledColor: AppColors.muted,
+                    iconDisabledColor: AppColors.muted,
+                    decoration: const InputDecoration(
+                      labelText: 'Fur / Wool Class',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: const [
+                      DropdownMenuItem(
+                        value: 'White',
+                        child: Text(
+                          'White',
+                          style: _entrySheetDropdownTextStyle,
+                        ),
+                      ),
+                      DropdownMenuItem(
+                        value: 'Colored',
+                        child: Text(
+                          'Colored',
+                          style: _entrySheetDropdownTextStyle,
+                        ),
+                      ),
+                    ],
+                    onChanged: _saving
+                        ? null
+                        : (value) {
+                            setState(() {
+                              _furVarietyValue = value;
+                              _furVariety.text = value ?? '';
+                              _msg = null;
+                            });
+                          },
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: _furNotes,
+                    enabled: !_saving,
+                    minLines: 2,
+                    maxLines: 4,
+                    style: _entrySheetDropdownTextStyle,
+                    decoration: const InputDecoration(
+                      labelText: 'Fur / Wool Notes',
+                      labelStyle: _entrySheetInputLabelStyle,
+                      floatingLabelStyle: _entrySheetFocusedInputLabelStyle,
+                      border: OutlineInputBorder(),
+                    ),
                   ),
                 ],
-                onChanged: _saving
-                    ? null
-                    : (value) {
-                        setState(() {
-                          _furVarietyValue = value;
-                          _furVariety.text = value ?? '';
-                          _msg = null;
-                        });
-                      },
-              ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: _furNotes,
-                enabled: !_saving,
-                minLines: 2,
-                maxLines: 4,
-                style: _entrySheetDropdownTextStyle,
-                decoration: const InputDecoration(
-                  labelText: 'Fur / Wool Notes',
-                  labelStyle: _entrySheetInputLabelStyle,
-                  floatingLabelStyle: _entrySheetFocusedInputLabelStyle,
-                  border: OutlineInputBorder(),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: _notes,
+                  enabled: !_saving,
+                  minLines: 2,
+                  maxLines: 5,
+                  style: _entrySheetDropdownTextStyle,
+                  decoration: const InputDecoration(
+                    labelText: 'Notes',
+                    labelStyle: _entrySheetInputLabelStyle,
+                    floatingLabelStyle: _entrySheetFocusedInputLabelStyle,
+                    border: OutlineInputBorder(),
+                  ),
                 ),
-              ),
-            ],
-            const SizedBox(height: 10),
-            TextField(
-              controller: _notes,
-              enabled: !_saving,
-              minLines: 2,
-              maxLines: 5,
-              style: _entrySheetDropdownTextStyle,
-              decoration: const InputDecoration(
-                labelText: 'Notes',
-                labelStyle: _entrySheetInputLabelStyle,
-                floatingLabelStyle: _entrySheetFocusedInputLabelStyle,
-                border: OutlineInputBorder(),
-              ),
+                const SizedBox(height: 14),
+                FilledButton(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.primaryButton,
+                    foregroundColor: AppColors.primaryButtonText,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                  ),
+                  onPressed: _saving ? null : _save,
+                  child: Text(_saving ? 'Saving…' : 'Save Changes'),
+                ),
+              ],
             ),
-            const SizedBox(height: 14),
-            FilledButton(
-              style: FilledButton.styleFrom(
-                backgroundColor: AppColors.primaryButton,
-                foregroundColor: AppColors.primaryButtonText,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-              ),
-              onPressed: _saving ? null : _save,
-              child: Text(_saving ? 'Saving…' : 'Save Changes'),
-            ),
-          ],
+          ),
         ),
       ),
     );

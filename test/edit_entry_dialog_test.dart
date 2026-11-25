@@ -1,3 +1,7 @@
+import 'dart:io';
+import 'dart:ui' as ui;
+import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ringmaster_show/theme/app_theme.dart';
@@ -11,61 +15,65 @@ void main() {
     bool preJunior = false,
     String initial = 'Intermediate',
     bool missing = false,
+    ValueChanged<EditEntryResult?>? onResult,
   }) async {
     await tester.pumpWidget(
-      MaterialApp(
-        theme: AppTheme.onGradientTheme(ThemeData.light()),
-        home: Scaffold(
-          body: Builder(
-            builder: (context) => TextButton(
-              onPressed: () => showDialog<EditEntryResult>(
-                context: context,
-                builder: (_) => EditEntryDialog(
-                  initialAnimalId: 'a',
-                  initialClassName: initial,
-                  initialSectionId: 's',
-                  initialExhibitorId: 'e',
-                  breeds: missing
-                      ? []
-                      : [
-                          {
-                            'name': 'Belgian Hare (COD)',
-                            'species': species,
-                            'class_system': system,
-                            'has_prejunior': preJunior,
-                          },
-                          {
-                            'name': 'Californian',
-                            'species': 'rabbit',
-                            'class_system': 'six',
-                          },
-                        ],
-                  animals: [
-                    {
-                      'id': 'a',
-                      'breed': 'Belgian Hare',
-                      'species': species,
-                      'tattoo': 'MTB3',
-                    },
-                    {
-                      'id': 'b',
-                      'breed': 'Californian',
-                      'species': 'rabbit',
-                      'tattoo': 'OTHER',
-                    },
-                  ],
-                  exhibitors: [
-                    {'id': 'e', 'showing_name': 'Jackson Mossefin'},
-                  ],
-                  sections: [
-                    {'id': 's'},
-                  ],
-                  sectionLabel: (_) => 'Open A',
-                  onAddNewAnimal: () async {},
-                  reloadAnimals: () async => [],
-                ),
+      RepaintBoundary(
+        key: const Key('edit-preview'),
+        child: MaterialApp(
+          theme: AppTheme.onGradientTheme(ThemeData.light()),
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => TextButton(
+                onPressed: () => showDialog<EditEntryResult>(
+                  context: context,
+                  builder: (_) => EditEntryDialog(
+                    initialAnimalId: 'a',
+                    initialClassName: initial,
+                    initialSectionId: 's',
+                    initialExhibitorId: 'e',
+                    breeds: missing
+                        ? []
+                        : [
+                            {
+                              'name': 'Belgian Hare (COD)',
+                              'species': species,
+                              'class_system': system,
+                              'has_prejunior': preJunior,
+                            },
+                            {
+                              'name': 'Californian',
+                              'species': 'rabbit',
+                              'class_system': 'six',
+                            },
+                          ],
+                    animals: [
+                      {
+                        'id': 'a',
+                        'breed': 'Belgian Hare',
+                        'species': species,
+                        'tattoo': 'MTB3',
+                      },
+                      {
+                        'id': 'b',
+                        'breed': 'Californian',
+                        'species': 'rabbit',
+                        'tattoo': 'OTHER',
+                      },
+                    ],
+                    exhibitors: [
+                      {'id': 'e', 'showing_name': 'Jackson Mossefin'},
+                    ],
+                    sections: [
+                      {'id': 's'},
+                    ],
+                    sectionLabel: (_) => 'Open A',
+                    onAddNewAnimal: () async {},
+                    reloadAnimals: () async => [],
+                  ),
+                ).then((result) => onResult?.call(result)),
+                child: const Text('Edit'),
               ),
-              child: const Text('Edit'),
             ),
           ),
         ),
@@ -81,6 +89,28 @@ void main() {
           w is DropdownButtonFormField<String> &&
           w.key.toString().contains('class-'),
     ),
+  );
+
+  testWidgets(
+    'direct tattoo and bulk choice are returned without swapping animal',
+    (tester) async {
+      EditEntryResult? result;
+      await open(
+        tester,
+        initial: 'Senior',
+        onResult: (value) => result = value,
+      );
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Tattoo / ear number'),
+        '  ear42 ',
+      );
+      await tester.tap(find.text('Choose other show sections for these edits'));
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+      expect(result!.tattoo, 'EAR42');
+      expect(result!.animalId, 'a');
+      expect(result!.chooseSections, isTrue);
+    },
   );
   List<String> choices(WidgetTester tester) {
     final dropdown = tester.widget<DropdownButton<String>>(
@@ -100,7 +130,10 @@ void main() {
     'four-class rejects previous Intermediate and saves Senior from dropdown',
     (tester) async {
       await open(tester);
-      expect(find.byType(TextField), findsNothing);
+      expect(
+        find.widgetWithText(TextField, 'Tattoo / ear number'),
+        findsOneWidget,
+      );
       expect(choices(tester), ['Junior', 'Senior']);
       expect(field(tester).initialValue, isNull);
       await tester.tap(find.text('Save'));
@@ -189,7 +222,21 @@ void main() {
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
+      final font = FontLoader('Roboto')
+        ..addFont(rootBundle.load('assets/fonts/Roboto-Regular.ttf'));
+      await font.load();
       await open(tester, initial: 'Senior');
+      await tester.runAsync(() async {
+        final boundary = tester.renderObject<RenderRepaintBoundary>(
+          find.byKey(const Key('edit-preview')),
+        );
+        final image = await boundary.toImage(pixelRatio: 2);
+        final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+        await File(
+          '/tmp/entry-tattoo-phone.png',
+        ).writeAsBytes(bytes!.buffer.asUint8List());
+        image.dispose();
+      });
       expect(tester.takeException(), isNull);
       final context = tester.element(find.text('Edit Entry'));
       final theme = Theme.of(context);

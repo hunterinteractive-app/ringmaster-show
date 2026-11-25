@@ -9,17 +9,22 @@ class EditEntryResult {
   final String className;
   final String sectionId;
   final String exhibitorId;
+  final String tattoo;
+  final bool chooseSections;
 
   EditEntryResult({
     required this.animalId,
     required this.className,
     required this.sectionId,
     required this.exhibitorId,
+    this.tattoo = '',
+    this.chooseSections = false,
   });
 }
 
 class EditEntryDialog extends StatefulWidget {
   final String initialAnimalId;
+  final String? initialTattoo;
   final String initialClassName;
   final String initialSectionId;
   final String initialExhibitorId;
@@ -33,6 +38,7 @@ class EditEntryDialog extends StatefulWidget {
 
   const EditEntryDialog({
     required this.initialAnimalId,
+    this.initialTattoo,
     required this.initialClassName,
     required this.initialSectionId,
     required this.initialExhibitorId,
@@ -58,16 +64,31 @@ class EditEntryDialogState extends State<EditEntryDialog> {
   String? _className;
   String? _dialogError;
   bool _busy = false;
+  bool _chooseSections = false;
+  final _tattoo = TextEditingController();
 
   @override
   void initState() {
     super.initState();
     _animals = widget.animals;
+    _tattoo.text =
+        widget.initialTattoo ??
+        _animals
+            .where((a) => a['id'] == widget.initialAnimalId)
+            .map((a) => (a['tattoo'] ?? '').toString())
+            .firstOrNull ??
+        '';
     _animalId = widget.initialAnimalId;
     _sectionId = widget.initialSectionId;
     _exhibitorId = widget.initialExhibitorId;
     _className = canonicalEntryClassName(widget.initialClassName);
     _validateClassSelection();
+  }
+
+  @override
+  void dispose() {
+    _tattoo.dispose();
+    super.dispose();
   }
 
   List<String> get _classOptions {
@@ -192,6 +213,26 @@ class EditEntryDialogState extends State<EditEntryDialog> {
                   ),
                   const SizedBox(height: 10),
                 ],
+                TextField(
+                  controller: _tattoo,
+                  maxLength: 100,
+                  textCapitalization: TextCapitalization.characters,
+                  decoration: const InputDecoration(
+                    labelText: 'Tattoo / ear number',
+                    helperText:
+                        'Updates the selected show entries. Your saved animal profile stays unchanged.',
+                    helperMaxLines: 3,
+                  ),
+                ),
+                CheckboxListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text(
+                    'Choose other show sections for these edits',
+                  ),
+                  value: _chooseSections,
+                  onChanged: (v) =>
+                      setState(() => _chooseSections = v ?? false),
+                ),
                 DropdownButtonFormField<String>(
                   isExpanded: true,
                   initialValue: hasSelectedSection ? _sectionId : null,
@@ -260,6 +301,12 @@ class EditEntryDialogState extends State<EditEntryDialog> {
                       ? null
                       : (v) => setState(() {
                           _animalId = v ?? _animalId;
+                          _tattoo.text =
+                              _animals
+                                  .where((a) => a['id'] == _animalId)
+                                  .map((a) => (a['tattoo'] ?? '').toString())
+                                  .firstOrNull ??
+                              '';
                           _validateClassSelection();
                           _dialogError = null;
                         }),
@@ -322,6 +369,22 @@ class EditEntryDialogState extends State<EditEntryDialog> {
                       (e) => (e['id'] ?? '').toString() == _exhibitorId,
                     );
 
+                    if (_tattoo.text.trim().isEmpty) {
+                      setState(
+                        () => _dialogError = 'Enter a tattoo / ear number.',
+                      );
+                      return;
+                    }
+                    if (_chooseSections &&
+                        (_animalId != widget.initialAnimalId ||
+                            _exhibitorId != widget.initialExhibitorId ||
+                            _sectionId != widget.initialSectionId)) {
+                      setState(
+                        () => _dialogError =
+                            'Save animal, exhibitor, or section moves separately before editing across sections.',
+                      );
+                      return;
+                    }
                     if (!hasValidSection) {
                       setState(() => _dialogError = 'Select a show / section.');
                       return;
@@ -352,6 +415,8 @@ class EditEntryDialogState extends State<EditEntryDialog> {
                         className: _className!,
                         sectionId: _sectionId,
                         exhibitorId: _exhibitorId,
+                        tattoo: _tattoo.text.trim().toUpperCase(),
+                        chooseSections: _chooseSections,
                       ),
                     );
                   },
