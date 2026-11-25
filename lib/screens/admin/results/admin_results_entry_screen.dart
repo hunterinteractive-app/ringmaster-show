@@ -2516,23 +2516,28 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
         !mounted) {
       return;
     }
-    final checked = await showControlSheetScanDialog(
+    final saved = await showControlSheetScanDialog(
       context,
       showId: widget.showId,
+      showName: widget.showName,
       loadSection: (sectionId) => _fetchHydratedEntries(sectionId: sectionId),
-      validate: _validateControlSheetScan,
+      prepare: _prepareControlSheetScan,
     );
-    if (!mounted || checked == null) return;
+    if (!mounted || saved == null) return;
+    await _loadAll();
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          'Pilot checked $checked ${checked == 1 ? 'entry' : 'entries'}. No results were saved.',
+          'Saved reviewed results for $saved ${saved == 1 ? 'entry' : 'entries'}.',
         ),
       ),
     );
   }
 
-  Future<int> _validateControlSheetScan(List<ScanResultChange> changes) async {
+  Future<ScanResultSavePlan> _prepareControlSheetScan(
+    List<ScanResultChange> changes,
+  ) async {
     if (AppSession.isSupportMode || !await RoleService.isSuperAdmin()) {
       throw StateError(
         'The bubble control sheet pilot is available to super admins.',
@@ -2541,6 +2546,15 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
     final sectionIds = changes
         .map((change) => resultsSectionScopeForEntry(change.entry))
         .toSet();
+    // Capture the database state before loading rows for validation. A change
+    // during validation or the confirmation dialog invalidates this batch.
+    final snapshot = await supabase.rpc(
+      'control_sheet_scan_snapshot',
+      params: {
+        'p_show_id': widget.showId,
+        'p_section_ids': sectionIds.toList(),
+      },
+    );
     final latest = <Map<String, dynamic>>[];
     for (final sectionId in sectionIds) {
       latest.addAll(await _fetchHydratedEntries(sectionId: sectionId));
@@ -2765,7 +2779,33 @@ class _AdminResultsEntryScreenState extends State<AdminResultsEntryScreen> {
       }
     }
     if (errors.isNotEmpty) throw StateError(errors.join('\n'));
-    return byMarkedEntry.length;
+    final payload = [
+      for (final entry in proposed.values)
+        {
+          'entry_id': resultsEntryId(entry),
+          'placement': entry['placement'],
+          'result_status': entry['result_status'],
+          'awards': _entryAwardCodes(entry).toList()..sort(),
+        },
+    ];
+    return (
+      count: byMarkedEntry.length,
+      save: () async {
+        if (AppSession.isSupportMode || !await RoleService.isSuperAdmin()) {
+          throw StateError('Only super admins can save scanned results.');
+        }
+        await supabase.rpc(
+          'save_control_sheet_scan',
+          params: {
+            'p_show_id': widget.showId,
+            'p_section_ids': sectionIds.toList(),
+            'p_snapshot': snapshot,
+            'p_changes': payload,
+          },
+        );
+        return byMarkedEntry.length;
+      },
+    );
   }
 
   @override

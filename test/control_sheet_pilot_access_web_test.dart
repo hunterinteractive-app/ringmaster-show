@@ -8,6 +8,8 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:ringmaster_show/screens/admin/print_packs/control_sheets_generator_sheet.dart';
 import 'package:ringmaster_show/screens/admin/results/admin_results_entry_screen.dart';
+import 'package:ringmaster_show/screens/admin/results/control_sheet_scan_dialog.dart';
+import 'package:ringmaster_show/services/results/result_status.dart';
 import 'package:ringmaster_show/services/role_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -22,6 +24,27 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
 
     var role = 'admin';
+    final saves = <Map<String, dynamic>>[];
+    final entries = [
+      for (var i = 0; i < 2; i++)
+        {
+          'entry_id': '00000000-0000-0000-0000-00000000000${i + 4}',
+          'show_id': showId,
+          'section_id': sectionId,
+          'breed': 'Mini Rex',
+          'variety': i == 0 ? 'Black' : 'Castor',
+          'class_name': 'Senior',
+          'sex': 'Buck',
+          'tattoo': 'TEST$i',
+          'species': 'rabbit',
+          'is_fur': false,
+          'is_shown': true,
+          'is_disqualified': false,
+          'result_status': 'Shown',
+          'uses_variety_awards': true,
+          '_awards': <String>[],
+        },
+    ];
     await tester.runAsync(() async {
       SharedPreferences.setMockInitialValues({});
       await Supabase.initialize(
@@ -34,6 +57,17 @@ void main() {
         ),
         httpClient: MockClient((request) async {
           final path = request.url.path;
+          if (path.endsWith('/save_control_sheet_scan')) {
+            saves.add(
+              Map<String, dynamic>.from(jsonDecode(request.body) as Map),
+            );
+            return http.Response(
+              '2',
+              200,
+              request: request,
+              headers: {'content-type': 'application/json'},
+            );
+          }
           final Object data = switch (path.split('/').last) {
             'super_admins' => [],
             'role_assignments' =>
@@ -43,6 +77,11 @@ void main() {
                     ]
                   : [],
             'shows' => {'is_locked': true, 'is_national_show': false},
+            'control_sheet_scan_snapshot' => 'frozen-review-snapshot',
+            'get_judging_entry_rows_page' =>
+              jsonDecode(request.body)['p_after_entry_id'] == null
+                  ? entries
+                  : [],
             _ => [],
           };
           return http.Response(
@@ -128,8 +167,61 @@ void main() {
               )
               .onPressed,
           isNotNull,
-          reason: 'The dry run is also available for locked shows.',
+          reason: 'Review is available; saving checks the server lock state.',
         );
+        await tester.tap(find.byTooltip('Scan control sheets (pilot)'));
+        await tester.pumpAndSettle();
+        final dialog = tester.widget<ControlSheetScanDialog>(
+          find.byType(ControlSheetScanDialog),
+        );
+        final plan = await tester.runAsync(
+          () => dialog.prepare([
+            (
+              entry: entries[0],
+              placement: '1',
+              outcome: null,
+              awards: {'BOV', 'BOB'},
+            ),
+            (
+              entry: entries[1],
+              placement: null,
+              outcome: ResultStatus.scratched,
+              awards: <String>{},
+            ),
+          ]),
+        );
+        expect(plan!.count, 2);
+        expect(
+          saves,
+          isEmpty,
+          reason: 'Preparing for confirmation cannot write results.',
+        );
+        role = 'admin';
+        await tester.runAsync(() => expectLater(plan.save(), throwsStateError));
+        expect(saves, isEmpty);
+        role = 'super_admin';
+        expect(await tester.runAsync(plan.save), 2);
+        expect(saves.single, {
+          'p_show_id': showId,
+          'p_section_ids': [sectionId],
+          'p_snapshot': 'frozen-review-snapshot',
+          'p_changes': [
+            {
+              'entry_id': entries[0]['entry_id'],
+              'placement': '1',
+              'result_status': 'Shown',
+              'awards': ['BOB', 'BOV'],
+            },
+            {
+              'entry_id': entries[1]['entry_id'],
+              'placement': null,
+              'result_status': 'Scratched',
+              'awards': <String>[],
+            },
+          ],
+        });
+        await tester.tap(find.widgetWithText(TextButton, 'Close'));
+        await tester.pumpAndSettle();
       }
     }
     expect(tester.takeException(), isNull);
