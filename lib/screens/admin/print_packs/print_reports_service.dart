@@ -8,6 +8,7 @@ import '../closeout/data/loaders/unpaid_balances_report_loader.dart';
 import '../closeout/data/loaders/exhibitor_mailing_labels_loader.dart';
 import '../closeout/data/loaders/entered_exhibitors_list_report_loader.dart';
 import '../closeout/models/base/report_request.dart';
+import '../closeout/models/unpaid/unpaid_balances_report_data.dart';
 import '../closeout/models/base/report_file_result.dart';
 import '../closeout/pdf/builders/paid_exhibitor_report_pdf.dart';
 import '../closeout/pdf/builders/unpaid_balances_report_pdf.dart';
@@ -37,25 +38,7 @@ class PrintReportAvailability {
   final List<String> errors;
 }
 
-/// Match the existing generators' eligibility rules, including partial payments
-/// and excluding abandoned carts from outstanding entry balances.
-Set<PrintReport> balancePrintReports(List<Map<String, dynamic>> balances) {
-  num cents(Object? value) => num.tryParse('$value') ?? 0;
-  return {
-    if (balances.any(
-      (r) =>
-          cents(r['paid_online_cents']) +
-              cents(r['paid_manual_cents']) -
-              cents(r['refunded_cents']) >
-          0,
-    ))
-      PrintReport.paid,
-    if (balances.any(
-      (r) => r['source'] == 'entries' && cents(r['balance_due_cents']) > 0,
-    ))
-      PrintReport.unpaid,
-  };
-}
+num _cents(Object? value) => num.tryParse('$value') ?? 0;
 
 Set<MailingLabelMode> availablePrintLabelModes(
   List<ExhibitorMailingLabel> labels,
@@ -87,15 +70,21 @@ class PrintReportsService {
 
     await Future.wait([
       if (request.sectionIds?.isNotEmpty == true) ...[
-        check('Payment reports', () async {
-          reports.addAll(
-            balancePrintReports(
-              await CloseoutRepository(client).loadShowExhibitorBalancesReport(
+        check('Paid exhibitor report', () async {
+          final balances = await CloseoutRepository(client)
+              .loadShowExhibitorBalancesReport(
                 request.showId,
                 sectionIds: request.sectionIds,
-              ),
-            ),
-          );
+              );
+          if (balances.any(
+            (row) =>
+                _cents(row['paid_online_cents']) +
+                    _cents(row['paid_manual_cents']) -
+                    _cents(row['refunded_cents']) >
+                0,
+          )) {
+            reports.add(PrintReport.paid);
+          }
         }),
         check('Exhibitor reports', () async {
           final labels = await ExhibitorMailingLabelsLoader(
@@ -106,6 +95,14 @@ class PrintReportsService {
           if (modes.isNotEmpty) reports.add(PrintReport.labels);
         }),
       ],
+      check('Unpaid exhibitor report', () async {
+        final balances = await CloseoutRepository(
+          client,
+        ).loadCurrentShowBalances(request.showId);
+        if (balances.any((row) => _cents(row['balance_due_cents']) > 0)) {
+          reports.add(PrintReport.unpaid);
+        }
+      }),
       check('Add-on and contest reports', () async {
         final rows = await ShowAddonService(
           client: client,
@@ -130,6 +127,7 @@ class PrintReportsService {
     ReportRequest request, {
     MailingLabelMode labelMode = MailingLabelMode.address,
     MailingLabelSort labelSort = MailingLabelSort.lastName,
+    OutstandingBalanceFilter outstandingFilter = OutstandingBalanceFilter.all,
   }) async {
     final req = request.copyWith(reportName: report.reportName);
     switch (report) {
@@ -146,7 +144,7 @@ class PrintReportsService {
       case PrintReport.unpaid:
         final data = await UnpaidBalancesReportLoader(
           CloseoutRepository(client),
-        ).load(req);
+        ).load(req, filter: outstandingFilter);
         if (data.rows.isEmpty) {
           throw StateError('No unpaid exhibitor balances to report.');
         }

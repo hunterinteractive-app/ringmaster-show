@@ -443,7 +443,8 @@ void main() {
                   },
               ];
             }
-          } else if (path.endsWith('report_show_exhibitor_balances_scoped') &&
+          } else if ((path.endsWith('report_show_exhibitor_balances_scoped') ||
+                  path.endsWith('report_current_show_balances')) &&
               withBalances &&
               (query['offset'] ?? '0') == '0') {
             value = [
@@ -533,14 +534,16 @@ void main() {
             requests
                 .firstWhere(
                   (r) => r.url.path.endsWith(
-                    'report_show_exhibitor_balances_scoped',
+                    report == 'unpaid_balances_report'
+                        ? 'report_current_show_balances'
+                        : 'report_show_exhibitor_balances_scoped',
                   ),
                 )
                 .body,
           );
           expect(
             body['p_section_ids'],
-            report == 'unpaid_balances_report' ? ['s1', 's2'] : ['s2'],
+            report == 'unpaid_balances_report' ? null : ['s2'],
           );
         },
       );

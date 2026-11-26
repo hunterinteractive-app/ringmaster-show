@@ -834,11 +834,10 @@ void main() {
         '../../lib/screens/admin/closeout/data/loaders/unpaid_balances_report_loader.dart',
       ).readAsStringSync();
       expect(paid, contains('sectionIds: request.sectionIds'));
-      expect(unpaid, contains('repo.loadShowExhibitorBalancesReport(showId)'));
+      expect(unpaid, contains('repo.loadCurrentShowBalances(showId)'));
       expect(unpaid, isNot(contains('sectionIds: request.sectionIds')));
       for (final source in [paid, unpaid]) {
         expect(source, isNot(contains("'report_show_exhibitor_balances'")));
-        expect(source, contains('loadShowExhibitorBalancesReport'));
       }
     });
 

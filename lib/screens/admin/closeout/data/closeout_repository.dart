@@ -246,6 +246,18 @@ class CloseoutRepository {
     return allRows;
   }
 
+  Future<ReportRows> loadCurrentShowBalances(String showId) =>
+      readAllReportPages(
+        (from, to) async => List<Map<String, dynamic>>.from(
+          await supabase
+              .rpc(
+                'report_current_show_balances',
+                params: {'p_show_id': showId},
+              )
+              .range(from, to),
+        ),
+      );
+
   Future<List<Map<String, dynamic>>> loadShowExhibitorBalances(
     String showId,
   ) async {

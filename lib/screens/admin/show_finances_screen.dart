@@ -9,6 +9,7 @@ import '../../theme/app_theme.dart';
 import '../../utils/date_time_utils.dart';
 import '../../widgets/ringmaster_page_shell.dart';
 import 'closeout/models/base/report_request.dart';
+import 'closeout/models/unpaid/unpaid_balances_report_data.dart';
 import 'print_packs/print_reports_service.dart';
 import 'print_packs/print_pack_pdf_helpers.dart';
 
@@ -95,6 +96,18 @@ class _ShowFinancesScreenState extends State<ShowFinancesScreen> {
     );
   }
 
+  OutstandingBalanceFilter get _outstandingFilter => switch (_filter) {
+    'Unpaid' => OutstandingBalanceFilter.unpaid,
+    'Partial' => OutstandingBalanceFilter.partial,
+    _ => OutstandingBalanceFilter.all,
+  };
+
+  String get _outstandingReportLabel => switch (_outstandingFilter) {
+    OutstandingBalanceFilter.unpaid => 'Unpaid Balances',
+    OutstandingBalanceFilter.partial => 'Partial Balances',
+    OutstandingBalanceFilter.all => 'Outstanding Balances',
+  };
+
   Future<void> _report(PrintReport report, bool print) async {
     setState(() => _exporting = true);
     try {
@@ -107,6 +120,7 @@ class _ShowFinancesScreenState extends State<ShowFinancesScreen> {
           finalizeRunId: '',
           sectionIds: List<String>.from(_data?['section_ids'] as List? ?? []),
         ),
+        outstandingFilter: _outstandingFilter,
       );
       final bytes = Uint8List.fromList(file.bytes);
       if (print) {
@@ -186,14 +200,19 @@ class _ShowFinancesScreenState extends State<ShowFinancesScreen> {
                   child: Text('Print Paid Exhibitor Report'),
                 ),
               ],
-              if (rows.any((r) => r.due > 0)) ...[
-                const PopupMenuItem(
+              if (rows.any(
+                (row) =>
+                    row.due > 0 &&
+                    (_outstandingFilter == OutstandingBalanceFilter.all ||
+                        row.status.toLowerCase() == _outstandingFilter.name),
+              )) ...[
+                PopupMenuItem(
                   value: 'unpaid-download',
-                  child: Text('Download Unpaid Balances'),
+                  child: Text('Download $_outstandingReportLabel'),
                 ),
-                const PopupMenuItem(
+                PopupMenuItem(
                   value: 'unpaid-print',
-                  child: Text('Print Unpaid Balances'),
+                  child: Text('Print $_outstandingReportLabel'),
                 ),
               ],
             ],

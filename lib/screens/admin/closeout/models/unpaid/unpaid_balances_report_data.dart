@@ -1,10 +1,13 @@
 // lib/screens/admin/closeout/models/unpaid/unpaid_balances_report_data.dart
 
+enum OutstandingBalanceFilter { all, unpaid, partial }
+
 class UnpaidBalancesReportData {
   final String showName;
   final String showDate;
   final String showLocation;
   final String currency;
+  final OutstandingBalanceFilter filter;
 
   final List<UnpaidBalanceRow> rows;
 
@@ -24,6 +27,7 @@ class UnpaidBalancesReportData {
     required this.showDate,
     required this.showLocation,
     required this.currency,
+    this.filter = OutstandingBalanceFilter.all,
     required this.rows,
     required this.totalExhibitors,
     required this.totalEntries,
@@ -54,6 +58,7 @@ class UnpaidBalanceRow {
   final String arbaNumber;
   final String paymentStatus;
   final String source;
+  final String? currency;
 
   final List<SectionCountRow> sections;
 
@@ -86,6 +91,7 @@ class UnpaidBalanceRow {
     this.arbaNumber = '',
     this.paymentStatus = 'unpaid',
     this.source = '',
+    this.currency,
     required this.sections,
     required this.entryCount,
     this.furCount = 0,

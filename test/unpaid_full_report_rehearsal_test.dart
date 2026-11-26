@@ -31,7 +31,7 @@ void main() {
             response = show;
           } else if (endpoint == 'show_sections') {
             response = fixture['sections'];
-          } else if (endpoint == 'report_show_exhibitor_balances_scoped') {
+          } else if (endpoint == 'report_current_show_balances') {
             expect(jsonDecode(request.body)['p_show_id'], show['id']);
             final rows = fixture['balances'] as List;
             response = rows

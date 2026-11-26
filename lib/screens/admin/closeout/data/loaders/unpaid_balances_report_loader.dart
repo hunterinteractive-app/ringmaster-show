@@ -11,26 +11,32 @@ class UnpaidBalancesReportLoader {
 
   UnpaidBalancesReportLoader(this.repo);
 
-  Future<UnpaidBalancesReportData> load(ReportRequest request) async {
+  Future<UnpaidBalancesReportData> load(
+    ReportRequest request, {
+    OutstandingBalanceFilter filter = OutstandingBalanceFilter.all,
+  }) async {
     final showId = request.showId;
 
     final show = await repo.loadShowBasics(showId);
 
-    // This is a whole-show operational report. Do not restrict the balance RPC
-    // to the currently selected Rabbit, Cavy, or custom Closeout scope.
-    final balanceRows = await repo.loadShowExhibitorBalancesReport(showId);
-
+    // Always use whole-show balances, even for a report opened from a section.
+    final balanceRows = await repo.loadCurrentShowBalances(showId);
     final rows = <UnpaidBalanceRow>[];
 
     for (final balance in balanceRows) {
-      // Only actual show entries create an amount to collect at check-in.
-      // The shared RPC also returns abandoned or stale cart-only snapshots.
-      // Secretary entries may have no cart, so do not filter by cart status.
-      if (_str(balance['source']) != 'entries') continue;
-
       final totalDue = _centsToDollars(balance['balance_due_cents']);
-
-      if (request.hideZeroBalances && totalDue <= 0) {
+      final paidOnline = _centsToDollars(balance['paid_online_cents']);
+      final paidManual = _centsToDollars(balance['paid_manual_cents']);
+      final refunded = _centsToDollars(balance['refunded_cents']);
+      final status = totalDue <= 0
+          ? 'paid'
+          : _asInt(balance['paid_online_cents']) +
+                    _asInt(balance['paid_manual_cents']) >
+                _asInt(balance['refunded_cents'])
+          ? 'partial'
+          : 'unpaid';
+      if (request.hideZeroBalances && totalDue <= 0) continue;
+      if (filter != OutstandingBalanceFilter.all && filter.name != status) {
         continue;
       }
 
@@ -49,36 +55,23 @@ class UnpaidBalancesReportLoader {
           state: _str(balance['state']),
           zip: _str(balance['zip']),
           arbaNumber: _str(balance['arba_number']),
-          paymentStatus: _str(balance['payment_status']).isEmpty
-              ? 'unpaid'
-              : _str(balance['payment_status']),
+          paymentStatus: status,
           source: _str(balance['source']),
+          currency: _str(balance['currency']).isEmpty
+              ? null
+              : _str(balance['currency']).toUpperCase(),
           sections: _sectionRowsFromBreakdown(balance['section_breakdown']),
           entryCount: _asInt(balance['entry_count']),
           furCount: _asInt(balance['fur_count']),
-          entriesSubtotal: _centsToDollars(
-            balance['entry_fee_subtotal_cents'],
-          ),
-          furSubtotal: _centsToDollars(
-            balance['fur_fee_subtotal_cents'],
-          ),
-          subtotal: _centsToDollars(
-            balance['subtotal_before_discount_cents'],
-          ),
-          showFee: _centsToDollars(
-            balance['show_fee_subtotal_cents'],
-          ),
+          entriesSubtotal: _centsToDollars(balance['entry_fee_subtotal_cents']),
+          furSubtotal: _centsToDollars(balance['fur_fee_subtotal_cents']),
+          subtotal: _centsToDollars(balance['subtotal_before_discount_cents']),
+          showFee: _centsToDollars(balance['show_fee_subtotal_cents']),
           discount: _centsToDollars(balance['discount_cents']),
-          calculatedTotal: _centsToDollars(
-            balance['calculated_total_cents'],
-          ),
-          paidOnline: _centsToDollars(
-            balance['paid_online_cents'],
-          ),
-          paidManual: _centsToDollars(
-            balance['paid_manual_cents'],
-          ),
-          refunded: _centsToDollars(balance['refunded_cents']),
+          calculatedTotal: _centsToDollars(balance['calculated_total_cents']),
+          paidOnline: paidOnline,
+          paidManual: paidManual,
+          refunded: refunded,
           totalDue: totalDue < 0 ? 0.0 : totalDue,
         ),
       );
@@ -92,25 +85,16 @@ class UnpaidBalancesReportLoader {
 
     final totalExhibitors = rows.length;
 
-    final totalEntries = rows.fold<int>(
-      0,
-      (sum, row) => sum + row.entryCount,
-    );
+    final totalEntries = rows.fold<int>(0, (sum, row) => sum + row.entryCount);
 
-    final totalFurEntries = rows.fold<int>(
-      0,
-      (sum, row) => sum + row.furCount,
-    );
+    final totalFurEntries = rows.fold<int>(0, (sum, row) => sum + row.furCount);
 
     final grandSubtotal = rows.fold<double>(
       0,
       (sum, row) => sum + row.subtotal,
     );
 
-    final grandShowFee = rows.fold<double>(
-      0,
-      (sum, row) => sum + row.showFee,
-    );
+    final grandShowFee = rows.fold<double>(0, (sum, row) => sum + row.showFee);
 
     final grandDiscount = rows.fold<double>(
       0,
@@ -145,15 +129,13 @@ class UnpaidBalancesReportLoader {
 
     return UnpaidBalancesReportData(
       showName: _str(show['name']),
-      showDate: _formatShowDateRange(
-        show['start_date'],
-        show['end_date'],
-      ),
+      showDate: _formatShowDateRange(show['start_date'], show['end_date']),
       showLocation: [
         _str(show['location_name']),
         _str(show['location_address']),
       ].where((value) => value.isNotEmpty).join(', '),
       currency: currency,
+      filter: filter,
       rows: rows,
       totalExhibitors: totalExhibitors,
       totalEntries: totalEntries,
@@ -205,20 +187,16 @@ class UnpaidBalancesReportLoader {
             sectionId: _str(map['section_id']),
             count: _asInt(map['entry_count']),
             furCount: _asInt(map['fur_count']),
-            entriesSubtotal: _centsToDollars(
-              map['entry_fee_subtotal_cents'],
-            ),
-            furSubtotal: _centsToDollars(
-              map['fur_fee_subtotal_cents'],
-            ),
-            showFee: _centsToDollars(
-              map['show_fee_subtotal_cents'],
-            ),
+            entriesSubtotal: _centsToDollars(map['entry_fee_subtotal_cents']),
+            furSubtotal: _centsToDollars(map['fur_fee_subtotal_cents']),
+            showFee: _centsToDollars(map['show_fee_subtotal_cents']),
             kind: _str(map['kind']),
             letter: _str(map['letter']),
           );
         })
-        .where((row) => row.label.isNotEmpty && row.count > 0)
+        .where(
+          (row) => row.label.isNotEmpty && (row.count > 0 || row.furCount > 0),
+        )
         .toList();
 
     parsedRows.sort((a, b) {

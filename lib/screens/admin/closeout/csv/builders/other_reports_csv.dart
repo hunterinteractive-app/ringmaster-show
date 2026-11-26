@@ -317,7 +317,7 @@ class OtherReportsCsvBuilder {
               r.refunded,
               r.paidOnline + r.paidManual - r.refunded,
               r.totalDue,
-              data.currency,
+              r.currency ?? data.currency,
             ],
         ]);
       case ExhibitorPrintPackCsvData():

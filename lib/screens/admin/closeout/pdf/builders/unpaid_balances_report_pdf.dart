@@ -139,6 +139,21 @@ class UnpaidBalancesReportPdfBuilder {
                       ),
                     ),
                   ),
+                  pw.SizedBox(height: 4),
+                  pw.Center(
+                    child: pw.Text(
+                      switch (data.filter) {
+                        OutstandingBalanceFilter.unpaid =>
+                          'Unpaid only. Partial payments are listed separately in Show Finances.',
+                        OutstandingBalanceFilter.partial =>
+                          'Partially paid exhibitors only.',
+                        OutstandingBalanceFilter.all =>
+                          'Includes unpaid and partially paid balances.',
+                      },
+                      textAlign: pw.TextAlign.center,
+                      style: const pw.TextStyle(fontSize: 8),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -171,11 +186,6 @@ class UnpaidBalancesReportPdfBuilder {
           pw.Text(
             'No unpaid exhibitor balances were found for this show.',
             style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold),
-          ),
-          pw.SizedBox(height: 6),
-          pw.Text(
-            'If balances were expected, check that the exhibitor balance RPC is returning rows with payment_status unpaid or partial and balance_due_cents greater than zero.',
-            style: const pw.TextStyle(fontSize: 8),
           ),
         ],
       ),
@@ -210,7 +220,10 @@ class UnpaidBalancesReportPdfBuilder {
         8: pw.FlexColumnWidth(0.65), // Discount
         9: pw.FlexColumnWidth(0.82), // Balance Due
       },
-      children: [_headerRow(), ...rows.map(_dataRow)],
+      children: [
+        _headerRow(),
+        ...rows.map((row) => _dataRow(row, data.currency)),
+      ],
     );
   }
 
@@ -246,7 +259,8 @@ class UnpaidBalancesReportPdfBuilder {
     );
   }
 
-  pw.TableRow _dataRow(UnpaidBalanceRow row) {
+  pw.TableRow _dataRow(UnpaidBalanceRow row, String fallbackCurrency) {
+    final currency = row.currency ?? fallbackCurrency;
     pw.Widget textCell(
       String text, {
       pw.Alignment alignment = pw.Alignment.centerLeft,
@@ -270,7 +284,11 @@ class UnpaidBalancesReportPdfBuilder {
           padding: const pw.EdgeInsets.all(4),
           child: _paidCheckboxCell(),
         ),
-        textCell(row.exhibitorName),
+        textCell(
+          row.paymentStatus == 'partial'
+              ? '${row.exhibitorName} (Partial)'
+              : row.exhibitorName,
+        ),
         textCell(row.exhibitorType),
         textCell(row.phone),
         pw.Container(
@@ -283,19 +301,21 @@ class UnpaidBalancesReportPdfBuilder {
           alignment: pw.Alignment.centerRight,
         ),
         textCell(
-          _money(row.subtotal, currency: null),
+          _money(row.subtotal, currency: currency),
           alignment: pw.Alignment.centerRight,
         ),
         textCell(
-          _money(row.showFee, currency: null),
+          _money(row.showFee, currency: currency),
           alignment: pw.Alignment.centerRight,
         ),
         textCell(
-          row.discount > 0 ? '-${_money(row.discount, currency: null)}' : '',
+          row.discount > 0
+              ? '-${_money(row.discount, currency: currency)}'
+              : '',
           alignment: pw.Alignment.centerRight,
         ),
         textCell(
-          _money(row.totalDue, currency: null),
+          _balanceMoney(row.totalDue, currency),
           alignment: pw.Alignment.centerRight,
           style: pw.TextStyle(fontSize: 7, fontWeight: pw.FontWeight.bold),
         ),
@@ -372,6 +392,15 @@ class UnpaidBalancesReportPdfBuilder {
   }
 
   pw.Widget _totals(UnpaidBalancesReportData data) {
+    final totals = <String, double>{};
+    for (final row in data.rows) {
+      final currency = row.currency ?? data.currency;
+      totals.update(
+        currency,
+        (sum) => sum + row.totalDue,
+        ifAbsent: () => row.totalDue,
+      );
+    }
     return pw.Align(
       alignment: pw.Alignment.centerRight,
       child: pw.Container(
@@ -387,11 +416,14 @@ class UnpaidBalancesReportPdfBuilder {
             _totalLine('Total Entries', '${data.totalEntries}'),
             pw.SizedBox(height: 4),
             pw.Divider(thickness: 0.5),
-            _totalLine(
-              'Grand Balance Due',
-              _money(data.grandTotalDue, currency: data.currency),
-              bold: true,
-            ),
+            for (final total in totals.entries)
+              _totalLine(
+                totals.length == 1
+                    ? 'Grand Balance Due'
+                    : 'Balance Due (${total.key})',
+                _balanceMoney(total.value, total.key),
+                bold: true,
+              ),
           ],
         ),
       ),
@@ -465,6 +497,11 @@ class UnpaidBalancesReportPdfBuilder {
 
   String _normalizeSortText(String value) {
     return value.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), ' ').trim();
+  }
+
+  String _balanceMoney(double value, String currency) {
+    final amount = _money(value, currency: currency);
+    return currency == 'USD' ? amount : '$amount $currency';
   }
 
   String _money(double value, {String? currency}) {

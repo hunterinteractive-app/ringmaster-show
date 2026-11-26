@@ -351,6 +351,39 @@ void main() {
     expect(gateway.saved.single.containsKey('p_method'), isFalse);
     expect(tester.takeException(), isNull);
   });
+  testWidgets('the outstanding report follows the payment status filter', (
+    tester,
+  ) async {
+    final gateway = FakeFinance()
+      ..rows.add({
+        'exhibitor_id': 'three',
+        'name': 'Partially Paid Exhibitor',
+        'currency': 'usd',
+        'charges_cents': 2000,
+        'manual_cents': 500,
+        'online_cents': 0,
+        'due_cents': 1500,
+      });
+    await start(tester, gateway);
+    final menu = find.byTooltip('Financial reports');
+    for (final (tab, label) in [
+      ('All', 'Outstanding Balances'),
+      ('Unpaid', 'Unpaid Balances'),
+      ('Partial', 'Partial Balances'),
+    ]) {
+      final chip = find.widgetWithText(ChoiceChip, tab);
+      await reveal(tester, chip);
+      await tester.tap(chip);
+      await tester.pumpAndSettle();
+      await tester.tap(menu);
+      await tester.pumpAndSettle();
+      expect(find.text('Download $label'), findsOneWidget);
+      expect(find.text('Print $label'), findsOneWidget);
+      await tester.tapAt(const Offset(10, 420));
+      await tester.pumpAndSettle();
+    }
+  });
+
   testWidgets('screen filters, refresh recovery and history retry', (
     tester,
   ) async {

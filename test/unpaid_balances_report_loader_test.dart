@@ -3,6 +3,7 @@ import 'package:supabase/supabase.dart';
 import 'package:ringmaster_show/screens/admin/closeout/data/closeout_repository.dart';
 import 'package:ringmaster_show/screens/admin/closeout/data/loaders/unpaid_balances_report_loader.dart';
 import 'package:ringmaster_show/screens/admin/closeout/models/base/report_request.dart';
+import 'package:ringmaster_show/screens/admin/closeout/models/unpaid/unpaid_balances_report_data.dart';
 
 class FixtureRepository extends CloseoutRepository {
   FixtureRepository(super.client);
@@ -11,23 +12,9 @@ class FixtureRepository extends CloseoutRepository {
     'name': 'Duneabash',
   };
   @override
-  Future<List<Map<String, dynamic>>> loadShowExhibitorBalancesReport(
-    String showId, {
-    List<String>? sectionIds,
-    bool requireExactAllocation = true,
-  }) async => [
-    {
-      'exhibitor_name': 'Unfinished cart',
-      'source': 'cart',
-      'entry_count': 6,
-      'balance_due_cents': 2400,
-    },
-    {
-      'exhibitor_name': 'Stale cart',
-      'source': 'cart',
-      'entry_count': 1,
-      'balance_due_cents': 400,
-    },
+  Future<List<Map<String, dynamic>>> loadCurrentShowBalances(
+    String showId,
+  ) async => [
     {
       'exhibitor_name': 'Secretary pay at show',
       'source': 'entries',
@@ -36,7 +23,7 @@ class FixtureRepository extends CloseoutRepository {
     },
     {
       'exhibitor_name': 'Submitted pay at show',
-      'source': 'entries',
+      'source': 'cart',
       'entry_count': 2,
       'balance_due_cents': 800,
     },
@@ -58,9 +45,37 @@ class FixtureRepository extends CloseoutRepository {
 }
 
 void main() {
+  test(
+    'Unpaid and Partial exports select the same statuses as their tabs',
+    () async {
+      final client = SupabaseClient('https://example.supabase.co', 'test-key');
+      addTearDown(client.dispose);
+      final loader = UnpaidBalancesReportLoader(FixtureRepository(client));
+      final request = ReportRequest(
+        showId: 'show',
+        reportName: 'unpaid',
+        finalizeRunId: '',
+      );
+      final unpaid = await loader.load(
+        request,
+        filter: OutstandingBalanceFilter.unpaid,
+      );
+      expect(unpaid.rows.map((r) => r.exhibitorName), [
+        'Secretary pay at show',
+        'Submitted pay at show',
+      ]);
+      expect(unpaid.grandTotalDue, 20);
+      final partial = await loader.load(
+        request,
+        filter: OutstandingBalanceFilter.partial,
+      );
+      expect(partial.rows.single.exhibitorName, 'Partially paid online');
+      expect(partial.grandTotalDue, 4);
+    },
+  );
   for (final hideZero in [true, false]) {
     test(
-      'exclude cart-only debt while retaining real entries (hide zero: $hideZero)',
+      'include committed cart balances and handle zero totals (hide zero: $hideZero)',
       () async {
         final client = SupabaseClient(
           'https://example.supabase.co',
