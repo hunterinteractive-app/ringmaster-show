@@ -103,7 +103,7 @@ void main() {
         if ((withAssignedBreed ||
                 withAwards ||
                 (withSpecialty && specialtyHasJudge)) &&
-            path.endsWith('/get_show_judging_lineup') &&
+            path.endsWith('/get_species_show_judging_lineup') &&
             show == 'sala') {
           result = [
             {
@@ -119,7 +119,7 @@ void main() {
           ];
         }
         if (withAssignedBreed &&
-            path.endsWith('/get_show_judging_lineup') &&
+            path.endsWith('/get_species_show_judging_lineup') &&
             show == 'sala') {
           (result as List).add({
             'id': 'assigned',
@@ -133,7 +133,7 @@ void main() {
           });
         }
         if (withTimingOverlap &&
-            path.endsWith('/get_show_judging_lineup') &&
+            path.endsWith('/get_species_show_judging_lineup') &&
             show == 'sala') {
           result = <dynamic>[
             ...(result as List),
@@ -680,11 +680,42 @@ void main() {
       expect(tester.takeException(), isNull);
     });
   }
-  testWidgets('shared rabbit and cavy breed name requires a dual judge', (
+  testWidgets('Breed picker can add both American species in one section', (
     tester,
   ) async {
-    judgeCount = 3;
-    judgeTypes = {'judge1': 'Rabbit', 'judge2': 'Cavy', 'judge3': 'Dual'};
+    speciesBreeds = [
+      {'breed': 'American', 'species': 'rabbit'},
+      {'breed': 'American', 'species': 'cavy'},
+    ];
+    addTearDown(() => speciesBreeds = []);
+    await open(tester);
+    await tester.tap(find.text('Breed').first);
+    await tester.pumpAndSettle();
+    final rabbit = find.text('A · Sala • Open • American (Rabbit)');
+    final cavy = find.text('A · Sala • Open • American (Cavy)');
+    for (final breed in [cavy, rabbit]) {
+      await tester.scrollUntilVisible(
+        breed,
+        65,
+        scrollable: find.byType(Scrollable).last,
+      );
+      await tester.tap(breed);
+      await tester.pumpAndSettle();
+    }
+    final adds = mutations
+        .where((call) => call['p_action'] == 'add')
+        .map((call) => call['p_payload'] as Map)
+        .toList();
+    expect(adds.map((row) => row['p_species']), ['cavy', 'rabbit']);
+    expect(adds.map((row) => row['p_section_id']).toSet(), hasLength(1));
+    expect(adds.map((row) => row['p_entry_count_actual']), [2, 2]);
+  });
+
+  testWidgets('American rabbits and cavies fill separate qualified tables', (
+    tester,
+  ) async {
+    judgeCount = 2;
+    judgeTypes = {'judge1': 'Rabbit', 'judge2': 'Cavy'};
     speciesBreeds = [
       {'breed': 'American', 'species': 'rabbit'},
       {'breed': 'American', 'species': 'cavy'},
@@ -703,10 +734,12 @@ void main() {
       )['p_payload']['rows'],
     );
     final breeds = rows.where((r) => r['p_section_id'] != null).toList();
-    expect(breeds.length, 6);
+    expect(breeds.length, 12);
+    expect(breeds.map((r) => r['p_breed_id']).toSet(), {'American'});
     for (final row in breeds) {
-      expect(row['p_table_number'], '3');
-      expect(row['p_entry_count_actual'], 4);
+      expect(row['p_species'], isIn(['rabbit', 'cavy']));
+      expect(row['p_table_number'], row['p_species'] == 'rabbit' ? '1' : '2');
+      expect(row['p_entry_count_actual'], 2);
     }
   });
   testWidgets('single-show Auto Fill sends cavies only to the cavy table', (

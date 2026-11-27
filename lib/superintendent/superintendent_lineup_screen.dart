@@ -25,13 +25,30 @@ bool _isCommercialBreed(String breed) =>
 /// Commercial entries use `breed = Commercial` and their actual class
 /// (Roasters, Stewers, Single Fryers, or Meat Pens) in `variety`.  Keep that
 /// class in lineup identity so the superintendent can order it separately.
-String _lineupBreedIdentity(String breed, String? variety) {
-  final normalizedBreed = breed.trim().toLowerCase();
-  if (!_isCommercialBreed(breed)) return normalizedBreed;
-  return '$normalizedBreed|${(variety ?? '').trim().toLowerCase()}';
+String _lineupBreedIdentity(Map<String, dynamic> row) {
+  final breed = (row['breed_id'] ?? row['breed'] ?? '')
+      .toString()
+      .trim()
+      .toLowerCase();
+  final species = (row['species'] ?? '').toString().trim().toLowerCase();
+  final variety = _isCommercialBreed(breed)
+      ? (row['variety_key'] ?? row['variety'] ?? '')
+            .toString()
+            .trim()
+            .toLowerCase()
+      : '';
+  return '$species|$breed|$variety';
 }
 
-String _lineupBreedLabel(String breed, String? variety) {
+String _lineupBreedLabel(String breed, String? variety, [Object? species]) {
+  if (breed.trim().toLowerCase() == 'american') {
+    final label = switch (species?.toString().trim().toLowerCase()) {
+      'rabbit' => 'Rabbit',
+      'cavy' => 'Cavy',
+      _ => 'Species unassigned',
+    };
+    return '$breed ($label)';
+  }
   final commercialClass = (variety ?? '').trim();
   if (_isCommercialBreed(breed) && commercialClass.isNotEmpty) {
     return 'Commercial — $commercialClass';
@@ -126,7 +143,12 @@ class _SuperintendentLineupScreenState
       );
       return;
     }
-    await supabase.rpc('upsert_show_judging_assignment', params: params);
+    await supabase.rpc(
+      params.containsKey('p_species')
+          ? 'add_species_show_judging_breed'
+          : 'upsert_show_judging_assignment',
+      params: params,
+    );
   }
 
   @override
@@ -214,6 +236,7 @@ class _SuperintendentLineupScreenState
     final breed = _lineupBreedLabel(
       (row['breed_id'] ?? 'Breed not set').toString(),
       row['variety_key']?.toString(),
+      row['species'],
     );
     return letter.isEmpty ? breed : '$letter - $breed';
   }
@@ -747,7 +770,7 @@ class _SuperintendentLineupScreenState
   Future<_LineupData> _loadShowData(String showId) async {
     // Load the RPCs sequentially to avoid type issues
     final assignments = await supabase.rpc(
-      'get_show_judging_lineup',
+      'get_species_show_judging_lineup',
       params: {'p_show_id': showId},
     );
 
@@ -959,7 +982,10 @@ class _SuperintendentLineupScreenState
 
     for (final assignment in assignmentRows) {
       if (assignment['is_judge_change'] == true) continue;
-      if ((assignment['species'] ?? '').toString().isNotEmpty) continue;
+      if (assignment.containsKey('species')) {
+        assignment['species'] ??= '';
+        continue;
+      }
 
       final matchingBreed = breedRows.cast<Map<String, dynamic>?>().firstWhere((
         breed,
@@ -1172,7 +1198,7 @@ class _SuperintendentLineupScreenState
           continue;
         }
 
-        final key = '$judgeId|$breed|$scope';
+        final key = '$judgeId|${_lineupBreedIdentity(row)}|$scope';
         judgeBreedLetters.putIfAbsent(key, () => <String>{}).add(letter);
       }
     }
@@ -1203,7 +1229,7 @@ class _SuperintendentLineupScreenState
           continue;
         }
 
-        final key = '$judgeId|$breed|$scope';
+        final key = '$judgeId|${_lineupBreedIdentity(row)}|$scope';
         row['duplicate_judge_breed'] =
             (judgeBreedLetters[key]?.length ?? 0) > 1;
       }
@@ -1489,7 +1515,7 @@ class _SuperintendentLineupScreenState
       final variety = (row['variety'] ?? '').toString().trim();
       if (showLetter.isEmpty || scope.isEmpty || breed.isEmpty) continue;
 
-      final identity = _lineupBreedIdentity(breed, variety);
+      final identity = _lineupBreedIdentity(row);
       final key = '$showLetter|$scope|$identity'.toLowerCase();
       final count = (row['entry_count'] as num?)?.toInt() ?? 0;
 
@@ -1508,9 +1534,6 @@ class _SuperintendentLineupScreenState
         },
       );
 
-      // The stored lineup identifies breeds by section/name, not species.
-      // If a name (such as American) spans both species, require a dual judge
-      // for the combined assignment rather than silently treating it as one.
       (grouped[key]!['required_species'] as Set<String>).add(
         (row['species'] ?? '').toString().trim().toLowerCase(),
       );
@@ -1540,10 +1563,7 @@ class _SuperintendentLineupScreenState
     final breedTotalsByLetter = <String, int>{};
     for (final row in rows) {
       final letter = (row['show_letter'] ?? '').toString();
-      final breed = (row['breed'] ?? '').toString();
-      final key =
-          '$letter|${_lineupBreedIdentity(breed, row['variety']?.toString())}'
-              .toLowerCase();
+      final key = '$letter|${_lineupBreedIdentity(row)}'.toLowerCase();
       breedTotalsByLetter[key] =
           (breedTotalsByLetter[key] ?? 0) +
           ((row['entry_count'] as num?)?.toInt() ?? 0);
@@ -1558,10 +1578,12 @@ class _SuperintendentLineupScreenState
       final aBreed = _lineupBreedLabel(
         (a['breed'] ?? '').toString(),
         a['variety']?.toString(),
+        a['species'],
       );
       final bBreed = _lineupBreedLabel(
         (b['breed'] ?? '').toString(),
         b['variety']?.toString(),
+        b['species'],
       );
       final aScope = (a['scope'] ?? '').toString();
       final bScope = (b['scope'] ?? '').toString();
@@ -1572,11 +1594,11 @@ class _SuperintendentLineupScreenState
         // Keep Open and Youth for the same Show Letter + Breed adjacent.
         // Larger combined breeds still come first within the show letter.
         final aTotal =
-            breedTotalsByLetter['$aLetter|${_lineupBreedIdentity((a['breed'] ?? '').toString(), a['variety']?.toString())}'
+            breedTotalsByLetter['$aLetter|${_lineupBreedIdentity(a)}'
                 .toLowerCase()] ??
             aCount;
         final bTotal =
-            breedTotalsByLetter['$bLetter|${_lineupBreedIdentity((b['breed'] ?? '').toString(), b['variety']?.toString())}'
+            breedTotalsByLetter['$bLetter|${_lineupBreedIdentity(b)}'
                 .toLowerCase()] ??
             bCount;
         final totalCompare = bTotal.compareTo(aTotal);
@@ -1936,7 +1958,7 @@ class _SuperintendentLineupScreenState
       final sortOrderByTable = <String, int>{};
       final pairScopes = data.userPreferences['open_youth_mode'] != 'separate';
       String pairKey(Map<String, dynamic> row) =>
-          '${row['show_letter']}|${row['species']}|${_lineupBreedIdentity((row['breed'] ?? '').toString(), row['variety']?.toString())}';
+          '${row['show_letter']}|${_lineupBreedIdentity(row)}';
       final pairedJudges = <String, Map<String, dynamic>>{};
 
       for (var i = 0; i < data.judges.length; i++) {
@@ -2001,7 +2023,7 @@ class _SuperintendentLineupScreenState
             final scopes = group
                 .map(
                   (r) =>
-                      '${_lineupBreedIdentity(r['breed'].toString(), r['variety']?.toString())}|${r['scope'].toString().toLowerCase()}',
+                      '${_lineupBreedIdentity(r)}|${r['scope'].toString().toLowerCase()}',
                 )
                 .toSet();
             final eligible = data.judges
@@ -2041,10 +2063,7 @@ class _SuperintendentLineupScreenState
           }
         }
         final breed = breedRows[position];
-        final breedName = _lineupBreedIdentity(
-          (breed['breed'] ?? '').toString(),
-          breed['variety']?.toString(),
-        );
+        final breedName = _lineupBreedIdentity(breed);
         final scope = (breed['scope'] ?? '').toString().toLowerCase();
         final count = (breed['entry_count'] as num?)?.toInt() ?? 0;
         final breedScopeKey = '$breedName|$scope';
@@ -2192,11 +2211,12 @@ class _SuperintendentLineupScreenState
           'p_show_id': widget.showId,
           'p_section_id': breed['section_id'],
           'p_breed_id': breed['breed'],
+          'p_species': (breed['species']?.toString().trim().isNotEmpty ?? false)
+              ? breed['species'].toString().trim().toLowerCase()
+              : null,
           'p_variety_key': breed['variety'],
-          'p_judge_id': null,
           'p_table_number': tableNumber,
           'p_sort_order': sortOrder,
-          'p_status': 'draft',
           'p_scope': breed['scope'],
           'p_entry_count_actual': count,
           'p_notes': requiresOverride
@@ -2577,7 +2597,7 @@ class _SummaryCards extends StatelessWidget {
     final scope = _scopeLabelForRow(row).toLowerCase();
     final breed = (row['breed_id'] ?? '').toString().trim().toLowerCase();
     if (letter.isEmpty || scope.isEmpty || breed.isEmpty) return '';
-    return '$letter|$scope|${_lineupBreedIdentity(breed, row['variety_key']?.toString())}';
+    return '$letter|$scope|${_lineupBreedIdentity(row)}';
   }
 
   String _breedKeyFromCount(Map<String, dynamic> row) {
@@ -2585,7 +2605,7 @@ class _SummaryCards extends StatelessWidget {
     final scope = _scopeLabelForRow(row).toLowerCase();
     final breed = (row['breed'] ?? '').toString().trim().toLowerCase();
     if (letter.isEmpty || scope.isEmpty || breed.isEmpty) return '';
-    return '$letter|$scope|${_lineupBreedIdentity(breed, row['variety']?.toString())}';
+    return '$letter|$scope|${_lineupBreedIdentity(row)}';
   }
 
   @override
@@ -3282,7 +3302,7 @@ class _LineupRow extends StatelessWidget {
         ? judgeName
         : [
             if (showLetter.isNotEmpty) showLetter,
-            _lineupBreedLabel(rawBreedName, varietyKey),
+            _lineupBreedLabel(rawBreedName, varietyKey, row['species']),
           ].join(' | ');
     final speciesRaw = (row['species'] ?? row['species_name'] ?? '')
         .toString()
@@ -3662,12 +3682,16 @@ class _AddAssignmentSheetState extends State<_AddAssignmentSheet> {
       await widget.saveAssignment!(params);
       return;
     }
-    await supabase.rpc('upsert_show_judging_assignment', params: params);
+    await supabase.rpc(
+      params.containsKey('p_species')
+          ? 'add_species_show_judging_breed'
+          : 'upsert_show_judging_assignment',
+      params: params,
+    );
   }
 
   bool _alreadyAssignedExactBreedRow(Map<String, dynamic> breed) {
     final targetBreed = (breed['breed'] ?? '').toString().trim().toLowerCase();
-    final targetVariety = (breed['variety'] ?? '').toString().trim();
     final targetScope = _scopeLabelForRow(breed).toLowerCase();
     final targetLetter = _showLetterForRow(breed).toLowerCase();
 
@@ -3676,7 +3700,7 @@ class _AddAssignmentSheetState extends State<_AddAssignmentSheet> {
     }
 
     final assignedKey =
-        '$targetLetter|$targetScope|${_lineupBreedIdentity(targetBreed, targetVariety)}'
+        '$targetLetter|$targetScope|${_lineupBreedIdentity(breed)}'
             .toLowerCase();
     if (_newlyAssignedBreedKeys.contains(assignedKey)) {
       return true;
@@ -3688,13 +3712,10 @@ class _AddAssignmentSheetState extends State<_AddAssignmentSheet> {
           (row['breed_id'] ?? '').toString() == '__judge_change__';
       if (isJudgeChange || row['is_award_plan'] == true) continue;
 
-      final rowBreed = (row['breed_id'] ?? '').toString().trim().toLowerCase();
-      final rowVariety = (row['variety_key'] ?? '').toString().trim();
       final rowScope = _scopeLabelForRow(row).toLowerCase();
       final rowLetter = _showLetterForRow(row).toLowerCase();
 
-      if (_lineupBreedIdentity(rowBreed, rowVariety) ==
-              _lineupBreedIdentity(targetBreed, targetVariety) &&
+      if (_lineupBreedIdentity(row) == _lineupBreedIdentity(breed) &&
           rowScope == targetScope &&
           rowLetter == targetLetter) {
         return true;
@@ -3763,14 +3784,10 @@ class _AddAssignmentSheetState extends State<_AddAssignmentSheet> {
 
       final showLetter = _showLetterForRow(row);
       final breed = (row['breed_id'] ?? '').toString();
-      final variety = (row['variety_key'] ?? '').toString();
       final scope = _scopeLabelForRow(row);
       if (showLetter.isEmpty || breed.isEmpty || scope.isEmpty) continue;
 
-      keys.add(
-        '$showLetter|$scope|${_lineupBreedIdentity(breed, variety)}'
-            .toLowerCase(),
-      );
+      keys.add('$showLetter|$scope|${_lineupBreedIdentity(row)}'.toLowerCase());
     }
 
     return {...keys, ..._newlyAssignedBreedKeys};
@@ -3782,12 +3799,9 @@ class _AddAssignmentSheetState extends State<_AddAssignmentSheet> {
 
     for (final row in widget.breedCounts) {
       final showLetter = _showLetterForRow(row);
-      final breed = (row['breed'] ?? '').toString();
-      final variety = (row['variety'] ?? '').toString();
       final scope = _scopeLabelForRow(row);
-      final assignedKey =
-          '$showLetter|$scope|${_lineupBreedIdentity(breed, variety)}'
-              .toLowerCase();
+      final assignedKey = '$showLetter|$scope|${_lineupBreedIdentity(row)}'
+          .toLowerCase();
       if (assignedBreedKeys.contains(assignedKey)) continue;
 
       final letter = showLetter;
@@ -3841,7 +3855,7 @@ class _AddAssignmentSheetState extends State<_AddAssignmentSheet> {
       final variety = (row['variety'] ?? '').toString();
       final species = row['species'];
       final scope = _scopeLabelForRow(row);
-      final identity = _lineupBreedIdentity(breed, variety);
+      final identity = _lineupBreedIdentity(row);
       final assignedKey = '$showLetter|$scope|$identity'.toLowerCase();
       if (assignedBreedKeys.contains(assignedKey)) continue;
       if (_selectedShowLetter != null &&
@@ -3903,10 +3917,7 @@ class _AddAssignmentSheetState extends State<_AddAssignmentSheet> {
     final breedTotalsByLetter = <String, int>{};
     for (final row in options) {
       final letter = (row['show_letter'] ?? '').toString();
-      final breed = (row['breed'] ?? '').toString();
-      final key =
-          '$letter|${_lineupBreedIdentity(breed, row['variety']?.toString())}'
-              .toLowerCase();
+      final key = '$letter|${_lineupBreedIdentity(row)}'.toLowerCase();
       breedTotalsByLetter[key] =
           (breedTotalsByLetter[key] ?? 0) +
           ((row['entry_count'] as num?)?.toInt() ?? 0);
@@ -3918,10 +3929,12 @@ class _AddAssignmentSheetState extends State<_AddAssignmentSheet> {
       final aBreed = _lineupBreedLabel(
         (a['breed'] ?? '').toString(),
         a['variety']?.toString(),
+        a['species'],
       );
       final bBreed = _lineupBreedLabel(
         (b['breed'] ?? '').toString(),
         b['variety']?.toString(),
+        b['species'],
       );
       final aScope = (a['scope'] ?? '').toString();
       final bScope = (b['scope'] ?? '').toString();
@@ -3934,11 +3947,11 @@ class _AddAssignmentSheetState extends State<_AddAssignmentSheet> {
 
         if (pairOpenYouth) {
           final aTotal =
-              breedTotalsByLetter['$aLetter|${_lineupBreedIdentity((a['breed'] ?? '').toString(), a['variety']?.toString())}'
+              breedTotalsByLetter['$aLetter|${_lineupBreedIdentity(a)}'
                   .toLowerCase()] ??
               aCount;
           final bTotal =
-              breedTotalsByLetter['$bLetter|${_lineupBreedIdentity((b['breed'] ?? '').toString(), b['variety']?.toString())}'
+              breedTotalsByLetter['$bLetter|${_lineupBreedIdentity(b)}'
                   .toLowerCase()] ??
               bCount;
           final totalCompare = bTotal.compareTo(aTotal);
@@ -3985,18 +3998,13 @@ class _AddAssignmentSheetState extends State<_AddAssignmentSheet> {
     List<Map<String, dynamic>> options,
   ) {
     final showLetter = (breed['show_letter'] ?? '').toString();
-    final breedName = (breed['breed'] ?? '').toString();
-    final variety = (breed['variety'] ?? '').toString();
 
     final matches = options.where((option) {
       final optionLetter = (option['show_letter'] ?? '').toString();
-      final optionBreed = (option['breed'] ?? '').toString();
-      final optionVariety = (option['variety'] ?? '').toString();
       final optionScope = _scopeLabelForRow(option).toLowerCase();
 
       return optionLetter == showLetter &&
-          _lineupBreedIdentity(optionBreed, optionVariety) ==
-              _lineupBreedIdentity(breedName, variety) &&
+          _lineupBreedIdentity(option) == _lineupBreedIdentity(breed) &&
           (optionScope == 'open' || optionScope == 'youth');
     }).toList();
 
@@ -4029,7 +4037,6 @@ class _AddAssignmentSheetState extends State<_AddAssignmentSheet> {
     }
 
     final targetBreed = (breed['breed'] ?? '').toString().trim().toLowerCase();
-    final targetVariety = (breed['variety'] ?? '').toString().trim();
     final targetScope = _scopeLabelForRow(breed).toLowerCase();
     final targetLetter = _showLetterForRow(breed).toLowerCase();
     if (targetBreed.isEmpty || targetScope.isEmpty) {
@@ -4063,17 +4070,11 @@ class _AddAssignmentSheetState extends State<_AddAssignmentSheet> {
           continue;
         }
 
-        final rowBreed = (row['breed_id'] ?? '')
-            .toString()
-            .trim()
-            .toLowerCase();
-        final rowVariety = (row['variety_key'] ?? '').toString().trim();
         final rowScope = _scopeLabelForRow(row).toLowerCase();
         final rowLetter = _showLetterForRow(row).toLowerCase();
 
         if (activeJudgeId == judgeId &&
-            _lineupBreedIdentity(rowBreed, rowVariety) ==
-                _lineupBreedIdentity(targetBreed, targetVariety) &&
+            _lineupBreedIdentity(row) == _lineupBreedIdentity(breed) &&
             rowScope == targetScope &&
             rowLetter != targetLetter) {
           matches.add(row);
@@ -4236,11 +4237,12 @@ class _AddAssignmentSheetState extends State<_AddAssignmentSheet> {
       'p_show_id': breed['show_id'] ?? widget.showId,
       'p_section_id': sectionId,
       'p_breed_id': breed['breed'],
+      'p_species': (breed['species']?.toString().trim().isNotEmpty ?? false)
+          ? breed['species'].toString().trim().toLowerCase()
+          : null,
       'p_variety_key': breed['variety'],
-      'p_judge_id': null,
       'p_table_number': widget.tableNumber,
       'p_sort_order': widget.sortOrder + _newlyAssignedBreedKeys.length,
-      'p_status': 'draft',
       'p_scope': (breed['scope'] ?? '').toString().isEmpty
           ? 'combined'
           : breed['scope'],
@@ -4532,6 +4534,7 @@ class _AddAssignmentSheetState extends State<_AddAssignmentSheet> {
                               _lineupBreedLabel(
                                 (breed['breed'] ?? '').toString(),
                                 breed['variety']?.toString(),
+                                breed['species'],
                               ),
                             ]
                             .where(
