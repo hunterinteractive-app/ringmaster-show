@@ -146,6 +146,17 @@ input:focus {
   color: #8992a1;
   margin-top: 36px;
 }
+.sign-in-feedback p {
+  margin: 16px 0 0;
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 1.5;
+}
+.sign-in-feedback a {
+  color: var(--purple);
+  overflow-wrap: anywhere;
+  text-decoration: underline;
+}
 .sign-in-art {
   background: linear-gradient(145deg, #30205f, #593b8c 63%, #67519a);
   display: grid;

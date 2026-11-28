@@ -1,10 +1,11 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import Image from "next/image";
+import { FunctionsHttpError } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 
-const PORTAL_VERSION = "v0.1.24";
+const PORTAL_VERSION = "v0.1.25";
 const portalCacheKey = (email: string) =>
   `ringmaster-sweepstakes-portal:${email.toLowerCase()}`;
 
@@ -28,7 +29,7 @@ type PortalShow = {
 export default function Home() {
   const [screen, setScreen] = useState<Screen>("sign-in");
   const [acceptedTerms, setAcceptedTerms] = useState(false);
-  const [authMessage, setAuthMessage] = useState("");
+  const [authMessage, setAuthMessage] = useState<ReactNode>("");
   const [pendingEmail, setPendingEmail] = useState("");
   const [verificationType, setVerificationType] = useState<
     "email" | "magiclink"
@@ -152,14 +153,26 @@ export default function Home() {
     const signInEmail = String(
       new FormData(event.currentTarget).get("email") ?? "",
     ).trim();
+    setAuthMessage("");
     const { data, error } = await supabase.functions.invoke(
       "sweepstakes-request-code",
       { body: { email: signInEmail } },
     );
     if (error || !data?.ok) {
-      setAuthMessage(
-        data?.error ?? "We could not send a sign-in code. Please try again.",
-      );
+      const failure = error instanceof FunctionsHttpError
+        ? await error.context.json().catch(() => null)
+        : data;
+      if (failure?.code === "portal_access_required") {
+        setAuthMessage(
+          <>
+            We’re sorry, this email doesn’t have a Sweepstakes Portal account.
+            Check that you entered it correctly. If you still need help, contact{" "}
+            <a href="mailto:support@ringmasterone.com">support@ringmasterone.com</a>.
+          </>,
+        );
+      } else {
+        setAuthMessage("We could not send a sign-in code. Please try again.");
+      }
       return;
     }
     setPendingEmail(signInEmail);
@@ -516,7 +529,7 @@ function SignIn({
   onStartOver,
 }: {
   acceptedTerms: boolean;
-  authMessage: string;
+  authMessage: ReactNode;
   authStep: "email" | "code";
   pendingEmail: string;
   verificationCode: string;
@@ -632,7 +645,9 @@ function SignIn({
             </button>
           </form>
         )}
-        {authMessage && <p className="invitation-note">{authMessage}</p>}
+        <div className="sign-in-feedback" role="status">
+          {authMessage && <p>{authMessage}</p>}
+        </div>
         <p className="invitation-note">
           Portal access is separate from RingMaster Show.
         </p>
