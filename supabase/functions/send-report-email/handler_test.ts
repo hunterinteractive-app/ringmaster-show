@@ -22,8 +22,10 @@ const delivery = (
   id: string,
   status = "delivered",
   email = "reader@example.test",
+  generation?: number,
 ) => ({
   artifact_id: id,
+  artifact_generation: generation,
   recipient_email: email,
   delivery_status: status,
   sent_at: "2026-11-12T17:00:00Z",
@@ -35,6 +37,8 @@ async function run(options: {
   historyError?: boolean;
   body?: Record<string, unknown>;
   allowed?: boolean;
+  sanctionNumber?: string;
+  sanctionGeneration?: number;
 } = {}) {
   const savedFetch = globalThis.fetch;
   const env = {
@@ -78,7 +82,38 @@ async function run(options: {
       return json(options.allowed !== false);
     }
     if (url.pathname.endsWith("/show_report_artifacts")) {
+      if (options.sanctionGeneration !== undefined) {
+        assert(
+          url.searchParams.get("id") === "in.(a,b)",
+          "must not expand the club bundle",
+        );
+        return json(["a", "b"].map((id) => ({
+          ...artifact(id),
+          report_name: id === "a"
+            ? "sweepstakes_report"
+            : "breed_results_detail_report",
+          generation: options.sanctionGeneration,
+          is_current: true,
+          metadata: {
+            club_name: "English Spot Club",
+            breed_name: "English Spot",
+            sanction_update_id: "sanction-open-a",
+            sanction_number: "ES-NEW",
+            section_id: "open-a",
+            sweepstakes_email: "reader@example.test",
+            sanctioning_body: "NATIONAL CLUB",
+            delivery_type: "club",
+          },
+        })));
+      }
       return json([artifact("a"), artifact("b")]);
+    }
+    if (url.pathname.endsWith("/show_sanctions")) {
+      return json([{
+        id: "sanction-open-a",
+        section_id: "open-a",
+        sanction_number: options.sanctionNumber ?? "ES-NEW",
+      }]);
     }
     if (url.pathname.endsWith("/show_email_deliveries")) {
       if (req.method === "POST") {
@@ -178,6 +213,47 @@ Deno.test("new files in a partially sent bundle are sent without repeating old f
   assert(
     result.inserted.length === 1 && result.inserted[0].artifact_id === "b",
   );
+});
+Deno.test("sanction correction emails only the requested package and records its generation", async () => {
+  const options = {
+    sanctionGeneration: 2,
+    body: { sanction_generations: { a: 2, b: 2 } },
+    history: [delivery("a", "delivered", undefined, 1), delivery("b")],
+  };
+  const first = await run(options);
+  assert(first.status === 200 && first.providerCalls.length === 1);
+  assert(first.providerCalls[0].body.attachments.length === 2);
+  assert(
+    first.inserted.length === 2 &&
+      first.inserted.every((row) => row.artifact_generation === 2),
+  );
+
+  const retry = await run(options);
+  assert(retry.providerCalls[0].key === first.providerCalls[0].key);
+  const alreadySent = await run({
+    ...options,
+    history: ["a", "b"].map((id) => delivery(id, "delivered", undefined, 2)),
+  });
+  assert(
+    alreadySent.body.already_sent && alreadySent.providerCalls.length === 0,
+  );
+});
+
+Deno.test("sanction correction rejects stale numbers, versions, and destination addresses", async () => {
+  const options = {
+    sanctionGeneration: 2,
+    body: { sanction_generations: { a: 2, b: 2 } },
+  };
+  for (
+    const invalid of [
+      { ...options, sanctionNumber: "ES-REPLACED" },
+      { ...options, sanctionGeneration: 3 },
+      { ...options, body: { ...options.body, to: "other@example.test" } },
+    ]
+  ) {
+    const result = await run(invalid);
+    assert(result.status === 409 && result.providerCalls.length === 0);
+  }
 });
 Deno.test("an unrelated report or new recipient is not suppressed", async () => {
   const result = await run({

@@ -5,6 +5,8 @@ import 'package:ringmaster_show/theme/app_theme.dart';
 import 'package:ringmaster_show/services/ringmaster_backend.dart';
 import 'package:ringmaster_show/services/show_lock_service.dart';
 import 'package:ringmaster_show/services/sanction_save_policy.dart';
+import 'package:ringmaster_show/services/sanction_club_report_service.dart';
+import 'sanction_club_report_prompt.dart';
 import 'sanction_directory_screen.dart';
 
 SupabaseClient get supabase => ringMasterClient;
@@ -83,6 +85,7 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
 
   final Map<String, TextEditingController> _controllers = {};
   final Map<String, String> _existingRecordIds = {};
+  final Map<String, String> _savedSanctionNumbers = {};
   final Map<String, bool> _useArbaByRowKey = {};
   final Map<String, String> _requestStatusByCellKey = {};
 
@@ -651,19 +654,17 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
   }
 
   Future<void> _loadSavedSanctions() async {
-    for (final c in _controllers.values) {
-      c.dispose();
-    }
-    _controllers.clear();
-    _existingRecordIds.clear();
-    _requestStatusByCellKey.clear();
-
     final res = await supabase
         .from(_table)
         .select(
           'id,show_id,section_id,sanctioning_body,club_name,breed_name,sanction_number,notes,breed_club_id,secretary_email,sweepstakes_email,use_arba_number,request_status',
         )
         .eq('show_id', widget.showId);
+    if (!mounted) return;
+
+    _existingRecordIds.clear();
+    _savedSanctionNumbers.clear();
+    _requestStatusByCellKey.clear();
 
     final saved = (res as List).cast<Map<String, dynamic>>();
 
@@ -717,7 +718,9 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
             ? ''
             : (existing['sanction_number'] ?? '').toString();
 
-        _controllers[key] = TextEditingController(text: value);
+        final controller = _controllerFor(row.key, section.id);
+        if (controller.text != value) controller.text = value;
+        _savedSanctionNumbers[key] = value.trim();
 
         if (existing != null) {
           final id = (existing['id'] ?? '').toString().trim();
@@ -893,11 +896,13 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
       });
       return;
     }
+    FocusManager.instance.primaryFocus?.unfocus();
     setState(() {
       _saving = true;
       _msg = null;
     });
 
+    final changedClubNumbers = <String, String>{};
     try {
       await ShowLockService.assertShowUnlocked(widget.showId);
 
@@ -943,6 +948,11 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
               if (deleted.isNotEmpty) _existingRecordIds.remove(key);
             }
             continue;
+          }
+
+          if (row.rowType == _SanctionRowType.club &&
+              value != (_savedSanctionNumbers[key] ?? '')) {
+            changedClubNumbers[key] = value;
           }
 
           final payload = <String, dynamic>{
@@ -1008,18 +1018,56 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
       }
 
       await _loadSavedSanctions();
-      if (!mounted) return;
-      setState(() {
-        _saving = false;
-        _msg = 'Saved.';
-      });
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _saving = false;
         _msg = 'Save failed: $e';
       });
+      return;
     }
+
+    if (!mounted) return;
+    setState(() => _msg = 'Saved.');
+    final changes = <String, String>{
+      for (final entry in changedClubNumbers.entries)
+        if (_existingRecordIds[entry.key] case final String id)
+          if (_savedSanctionNumbers[entry.key] == entry.value) id: entry.value,
+    };
+    String message = 'Saved.';
+    try {
+      final service = SanctionClubReportService(supabase);
+      final options = await service.options(widget.showId, changes);
+      var sent = 0;
+      for (final option in options) {
+        if (!mounted) return;
+        final confirmed = await showSanctionClubReportPrompt(
+          context,
+          option: option,
+          send: (onProgress) => service.generateAndSend(
+            showId: widget.showId,
+            showName: widget.showName,
+            changes: changes,
+            option: option,
+            onProgress: onProgress,
+          ),
+        );
+        if (confirmed) sent++;
+      }
+      if (sent > 0) {
+        message = sent == 1
+            ? 'Saved. Club reports sent.'
+            : 'Saved. Reports sent to $sent club recipients.';
+      }
+    } catch (_) {
+      message = 'Sanction numbers saved. Club report options could not load.';
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _saving = false;
+      _msg = message;
+    });
   }
 
   Widget _buildTabs() {
@@ -1440,7 +1488,38 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
     final dialogWidth = isMobile ? media.width - 16 : media.width * 0.94;
     final dialogHeight = isMobile ? media.height * 0.94 : media.height * 0.88;
 
-    final savedMessage = _msg == 'Saved.';
+    final savedMessage = _msg?.startsWith('Saved.') == true;
+
+    final introduction = Text(
+      _isExhibitorView
+          ? 'View sanctioned and requested breeds or clubs by show section. Only ARBA sanction numbers are displayed.'
+          : 'Open sections appear before Youth.',
+      style: TextStyle(color: AppColors.headerForeground.withValues(alpha: .9)),
+    );
+    final directoryButton = OutlinedButton.icon(
+      onPressed: _saving
+          ? null
+          : () async {
+              await Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => SanctionDirectoryScreen(
+                    showId: widget.showId,
+                    accessMode: _isExhibitorView
+                        ? SanctionDirectoryAccessMode.exhibitor
+                        : SanctionDirectoryAccessMode.admin,
+                  ),
+                ),
+              );
+
+              if (!mounted) return;
+              setState(() {
+                _loading = true;
+              });
+              await _loadAll();
+            },
+      icon: const Icon(Icons.open_in_new),
+      label: const Text('Find Sanction Links'),
+    );
 
     return Dialog(
       insetPadding: const EdgeInsets.all(16),
@@ -1503,49 +1582,19 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  _isExhibitorView
-                                      ? 'View sanctioned and requested breeds or clubs by show section. Only ARBA sanction numbers are displayed.'
-                                      : 'Sections are pulled from this show only and sorted Open first, Youth last.',
-                                  style: TextStyle(
-                                    color: AppColors.headerForeground
-                                        .withValues(alpha: .9),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              OutlinedButton.icon(
-                                onPressed: _saving
-                                    ? null
-                                    : () async {
-                                        await Navigator.of(context).push(
-                                          MaterialPageRoute(
-                                            builder: (_) => SanctionDirectoryScreen(
-                                              showId: widget.showId,
-                                              accessMode: _isExhibitorView
-                                                  ? SanctionDirectoryAccessMode
-                                                        .exhibitor
-                                                  : SanctionDirectoryAccessMode
-                                                        .admin,
-                                            ),
-                                          ),
-                                        );
-
-                                        if (!mounted) return;
-                                        setState(() {
-                                          _loading = true;
-                                        });
-                                        await _loadAll();
-                                      },
-                                icon: const Icon(Icons.open_in_new),
-                                label: const Text('Find Sanction Links'),
-                              ),
-                            ],
-                          ),
+                          if (isMobile) ...[
+                            introduction,
+                            const SizedBox(height: 8),
+                            directoryButton,
+                          ] else
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(child: introduction),
+                                const SizedBox(width: 12),
+                                directoryButton,
+                              ],
+                            ),
                           const SizedBox(height: 12),
                           _buildTabs(),
                           const SizedBox(height: 8),
@@ -1604,8 +1653,8 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
                               padding: const EdgeInsets.all(12),
                               decoration: BoxDecoration(
                                 color: savedMessage
-                                    ? Colors.green.withValues(alpha: .08)
-                                    : Colors.red.withValues(alpha: .08),
+                                    ? AppColors.successBg
+                                    : AppColors.dangerBg,
                                 borderRadius: BorderRadius.circular(12),
                                 border: Border.all(
                                   color: savedMessage
@@ -1617,8 +1666,8 @@ class _ShowSanctionsDialogState extends State<_ShowSanctionsDialog> {
                                 _msg!,
                                 style: TextStyle(
                                   color: savedMessage
-                                      ? Colors.green
-                                      : Colors.red,
+                                      ? AppColors.success
+                                      : AppColors.danger,
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
@@ -1833,11 +1882,13 @@ class _SanctionStatusLegendItem extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 6),
-        Text(
-          label,
-          style: Theme.of(
-            context,
-          ).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600),
+        Flexible(
+          child: Text(
+            label,
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600),
+          ),
         ),
       ],
     );

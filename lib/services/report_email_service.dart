@@ -73,6 +73,7 @@ class ReportEmailService {
     String? replyTo,
     bool forceResend = false,
     bool bulkResend = false,
+    Map<String, int>? sanctionGenerations,
   }) async {
     final resp = await supabase.functions.invoke(
       'send-report-email',
@@ -85,6 +86,8 @@ class ReportEmailService {
         'reply_to': replyTo,
         'force_resend': forceResend,
         'resend_scope': bulkResend ? 'bulk' : 'single',
+        if (sanctionGenerations != null)
+          'sanction_generations': sanctionGenerations,
       },
     );
 

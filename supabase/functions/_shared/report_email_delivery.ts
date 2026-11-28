@@ -1,8 +1,32 @@
 export interface PriorReportDelivery {
   artifact_id: string;
+  artifact_generation?: number | null;
   recipient_email: string;
   sent_at: string | null;
   provider_message_id: string | null;
+}
+
+export function matchesSanctionReportGeneration(
+  artifact: {
+    id: string;
+    generation: number;
+    is_current: boolean;
+    metadata?: Record<string, unknown> | null;
+  },
+  expected: Record<string, number>,
+  recipients: string[],
+): boolean {
+  const metadata = artifact.metadata;
+  return artifact.is_current === true &&
+    Number.isInteger(expected[artifact.id]) &&
+    artifact.generation === expected[artifact.id] &&
+    metadata?.delivery_type === "club" &&
+    typeof metadata.sanction_update_id === "string" &&
+    typeof metadata.sanction_number === "string" &&
+    metadata.sanction_number.trim() !== "" &&
+    recipients.length === 1 &&
+    String(metadata.sweepstakes_email ?? "").trim().toLowerCase() ===
+      recipients[0].trim().toLowerCase();
 }
 
 /** A provider-accepted send remains a send after delivery/open/bounce webhooks.
@@ -13,6 +37,7 @@ export async function selectUnsentReportArtifacts<T extends { id: string }>(
   recipients: string[],
   forceResend: boolean,
   loadHistory: (from: number, to: number) => Promise<PriorReportDelivery[]>,
+  generations?: Record<string, number>,
 ) {
   if (forceResend) {
     return { artifacts, alreadySentIds: [], priorDelivery: null };
@@ -27,6 +52,9 @@ export async function selectUnsentReportArtifacts<T extends { id: string }>(
     const rows = await loadHistory(from, from + pageSize - 1);
     for (const row of rows) {
       if (!row.sent_at) continue;
+      if (
+        generations && row.artifact_generation !== generations[row.artifact_id]
+      ) continue;
       const addresses = row.recipient_email.split(",").map((s) =>
         s.trim().toLowerCase()
       );
@@ -61,12 +89,15 @@ export function reportEmailAttemptIdentity(
   recipients: string[],
   artifactIds: string[],
   forceResend: boolean,
+  generations?: Record<string, number>,
 ): string {
   return [
     showId,
     [...new Set(recipients.map((email) => email.trim().toLowerCase()))].sort()
       .join(","),
-    [...new Set(artifactIds)].sort().join(","),
+    [...new Set(artifactIds)].sort().map((id) =>
+      generations ? `${id}:${generations[id]}` : id
+    ).join(","),
     // Normal retries/double-clicks reuse a provider key. Only an explicit
     // resend starts a new provider attempt within its 24-hour dedup window.
     forceResend ? crypto.randomUUID() : "initial-send",

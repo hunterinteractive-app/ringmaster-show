@@ -2,7 +2,7 @@
 import { observedFetch, authErrorStatus } from "../_shared/request_fetch.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.110.2";
 import { prepareReportEmailFiles, reportAttachmentBase64 } from "../_shared/report_email_files.ts";
-import { selectUnsentReportArtifacts, reportEmailAttemptIdentity } from "../_shared/report_email_delivery.ts";
+import { matchesSanctionReportGeneration, selectUnsentReportArtifacts, reportEmailAttemptIdentity } from "../_shared/report_email_delivery.ts";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -81,6 +81,14 @@ export async function handleReportEmail(req: Request) {
         error: "artifact_ids is required"
       }, 400);
     }
+    const sanctionGenerations = body.sanction_generations;
+    const sanctionUpdate = sanctionGenerations !== undefined && sanctionGenerations !== null;
+    if (sanctionUpdate && (forceResend || typeof sanctionGenerations !== "object" ||
+      Array.isArray(sanctionGenerations) ||
+      Object.keys(sanctionGenerations).length !== new Set(artifactIds).size ||
+      artifactIds.some((id) => !Number.isInteger(sanctionGenerations[id])))) {
+      return json({ error: "The sanction report package is invalid." }, 400);
+    }
     if (!rawTo || Array.isArray(rawTo) && rawTo.length === 0) {
       return json({
         error: "to is required"
@@ -134,6 +142,8 @@ export async function handleReportEmail(req: Request) {
           storage_bucket,
           storage_path,
           generated_at,
+          generation,
+          is_current,
           metadata
         `).eq("show_id", showId).in("id", artifactIds);
     if (artifactError) {
@@ -168,7 +178,24 @@ export async function handleReportEmail(req: Request) {
       "details_by_breed",
       "exh_by_breed"
     ].includes(String(artifact.report_name ?? "")));
-    if (isClubReportBundle && (anchorBreed || anchorClub || anchorEmail)) {
+    if (sanctionUpdate) {
+      if (artifacts.some((artifact) => !matchesSanctionReportGeneration(artifact, sanctionGenerations, recipients))) {
+        return json({ error: "The prepared club reports changed. Review the sanctions before sending." }, 409);
+      }
+      const sanctionIds = [...new Set(artifacts.map((artifact) => artifact.metadata.sanction_update_id))];
+      const { data: currentSanctions, error: sanctionError } = await adminClient.from("show_sanctions")
+        .select("id, section_id, sanction_number").eq("show_id", showId).in("id", sanctionIds);
+      if (sanctionError) return json({ error: "Could not check the current sanction numbers." }, 500);
+      const sanctionsById = new Map((currentSanctions ?? []).map((row) => [row.id, row]));
+      if (artifacts.some((artifact) => {
+        const meta = artifact.metadata;
+        const saved = sanctionsById.get(meta.sanction_update_id);
+        return !saved || saved.section_id !== meta.section_id ||
+          String(saved.sanction_number ?? "").trim() !== meta.sanction_number;
+      })) {
+        return json({ error: "A sanction number changed before the email could be sent." }, 409);
+      }
+    } else if (isClubReportBundle && (anchorBreed || anchorClub || anchorEmail)) {
       const isAcbaCavyDelivery = anchorSanctioningBody === "NATIONAL CLUB" && (
         anchorBreed.toLowerCase() === "cavy" ||
         String(anchorMeta["species"] ?? "").trim().toLowerCase() === "cavy"
@@ -255,12 +282,13 @@ export async function handleReportEmail(req: Request) {
     const deliverySelection = await selectUnsentReportArtifacts(
       artifacts, recipients, forceResend, async (from, to) => {
         const { data, error } = await adminClient.from("show_email_deliveries")
-          .select("artifact_id, recipient_email, sent_at, provider_message_id")
+          .select("artifact_id, artifact_generation, recipient_email, sent_at, provider_message_id")
           .eq("show_id", showId).in("artifact_id", artifacts.map((a) => a.id))
           .not("sent_at", "is", null).order("id").range(from, to);
         if (error) throw new Error("Unable to check report delivery history. No email was sent. Please try again.");
         return data ?? [];
       },
+      sanctionUpdate ? sanctionGenerations : undefined,
     );
     artifacts = deliverySelection.artifacts;
     if (artifacts.length === 0) {
@@ -270,11 +298,16 @@ export async function handleReportEmail(req: Request) {
         sent_at: deliverySelection.priorDelivery?.sent_at ?? null,
         artifact_count: 0, already_sent_artifact_ids: deliverySelection.alreadySentIds});
     }
-    const { data: showRow, error: showError } = await adminClient.from("shows").select("id, name, owner_user_id, secretary_email").eq("id", showId).single();
+    const { data: showRow, error: showError } = await adminClient.from("shows")
+      .select("id, name, owner_user_id, secretary_email, email_sending_disabled, is_demo")
+      .eq("id", showId).single();
     if (showError || !showRow) {
       return json({
         error: "Show not found."
       }, 404);
+    }
+    if (sanctionUpdate && (showRow.email_sending_disabled || showRow.is_demo)) {
+      return json({ error: "Report email is disabled for this show." }, 403);
     }
     const replyTo = await replyToForShow(adminClient, showId, requestedReplyTo);
     const replyToList = emailList(replyTo);
@@ -396,6 +429,7 @@ export async function handleReportEmail(req: Request) {
     });
     const idempotencyKey = await sha256Hex(reportEmailAttemptIdentity(
       showId, recipients, artifacts.map((artifact) => artifact.id), forceResend,
+      sanctionUpdate ? sanctionGenerations : undefined,
     ));
     const resendResp = await observedFetch("report_email")("https://api.resend.com/emails", {
       method: "POST",
@@ -441,6 +475,7 @@ export async function handleReportEmail(req: Request) {
     const { error: logError } = await adminClient.from("show_email_deliveries").insert(artifacts.map((artifact)=>({
         show_id: showId,
         artifact_id: artifact.id,
+        artifact_generation: artifact.generation ?? null,
         report_name: artifact.report_name,
         recipient_email: recipients.join(", "),
         recipient_name: loggedRecipientName,
